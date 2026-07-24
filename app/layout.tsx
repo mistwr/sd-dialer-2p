@@ -1,5 +1,6 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
+import { Suspense } from 'react'
 import './globals.css'
 import { ServiceWorkerRegistration } from '@/components/common/ServiceWorkerRegistration'
 
@@ -72,7 +73,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased bg-white text-gray-900">
         <ServiceWorkerRegistration />
-        {children}
+        <Suspense fallback={null}>{children}</Suspense>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

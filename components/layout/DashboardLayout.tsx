@@ -4,18 +4,16 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
-  title: string
+  title?: string
 }
 
 export function DashboardLayout({ children, title }: DashboardLayoutProps) {
-  const { user, profile, logout } = useAuth()
+  const { profile, logout } = useAuth()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const supabase = createClient()
 
   const handleLogout = async () => {
     await logout()
