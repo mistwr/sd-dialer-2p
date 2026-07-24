@@ -3,33 +3,53 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
-  generator: 'v0.app',
-  icons: {
-    icon: [
+  title: 'SD Dialer - CRM de Gestão Comercial',
+  description: 'Plataforma profissional de CRM para gestão comercial e distribuição de leads',
+  keywords: ['CRM', 'vendas', 'leads', 'gestão comercial', 'Portugal'],
+  authors: [{ name: 'SD Dialer Team' }],
+  creator: 'SD Dialer',
+  publisher: 'SD Dialer',
+  openGraph: {
+    type: 'website',
+    locale: 'pt_PT',
+    url: 'https://sddialer.com',
+    title: 'SD Dialer - CRM de Gestão Comercial',
+    description: 'Plataforma profissional de CRM para gestão comercial e distribuição de leads',
+    images: [
       {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
+        url: '/icons/icon-512.png',
+        width: 512,
+        height: 512,
+        alt: 'SD Dialer',
       },
     ],
-    apple: '/apple-icon.png',
+  },
+  icons: {
+    icon: '/icons/icon-192.png',
+    apple: '/apple-touch-icon.png',
+    shortcut: '/icons/icon-192.png',
+  },
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'SD Dialer',
+  },
+  formatDetection: {
+    telephone: false,
   },
 }
 
 export const viewport: Viewport = {
-  colorScheme: 'light dark',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  minimumScale: 1,
+  viewportFit: 'cover',
+  colorScheme: 'light',
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: 'white' },
-    { media: '(prefers-color-scheme: dark)', color: 'black' },
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#0f172a' },
   ],
 }
 
@@ -39,8 +59,17 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <body className="antialiased">
+    <html lang="pt" suppressHydrationWarning>
+      <head>
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="SD Dialer" />
+        <meta name="application-name" content="SD Dialer" />
+        <meta name="msapplication-TileColor" content="#0066cc" />
+        <meta name="msapplication-config" content="/browserconfig.xml" />
+      </head>
+      <body className="antialiased bg-white text-gray-900">
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
