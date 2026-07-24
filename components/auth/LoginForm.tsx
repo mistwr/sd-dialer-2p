@@ -12,7 +12,6 @@ export function LoginForm() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
-  const supabase = createClient()
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -20,6 +19,7 @@ export function LoginForm() {
     setLoading(true)
 
     try {
+      const supabase = createClient()
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -38,8 +38,6 @@ export function LoginForm() {
           .eq('id', data.user.id)
           .single()
 
-        console.log('[v0] profile:', profile, 'profileError:', profileError)
-
         if (profile?.role === 'admin') {
           router.push('/admin')
         } else if (profile?.role === 'supervisor') {
@@ -49,7 +47,6 @@ export function LoginForm() {
         }
       }
     } catch (err) {
-      console.log('[v0] login catch error:', err)
       setError(err instanceof Error ? err.message : 'Erro ao fazer login')
     } finally {
       setLoading(false)
