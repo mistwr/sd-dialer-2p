@@ -32,21 +32,24 @@ export function LoginForm() {
 
       if (data?.user) {
         // Obter role do utilizador
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from('usuarios')
           .select('role')
           .eq('id', data.user.id)
           .single()
 
+        console.log('[v0] profile:', profile, 'profileError:', profileError)
+
         if (profile?.role === 'admin') {
-          router.push('/dashboard/admin')
+          router.push('/admin')
         } else if (profile?.role === 'supervisor') {
-          router.push('/dashboard/supervisor')
+          router.push('/supervisor')
         } else {
-          router.push('/dashboard/comercial/leads')
+          router.push('/comercial/leads')
         }
       }
     } catch (err) {
+      console.log('[v0] login catch error:', err)
       setError(err instanceof Error ? err.message : 'Erro ao fazer login')
     } finally {
       setLoading(false)
