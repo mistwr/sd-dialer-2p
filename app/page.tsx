@@ -2,40 +2,14 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 
 export default function Page() {
   const router = useRouter()
-  const supabase = createClient()
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-
-      if (session?.user) {
-        // Obter perfil para redirecionar baseado no role
-        const { data: profile } = await supabase
-          .from('usuarios')
-          .select('role')
-          .eq('id', session.user.id)
-          .single()
-
-        if (profile?.role === 'admin') {
-          router.push('/dashboard/admin')
-        } else if (profile?.role === 'supervisor') {
-          router.push('/dashboard/supervisor')
-        } else {
-          router.push('/dashboard/comercial/leads')
-        }
-      } else {
-        router.push('/auth/login')
-      }
-    }
-
-    checkAuth()
-  }, [router, supabase])
+    // Redirect to login page
+    router.push('/auth/login')
+  }, [router])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white">
