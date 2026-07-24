@@ -1,4 +1,4 @@
-// Handled by middleware — redirects to /login or /admin
+import { redirect } from 'next/navigation'
 export default function RootPage() {
-  return null
+  redirect('/login')
 }
