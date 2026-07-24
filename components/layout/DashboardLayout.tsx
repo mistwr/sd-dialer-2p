@@ -4,7 +4,6 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
   Users,
@@ -33,13 +32,12 @@ interface NavItem {
 
 export function DashboardLayout({ children, title }: DashboardLayoutProps) {
   const { profile, logout } = useAuth()
-  const router = useRouter()
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const handleLogout = async () => {
     await logout()
-    router.push('/login')
+    window.location.href = '/login'
   }
 
   const getNavItems = (): NavItem[] => {

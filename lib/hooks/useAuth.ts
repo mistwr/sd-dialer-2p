@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
 import type { Usuario } from '@/lib/types'
@@ -13,7 +12,6 @@ export function useAuth() {
   const [profile, setProfile] = useState<Usuario | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
-  const router = useRouter()
 
   /**
    * Obter sessão do utilizador
@@ -94,7 +92,6 @@ export function useAuth() {
 
         if (error) throw error
 
-        router.push('/dashboard')
         return { success: true, error: null }
       } catch (err) {
         const error = err instanceof Error ? err : new Error('Login failed')
@@ -104,7 +101,7 @@ export function useAuth() {
         setLoading(false)
       }
     },
-    [router]
+    []
   )
 
   /**
@@ -119,7 +116,6 @@ export function useAuth() {
 
       setUser(null)
       setProfile(null)
-      router.push('/login')
       return { success: true, error: null }
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Logout failed')
@@ -128,7 +124,7 @@ export function useAuth() {
     } finally {
       setLoading(false)
     }
-  }, [router])
+  }, [])
 
   /**
    * Verificar se é admin
