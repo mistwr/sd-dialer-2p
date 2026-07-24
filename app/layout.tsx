@@ -1,6 +1,7 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import { ServiceWorkerRegistration } from '@/components/common/ServiceWorkerRegistration'
 
 export const metadata: Metadata = {
   title: 'SD Dialer - CRM de Gestão Comercial',
@@ -70,6 +71,7 @@ export default function RootLayout({
         <meta name="msapplication-config" content="/browserconfig.xml" />
       </head>
       <body className="antialiased bg-white text-gray-900">
+        <ServiceWorkerRegistration />
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
