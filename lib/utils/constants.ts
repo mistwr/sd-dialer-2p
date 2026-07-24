@@ -142,7 +142,7 @@ export const SUBSCRIPTION_PLANS = {
 } as const
 
 // Routes
-export const PUBLIC_ROUTES = ['/', '/auth/login', '/auth/register', '/auth/callback']
+export const PUBLIC_ROUTES = ['/', '/login', '/signup', '/callback']
 
 export const PROTECTED_ROUTES = {
   ADMIN: '/dashboard/admin',

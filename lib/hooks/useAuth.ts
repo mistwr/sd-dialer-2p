@@ -119,7 +119,7 @@ export function useAuth() {
 
       setUser(null)
       setProfile(null)
-      router.push('/auth/login')
+      router.push('/login')
       return { success: true, error: null }
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Logout failed')

@@ -19,7 +19,7 @@ export function DashboardLayout({ children, title }: DashboardLayoutProps) {
 
   const handleLogout = async () => {
     await logout()
-    router.push('/auth/login')
+    router.push('/login')
   }
 
   // Menu items baseado no role
