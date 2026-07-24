@@ -43,13 +43,16 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
   const isRoot = pathname === '/'
-  const isProtected = pathname.startsWith('/dashboard')
+  const isProtected =
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/supervisor') ||
+    pathname.startsWith('/comercial')
   const isAuthPage = pathname === '/login' || pathname === '/signup'
 
-  // Redirect root to login (or dashboard if already authenticated)
+  // Redirect root to login (or admin dashboard if already authenticated)
   if (isRoot) {
     const url = request.nextUrl.clone()
-    url.pathname = user ? '/dashboard/admin' : '/login'
+    url.pathname = user ? '/admin' : '/login'
     return NextResponse.redirect(url)
   }
 
@@ -59,10 +62,10 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // If already logged in and trying to access auth pages, redirect to dashboard
+  // If already logged in and trying to access auth pages, redirect to admin
   if (isAuthPage && user) {
     const url = request.nextUrl.clone()
-    url.pathname = '/dashboard/admin'
+    url.pathname = '/admin'
     return NextResponse.redirect(url)
   }
 
