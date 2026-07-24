@@ -1,174 +1,71 @@
 'use client'
-
 import { useEffect, useState, useCallback } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/client'
 import type { Usuario } from '@/lib/types'
 
-const supabase = createClient()
+interface AuthState {
+  user: User | null
+  profile: Usuario | null
+  loading: boolean
+  error: Error | null
+}
 
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(null)
-  const [profile, setProfile] = useState<Usuario | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
+  const [state, setState] = useState<AuthState>({
+    user: null,
+    profile: null,
+    loading: true,
+    error: null,
+  })
 
-  /**
-   * Obter sessão do utilizador
-   */
   useEffect(() => {
-    const getSession = async () => {
-      try {
-        setLoading(true)
-        const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession()
+    const supabase = createClient()
 
-        if (sessionError) throw sessionError
-
-        setUser(session?.user ?? null)
-
-        // Obter perfil completo se utilizador existe
-        if (session?.user?.id) {
-          const { data: profileData, error: profileError } = await supabase
-            .from('usuarios')
-            .select('*')
-            .eq('id', session.user.id)
-            .single()
-
-          if (profileError) throw profileError
-
-          setProfile(profileData)
-        }
-
-        setError(null)
-      } catch (err) {
-        setError(err instanceof Error ? err : new Error('Unknown error'))
-        setUser(null)
-        setProfile(null)
-      } finally {
-        setLoading(false)
-      }
+    const loadProfile = async (userId: string) => {
+      const { data, error } = await supabase
+        .from('usuarios')
+        .select('*')
+        .eq('id', userId)
+        .single()
+      if (error) return null
+      // Update last_seen
+      supabase.from('usuarios').update({ last_seen_at: new Date().toISOString() }).eq('id', userId).then(() => {})
+      return data as Usuario
     }
 
-    getSession()
-
-    // Subscribe to auth state changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setUser(session?.user ?? null)
-
-      if (session?.user?.id) {
-        const { data: profileData } = await supabase
-          .from('usuarios')
-          .select('*')
-          .eq('id', session.user.id)
-          .single()
-
-        setProfile(profileData)
+    // Get initial session
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        const profile = await loadProfile(session.user.id)
+        setState({ user: session.user, profile, loading: false, error: null })
       } else {
-        setProfile(null)
+        setState({ user: null, profile: null, loading: false, error: null })
       }
+    })
 
-      setLoading(false)
+    // Listen for changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        const profile = await loadProfile(session.user.id)
+        setState({ user: session.user, profile, loading: false, error: null })
+      } else {
+        setState({ user: null, profile: null, loading: false, error: null })
+      }
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
-  /**
-   * Fazer login
-   */
-  const login = useCallback(
-    async (email: string, password: string) => {
-      try {
-        setLoading(true)
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        })
-
-        if (error) throw error
-
-        return { success: true, error: null }
-      } catch (err) {
-        const error = err instanceof Error ? err : new Error('Login failed')
-        setError(error)
-        return { success: false, error }
-      } finally {
-        setLoading(false)
-      }
-    },
-    []
-  )
-
-  /**
-   * Fazer logout
-   */
   const logout = useCallback(async () => {
-    try {
-      setLoading(true)
-      const { error } = await supabase.auth.signOut()
-
-      if (error) throw error
-
-      setUser(null)
-      setProfile(null)
-      return { success: true, error: null }
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error('Logout failed')
-      setError(error)
-      return { success: false, error }
-    } finally {
-      setLoading(false)
-    }
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    window.location.href = '/login'
   }, [])
 
-  /**
-   * Verificar se é admin
-   */
-  const isAdmin = useCallback(() => {
-    return profile?.role === 'admin'
-  }, [profile])
+  const isAdmin      = () => state.profile?.role === 'admin'
+  const isSupervisor = () => state.profile?.role === 'supervisor' || state.profile?.role === 'admin'
+  const isParceiro   = () => state.profile?.role === 'parceiro'
 
-  /**
-   * Verificar se é supervisor
-   */
-  const isSupervisor = useCallback(() => {
-    return profile?.role === 'supervisor'
-  }, [profile])
-
-  /**
-   * Verificar se é comercial
-   */
-  const isComercial = useCallback(() => {
-    return profile?.role === 'comercial'
-  }, [profile])
-
-  /**
-   * Verificar se tem role específica
-   */
-  const hasRole = useCallback(
-    (role: string | string[]) => {
-      const roles = Array.isArray(role) ? role : [role]
-      return profile && roles.includes(profile.role)
-    },
-    [profile]
-  )
-
-  return {
-    user,
-    profile,
-    loading,
-    error,
-    login,
-    logout,
-    isAdmin,
-    isSupervisor,
-    isComercial,
-    hasRole,
-    isAuthenticated: !!user,
-  }
+  return { ...state, logout, isAdmin, isSupervisor, isParceiro }
 }

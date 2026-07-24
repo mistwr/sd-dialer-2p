@@ -1,90 +1,21 @@
 {
-  "name": "SD Dialer - CRM de Gestão Comercial",
+  "name": "SD Dialer",
   "short_name": "SD Dialer",
-  "description": "Plataforma profissional de CRM para gestão comercial e distribuição de leads com suporte para chamadas, WhatsApp e Google Maps",
+  "description": "Plataforma de chamadas para equipas comerciais",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "background_color": "#0F172A",
+  "theme_color": "#2563EB",
   "orientation": "portrait-primary",
-  "background_color": "#ffffff",
-  "theme_color": "#0066cc",
   "categories": ["business", "productivity"],
-  "screenshots": [
-    {
-      "src": "/icons/screenshot-mobile.png",
-      "sizes": "540x720",
-      "type": "image/png",
-      "form_factor": "narrow"
-    },
-    {
-      "src": "/icons/screenshot-desktop.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide"
-    }
-  ],
+  "lang": "pt-PT",
   "icons": [
-    {
-      "src": "/icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icons/icon-192-maskable.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icons/icon-512-maskable.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    }
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
-  "share_target": {
-    "action": "/share",
-    "method": "POST",
-    "enctype": "application/x-www-form-urlencoded",
-    "params": {
-      "title": "title",
-      "text": "text",
-      "url": "url"
-    }
-  },
   "shortcuts": [
-    {
-      "name": "Novas Leads",
-      "short_name": "Leads",
-      "description": "Visualizar e contactar novas leads",
-      "url": "/dashboard/comercial/leads",
-      "icons": [
-        {
-          "src": "/icons/leads-icon.png",
-          "sizes": "96x96",
-          "type": "image/png"
-        }
-      ]
-    },
-    {
-      "name": "Dashboard",
-      "short_name": "Dashboard",
-      "description": "Visualizar estatísticas e relatórios",
-      "url": "/dashboard/admin/dashboard",
-      "icons": [
-        {
-          "src": "/icons/dashboard-icon.png",
-          "sizes": "96x96",
-          "type": "image/png"
-        }
-      ]
-    }
+    { "name": "Minhas Leads", "url": "/parceiro", "description": "Ver leads atribuidas" },
+    { "name": "Dashboard", "url": "/admin", "description": "Painel de administracao" }
   ]
 }

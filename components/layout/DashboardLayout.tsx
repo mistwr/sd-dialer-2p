@@ -1,230 +1,203 @@
 'use client'
-
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useAuth } from '@/lib/hooks/useAuth'
 import {
-  LayoutDashboard,
-  Users,
-  Megaphone,
-  ClipboardList,
-  BarChart3,
-  Phone,
-  History,
-  LogOut,
-  Menu,
-  X,
-  ChevronRight,
-  Bell,
+  LayoutDashboard, Users, Building2, Megaphone,
+  PhoneCall, BarChart2, LogOut, Menu, X, Bell,
+  ChevronRight, PhoneIncoming,
 } from 'lucide-react'
-
-interface DashboardLayoutProps {
-  children: React.ReactNode
-  title?: string
-}
+import { useAuth } from '@/lib/hooks/useAuth'
+import { Spinner } from '@/components/ui/Spinner'
 
 interface NavItem {
   label: string
   href: string
-  icon: React.ReactNode
+  icon: React.ElementType
+  roles: string[]
 }
 
-export function DashboardLayout({ children, title }: DashboardLayoutProps) {
-  const { profile, logout } = useAuth()
+const NAV: NavItem[] = [
+  { label: 'Dashboard',   href: '/admin',           icon: LayoutDashboard, roles: ['admin', 'supervisor'] },
+  { label: 'Empresas',    href: '/admin/empresas',   icon: Building2,       roles: ['admin'] },
+  { label: 'Parceiros',   href: '/admin/parceiros',  icon: Users,           roles: ['admin', 'supervisor'] },
+  { label: 'Campanhas',   href: '/admin/campanhas',  icon: Megaphone,       roles: ['admin', 'supervisor'] },
+  { label: 'Leads',       href: '/admin/leads',      icon: PhoneCall,       roles: ['admin', 'supervisor'] },
+  { label: 'Relatorios',  href: '/admin/relatorios', icon: BarChart2,       roles: ['admin', 'supervisor'] },
+  { label: 'Supervisor',  href: '/supervisor',       icon: LayoutDashboard, roles: ['supervisor'] },
+  { label: 'Minhas Leads', href: '/parceiro',        icon: PhoneIncoming,   roles: ['parceiro'] },
+]
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const { profile, loading, logout } = useAuth()
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
-  const handleLogout = async () => {
-    await logout()
-    window.location.href = '/login'
-  }
+  // Close sidebar on route change
+  useEffect(() => { setSidebarOpen(false) }, [pathname])
 
-  const getNavItems = (): NavItem[] => {
-    if (profile?.role === 'admin') {
-      return [
-        { label: 'Dashboard', href: '/admin', icon: <LayoutDashboard size={17} /> },
-        { label: 'Utilizadores', href: '/admin/usuarios', icon: <Users size={17} /> },
-        { label: 'Campanhas', href: '/admin/campanhas', icon: <Megaphone size={17} /> },
-        { label: 'Leads', href: '/admin/leads', icon: <ClipboardList size={17} /> },
-        { label: 'Relatórios', href: '/admin/relatorios', icon: <BarChart3 size={17} /> },
-      ]
-    }
-    if (profile?.role === 'supervisor') {
-      return [
-        { label: 'Dashboard', href: '/supervisor', icon: <LayoutDashboard size={17} /> },
-        { label: 'Minha Equipa', href: '/supervisor/team', icon: <Users size={17} /> },
-        { label: 'Relatórios', href: '/supervisor/relatorios', icon: <BarChart3 size={17} /> },
-      ]
-    }
-    if (profile?.role === 'comercial') {
-      return [
-        { label: 'Meus Leads', href: '/comercial/leads', icon: <Phone size={17} /> },
-        { label: 'Histórico', href: '/comercial/history', icon: <History size={17} /> },
-      ]
-    }
-    return []
-  }
+  const role = profile?.role ?? 'parceiro'
+  const visibleNav = NAV.filter(n => n.roles.includes(role))
 
-  const navItems = getNavItems()
-
-  const getRoleLabel = () => {
-    if (profile?.role === 'admin') return 'Administrador'
-    if (profile?.role === 'supervisor') return 'Supervisor'
-    return 'Comercial'
-  }
-
-  const getRoleDot = () => {
-    if (profile?.role === 'admin') return 'bg-blue-400'
-    if (profile?.role === 'supervisor') return 'bg-emerald-400'
-    return 'bg-amber-400'
-  }
-
-  const initials = profile?.full_name
-    ? profile.full_name.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()
+  const avatarInitials = profile?.full_name
+    ? profile.full_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
     : '?'
 
   return (
-    <div className="min-h-screen flex bg-[#f4f5f7] font-sans">
-      {/* Mobile backdrop */}
+    <div style={{ display: 'flex', height: '100vh', background: '#F8FAFC', overflow: 'hidden' }}>
+      {/* Overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
           onClick={() => setSidebarOpen(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 30, background: 'rgba(0,0,0,0.4)' }}
+          className="md:hidden"
         />
       )}
 
       {/* Sidebar */}
-      <aside
-        className={`
-          fixed left-0 top-0 h-screen w-[240px] z-40 flex flex-col
-          bg-[#111827] text-white
-          transition-transform duration-200 ease-in-out
-          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-          sm:translate-x-0 sm:relative sm:z-auto
-        `}
+      <aside style={{
+        width: 240,
+        background: '#0F172A',
+        display: 'flex',
+        flexDirection: 'column',
+        flexShrink: 0,
+        position: 'fixed',
+        top: 0, bottom: 0, left: 0,
+        zIndex: 40,
+        transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+        transition: 'transform 0.22s ease',
+      }}
+        className="sidebar-fixed"
       >
         {/* Logo */}
-        <div className="flex items-center gap-3 px-5 h-[60px] border-b border-white/[0.07] shrink-0">
-          <div className="w-7 h-7 bg-blue-500 rounded-md flex items-center justify-center shrink-0">
-            <Phone size={13} className="text-white" />
+        <div style={{ padding: '20px 20px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 10,
+              background: 'linear-gradient(135deg, #2563EB, #1D4ED8)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(37,99,235,0.4)',
+            }}>
+              <PhoneCall size={16} color="#fff" />
+            </div>
+            <span style={{ color: '#fff', fontWeight: 700, fontSize: 16, letterSpacing: '-0.3px' }}>SD Dialer</span>
           </div>
-          <span className="font-semibold text-[14.5px] text-white tracking-tight">SD Dialer</span>
-          <button
-            className="ml-auto sm:hidden text-white/40 hover:text-white transition-colors"
-            onClick={() => setSidebarOpen(false)}
-          >
-            <X size={17} />
+          <button onClick={() => setSidebarOpen(false)} className="md-hidden" style={{
+            background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: 4, borderRadius: 6,
+          }} aria-label="Fechar">
+            <X size={18} />
           </button>
         </div>
 
-        {/* Nav section label */}
-        <div className="px-5 pt-6 pb-1.5">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-white/25">Navegação</p>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+        {/* Nav */}
+        <nav style={{ flex: 1, padding: '4px 12px', overflowY: 'auto' }}>
+          {visibleNav.map(item => {
+            const active = pathname === item.href || (item.href !== '/admin' && item.href !== '/parceiro' && pathname.startsWith(item.href))
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setSidebarOpen(false)}
-                className={`
-                  flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150
-                  ${isActive
-                    ? 'bg-blue-600 text-white'
-                    : 'text-white/55 hover:text-white hover:bg-white/[0.06]'
-                  }
-                `}
+              <Link key={item.href} href={item.href} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '9px 12px', borderRadius: 8, marginBottom: 2,
+                textDecoration: 'none',
+                background: active ? '#2563EB' : 'transparent',
+                color: active ? '#fff' : '#94A3B8',
+                fontWeight: active ? 600 : 400,
+                fontSize: 14,
+                transition: 'all 0.15s',
+              }}
+                onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = '#1E293B' }}
+                onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
               >
-                <span className={`shrink-0 ${isActive ? 'text-white' : 'text-white/40'}`}>
-                  {item.icon}
-                </span>
-                <span className="flex-1">{item.label}</span>
-                {isActive && <ChevronRight size={13} className="text-white/60 shrink-0" />}
+                <item.icon size={17} />
+                <span style={{ flex: 1 }}>{item.label}</span>
+                {active && <ChevronRight size={14} style={{ opacity: 0.6 }} />}
               </Link>
             )
           })}
         </nav>
 
-        {/* Divider */}
-        <div className="mx-3 border-t border-white/[0.07] mb-2" />
-
-        {/* Logout */}
-        <div className="px-3 pb-2">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium text-white/45 hover:text-white hover:bg-white/[0.06] transition-all duration-150"
-          >
-            <LogOut size={16} className="shrink-0" />
-            <span>Terminar Sessão</span>
-          </button>
-        </div>
-
-        {/* User card */}
-        <div className="mx-3 mb-4 p-3 rounded-xl bg-white/[0.05] border border-white/[0.07]">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-blue-500/20 border border-blue-400/20 flex items-center justify-center shrink-0">
-              <span className="text-[11px] font-bold text-blue-300">{initials}</span>
+        {/* User */}
+        <div style={{ padding: '12px 16px', borderTop: '1px solid #1E293B' }}>
+          {loading ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
+              <Spinner size={20} color="#64748B" />
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[12.5px] font-semibold text-white leading-tight truncate">
-                {profile?.full_name || 'Utilizador'}
-              </p>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${getRoleDot()}`} />
-                <span className="text-[11px] text-white/35 truncate">{getRoleLabel()}</span>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{
+                width: 34, height: 34, borderRadius: '50%',
+                background: '#2563EB', color: '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 12, fontWeight: 700, flexShrink: 0,
+              }}>
+                {avatarInitials}
               </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ color: '#F1F5F9', fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {profile?.full_name ?? 'Utilizador'}
+                </div>
+                <div style={{ color: '#475569', fontSize: 11, textTransform: 'capitalize' }}>{role}</div>
+              </div>
+              <button onClick={logout} style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: '#475569', padding: 4, borderRadius: 6,
+                transition: 'color 0.15s',
+              }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#EF4444' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#475569' }}
+                aria-label="Sair"
+                title="Sair"
+              >
+                <LogOut size={16} />
+              </button>
             </div>
-          </div>
+          )}
         </div>
       </aside>
 
-      {/* Main wrapper */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top header */}
-        <header className="h-[60px] bg-white border-b border-gray-200 flex items-center gap-4 px-6 shrink-0 sticky top-0 z-20">
-          {/* Mobile menu button */}
+      {/* Sidebar always visible on desktop via margin */}
+      <div className="sidebar-spacer" />
+
+      {/* Main */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+        {/* Top bar */}
+        <header style={{
+          height: 56, background: '#fff', borderBottom: '1px solid #E2E8F0',
+          display: 'flex', alignItems: 'center', padding: '0 20px', gap: 12,
+          flexShrink: 0, position: 'sticky', top: 0, zIndex: 10,
+        }}>
           <button
-            className="sm:hidden p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
             onClick={() => setSidebarOpen(true)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center' }}
+            aria-label="Abrir menu"
           >
             <Menu size={20} />
           </button>
-
-          {/* Page title */}
-          {title && (
-            <h1 className="text-[15px] font-semibold text-gray-900">{title}</h1>
-          )}
-
-          {/* Right controls */}
-          <div className="ml-auto flex items-center gap-1">
-            <button className="p-2 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors">
-              <Bell size={17} />
-            </button>
-            <div className="w-px h-4 bg-gray-200 mx-1" />
-            <div className="flex items-center gap-2 pl-1 pr-2 py-1.5 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer">
-              <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                <span className="text-[11px] font-bold text-blue-700">{initials}</span>
-              </div>
-              <div className="hidden sm:block">
-                <p className="text-[13px] font-medium text-gray-800 leading-tight">
-                  {profile?.full_name?.split(' ')[0] || 'Utilizador'}
-                </p>
-                <p className="text-[11px] text-gray-400 leading-tight">{getRoleLabel()}</p>
-              </div>
-            </div>
-          </div>
+          <div style={{ flex: 1 }} />
+          <button style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: '#64748B', padding: '6px', borderRadius: 8,
+            display: 'flex', alignItems: 'center', position: 'relative',
+          }} aria-label="Notificacoes">
+            <Bell size={18} />
+          </button>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-6">
+        {/* Content */}
+        <main style={{ flex: 1, overflowY: 'auto', padding: '24px 20px' }}>
           {children}
         </main>
       </div>
+
+      <style>{`
+        @media (min-width: 768px) {
+          .sidebar-fixed { transform: translateX(0) !important; position: relative !important; }
+          .sidebar-spacer { display: none; }
+          .md-hidden { display: none !important; }
+        }
+        @media (max-width: 767px) {
+          .sidebar-spacer { display: none; }
+        }
+      `}</style>
     </div>
   )
 }

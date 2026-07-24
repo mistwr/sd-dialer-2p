@@ -1,5 +1,4 @@
-// The middleware in lib/supabase/proxy.ts redirects "/" before this page
-// is ever rendered, so this component never executes.
-export default function Page() {
+// Handled by middleware — redirects to /login or /admin
+export default function RootPage() {
   return null
 }
