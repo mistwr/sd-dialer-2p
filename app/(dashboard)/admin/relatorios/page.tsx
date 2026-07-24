@@ -8,7 +8,7 @@ import { reportService } from '@/lib/services'
 import useSWR from 'swr'
 
 export default function RelatóriosPage() {
-  const { profile, isAdmin } = useAuth()
+  const { profile, isAdmin, loading } = useAuth()
   const [companyId, setCompanyId] = useState<string>('')
 
   useEffect(() => {
@@ -28,6 +28,16 @@ export default function RelatóriosPage() {
     () => (companyId ? reportService.getComercialRanking(companyId) : Promise.resolve(null)),
     { revalidateOnFocus: false }
   )
+
+  if (loading) {
+    return (
+      <DashboardLayout title="Relatórios">
+        <div className="flex items-center justify-center h-64">
+          <LoadingSpinner message="A carregar..." />
+        </div>
+      </DashboardLayout>
+    )
+  }
 
   if (!isAdmin()) {
     return (

@@ -1,11 +1,23 @@
 'use client'
 
+import Link from 'next/link'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
-import { Alert } from '@/components/common'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { Alert, LoadingSpinner } from '@/components/common'
+import { Users, BarChart3, ArrowRight } from 'lucide-react'
 
 export default function SupervisorDashboardPage() {
-  const { profile, isSupervisor } = useAuth()
+  const { profile, isSupervisor, loading } = useAuth()
+
+  if (loading) {
+    return (
+      <DashboardLayout title="Dashboard">
+        <div className="flex items-center justify-center h-64">
+          <LoadingSpinner message="A carregar..." />
+        </div>
+      </DashboardLayout>
+    )
+  }
 
   if (!isSupervisor()) {
     return (
@@ -16,32 +28,43 @@ export default function SupervisorDashboardPage() {
   }
 
   return (
-    <DashboardLayout title="Dashboard Supervisor">
+    <DashboardLayout title="Dashboard">
       <div className="space-y-6">
-        <div className="sd-card">
-          <div className="sd-card-body">
-            <h2 className="text-lg font-semibold mb-4">Bem-vindo, {profile?.full_name}!</h2>
-            <p className="text-gray-600">
-              Este é seu dashboard de supervisor. Aqui você pode gerenciar sua equipa, visualizar leads e acompanhar o desempenho.
-            </p>
+        <div>
+          <h2 className="text-[18px] font-bold text-gray-900">
+            Bom dia, {profile?.full_name?.split(' ')[0]}
+          </h2>
+          <p className="text-[13px] text-gray-500 mt-0.5">Resumo da tua equipa.</p>
+        </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-              <a href="/dashboard/supervisor/team" className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
-                <p className="font-semibold">👥 Minha Equipa</p>
-                <p className="text-sm text-gray-600 mt-1">Visualizar e gerenciar comerciais</p>
-              </a>
-
-              <a href="/dashboard/supervisor/leads" className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
-                <p className="font-semibold">📋 Leads</p>
-                <p className="text-sm text-gray-600 mt-1">Ver leads da sua equipa</p>
-              </a>
-
-              <a href="/dashboard/supervisor/relatorios" className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
-                <p className="font-semibold">📈 Relatórios</p>
-                <p className="text-sm text-gray-600 mt-1">Análise de desempenho da equipa</p>
-              </a>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Link
+            href="/supervisor/team"
+            className="flex items-center gap-4 bg-white rounded-xl border border-gray-200 p-4 hover:border-blue-300 hover:shadow-sm transition-all group"
+          >
+            <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 shrink-0 group-hover:bg-blue-100 transition-colors">
+              <Users size={17} />
             </div>
-          </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13.5px] font-semibold text-gray-900">Minha Equipa</p>
+              <p className="text-[12px] text-gray-500 mt-0.5">Visualizar e gerir comerciais</p>
+            </div>
+            <ArrowRight size={15} className="text-gray-300 group-hover:text-blue-500 transition-colors shrink-0" />
+          </Link>
+
+          <Link
+            href="/supervisor/relatorios"
+            className="flex items-center gap-4 bg-white rounded-xl border border-gray-200 p-4 hover:border-blue-300 hover:shadow-sm transition-all group"
+          >
+            <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0 group-hover:bg-emerald-100 transition-colors">
+              <BarChart3 size={17} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13.5px] font-semibold text-gray-900">Relatórios</p>
+              <p className="text-[12px] text-gray-500 mt-0.5">Análise de desempenho da equipa</p>
+            </div>
+            <ArrowRight size={15} className="text-gray-300 group-hover:text-blue-500 transition-colors shrink-0" />
+          </Link>
         </div>
       </div>
     </DashboardLayout>

@@ -8,7 +8,7 @@ import { leadsService } from '@/lib/services'
 import useSWR from 'swr'
 
 export default function LeadsPage() {
-  const { profile, isAdmin } = useAuth()
+  const { profile, isAdmin, loading } = useAuth()
   const [companyId, setCompanyId] = useState<string>('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
@@ -35,6 +35,16 @@ export default function LeadsPage() {
       lead.phone.includes(searchTerm) ||
       (lead.email && lead.email.toLowerCase().includes(searchTerm.toLowerCase()))
   )
+
+  if (loading) {
+    return (
+      <DashboardLayout title="Leads">
+        <div className="flex items-center justify-center h-64">
+          <LoadingSpinner message="A carregar..." />
+        </div>
+      </DashboardLayout>
+    )
+  }
 
   if (!isAdmin()) {
     return (

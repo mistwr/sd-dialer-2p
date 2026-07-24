@@ -8,7 +8,7 @@ import { usuarioService } from '@/lib/services'
 import useSWR from 'swr'
 
 export default function UsuariosPage() {
-  const { profile, isAdmin } = useAuth()
+  const { profile, isAdmin, loading } = useAuth()
   const [companyId, setCompanyId] = useState<string>('')
   const [showForm, setShowForm] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -24,6 +24,16 @@ export default function UsuariosPage() {
     () => (companyId ? usuarioService.getByCompany(companyId) : Promise.resolve([])),
     { revalidateOnFocus: false }
   )
+
+  if (loading) {
+    return (
+      <DashboardLayout title="Utilizadores">
+        <div className="flex items-center justify-center h-64">
+          <LoadingSpinner message="A carregar..." />
+        </div>
+      </DashboardLayout>
+    )
+  }
 
   if (!isAdmin()) {
     return (

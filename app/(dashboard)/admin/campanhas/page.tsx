@@ -8,7 +8,7 @@ import { campanhasService } from '@/lib/services'
 import useSWR from 'swr'
 
 export default function CampanhasPage() {
-  const { profile, isAdmin } = useAuth()
+  const { profile, isAdmin, loading } = useAuth()
   const [companyId, setCompanyId] = useState<string>('')
   const [showForm, setShowForm] = useState(false)
 
@@ -25,6 +25,16 @@ export default function CampanhasPage() {
   )
 
   const campanhas = response?.data || []
+
+  if (loading) {
+    return (
+      <DashboardLayout title="Campanhas">
+        <div className="flex items-center justify-center h-64">
+          <LoadingSpinner message="A carregar..." />
+        </div>
+      </DashboardLayout>
+    )
+  }
 
   if (!isAdmin()) {
     return (

@@ -8,7 +8,7 @@ import { leadsService } from '@/lib/services'
 import useSWR from 'swr'
 
 export default function ComercialLeadsPage() {
-  const { user, profile, isComercial } = useAuth()
+  const { user, profile, isComercial, loading } = useAuth()
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedLead, setSelectedLead] = useState<any>(null)
@@ -30,6 +30,16 @@ export default function ComercialLeadsPage() {
 
     return matchesSearch && matchesStatus
   })
+
+  if (loading) {
+    return (
+      <DashboardLayout title="Meus Leads">
+        <div className="flex items-center justify-center h-64">
+          <LoadingSpinner message="A carregar..." />
+        </div>
+      </DashboardLayout>
+    )
+  }
 
   if (!isComercial()) {
     return (
