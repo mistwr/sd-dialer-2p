@@ -158,3 +158,44 @@ export function isFutureDate(date: string): boolean {
 export function isPastDate(date: string): boolean {
   return new Date(date) < new Date()
 }
+
+// Lead Validator com retorno estruturado
+export function validateLead(data: any): { isValid: boolean; errors?: string[] } {
+  try {
+    leadSchema.parse(data)
+    return { isValid: true }
+  } catch (error: any) {
+    const errors = error.errors?.map((e: any) => e.message) || ['Validação falhou']
+    return { isValid: false, errors }
+  }
+}
+
+// Call History Validator com retorno estruturado
+export function validatePhoneCall(data: any): { isValid: boolean; errors?: string[] } {
+  try {
+    const schema = z.object({
+      lead_id: z.string().min(1, 'Lead ID é obrigatório'),
+      campaign_id: z.string().min(1, 'Campaign ID é obrigatório'),
+      duration_seconds: z.number().min(0, 'Duração deve ser maior que 0'),
+      result: z.enum([
+        'venda',
+        'nao_interessado',
+        'nao_atende',
+        'numero_errado',
+        'ligar_depois',
+        'cliente_aderiu',
+        'sem_cobertura',
+        'outro',
+      ]),
+      notes: z.string().optional().or(z.literal('')),
+      follow_up_date: z.string().optional().or(z.literal('')),
+      follow_up_time: z.string().optional().or(z.literal('')),
+    })
+
+    schema.parse(data)
+    return { isValid: true }
+  } catch (error: any) {
+    const errors = error.errors?.map((e: any) => e.message) || ['Validação falhou']
+    return { isValid: false, errors }
+  }
+}
