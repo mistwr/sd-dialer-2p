@@ -19,22 +19,20 @@ export function ServiceWorkerRegistration() {
           updateViaCache: 'none',
         })
         .then((registration) => {
-          console.log('[v0] Service Worker registered:', registration)
-
           // Check for updates periodically
           setInterval(() => {
             registration.update()
           }, 3600000) // Check every hour
         })
-        .catch((error) => {
-          console.error('[v0] Service Worker registration failed:', error)
+        .catch(() => {
+          // SW registration failed silently in development
         })
     }
 
     // Handle Service Worker messages
     if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-      const messageHandler = (event: MessageEvent) => {
-        console.log('[v0] Message from Service Worker:', event.data)
+      const messageHandler = (_event: MessageEvent) => {
+        // handle SW messages if needed
       }
 
       navigator.serviceWorker.addEventListener('message', messageHandler)
