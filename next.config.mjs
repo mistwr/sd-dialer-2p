@@ -48,7 +48,6 @@ const nextConfig = withPWA({
     unoptimized: true,
   },
   reactStrictMode: true,
-  swcMinify: true,
   compress: true,
 })
 
