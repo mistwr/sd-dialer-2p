@@ -109,11 +109,7 @@ function ParceirosForm({ initial, companies, onSave, onClose }: {
 export default function ParceirosPage() {
   const { data: users = [], isLoading: loadingUsers, mutate } = useSWR(
     'usuarios-list-v2',
-    async () => {
-      const result = await usuarioService.getAll()
-      console.log('[v0] parceiros SWR fetcher ran, rows:', result.length, result.map(u => u.email))
-      return result
-    },
+    () => usuarioService.getAll(),
     { revalidateOnMount: true, dedupingInterval: 0 }
   )
   const { data: companies = [] } = useSWR('companies', () => companyService.getAll())
