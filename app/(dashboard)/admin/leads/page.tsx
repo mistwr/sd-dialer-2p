@@ -163,6 +163,7 @@ export default function LeadsAdminPage() {
 
   // Import state
   const [importPreview, setImportPreview] = useState<any[] | null>(null)
+  const [importHeaders, setImportHeaders] = useState<string[]>([])
   const [importError, setImportError] = useState<string | null>(null)
   const [importCampanha, setImportCampanha] = useState('')
   const [importing, setImporting] = useState(false)
@@ -190,9 +191,10 @@ export default function LeadsAdminPage() {
     const file = e.target.files?.[0]
     if (!file) return
     try {
-      const { rows, duplicatesRemoved: dups } = await parseFile(file)
+      const { rows, headers, duplicatesRemoved: dups } = await parseFile(file)
       if (!rows.length) { setImportError('Nenhuma linha valida encontrada. Verifique as colunas: nome, telefone.'); return }
       setImportPreview(rows)
+      setImportHeaders(headers)
       setDuplicatesRemoved(dups)
     } catch {
       setImportError('Erro ao ler ficheiro. Use .xlsx ou .csv com colunas nome e telefone.')
@@ -222,6 +224,7 @@ export default function LeadsAdminPage() {
       mutate()
       setModal({ type: null })
       setImportPreview(null)
+      setImportHeaders([])
       setDuplicatesRemoved(0)
       setImportCampanha('')
       if (fileRef.current) fileRef.current.value = ''
@@ -429,64 +432,121 @@ export default function LeadsAdminPage() {
       </Modal>
 
       {/* Import Modal */}
-      <Modal open={modal.type === 'import'} onClose={() => { setModal({ type: null }); setImportPreview(null); setImportError(null) }} title="Importar Leads (.xlsx / .csv)" width={600}>
+      <Modal
+        open={modal.type === 'import'}
+        onClose={() => { setModal({ type: null }); setImportPreview(null); setImportHeaders([]); setImportError(null) }}
+        title="Importar Leads"
+        width={700}
+      >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ background: '#F8FAFC', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#64748B', lineHeight: 1.6 }}>
-            <strong style={{ color: '#374151' }}>Colunas suportadas:</strong> nome, telefone, email, morada, codigo_postal, localidade, operador, observacoes
-            <br />
-            <span style={{ fontSize: 12, color: '#94A3B8' }}>As colunas sao detetadas automaticamente (varios formatos aceites).</span>
+
+          {/* Step 1: File + campanha */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 5 }}>
+                Ficheiro <span style={{ color: '#94A3B8', fontWeight: 400 }}>(.xlsx, .xls ou .csv)</span>
+              </label>
+              <label style={{
+                display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+                padding: '10px 14px', borderRadius: 8, border: '1.5px dashed #CBD5E1',
+                background: '#F8FAFC', fontSize: 13, color: '#64748B',
+                transition: 'border-color 0.15s',
+              }}
+                onMouseEnter={e => (e.currentTarget.style.borderColor = '#2563EB')}
+                onMouseLeave={e => (e.currentTarget.style.borderColor = '#CBD5E1')}
+              >
+                <Upload size={16} color="#2563EB" />
+                {fileRef.current?.files?.[0]?.name ?? 'Escolher ficheiro...'}
+                <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFileChange} style={{ display: 'none' }} />
+              </label>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Campanha <span style={{ color: '#94A3B8', fontWeight: 400 }}>(opcional)</span></label>
+              <select value={importCampanha} onChange={e => setImportCampanha(e.target.value)}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 13, outline: 'none', background: '#fff', color: '#374151' }}>
+                <option value="">— Sem campanha —</option>
+                {campanhas.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
           </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Campanha (opcional)</label>
-            <select value={importCampanha} onChange={e => setImportCampanha(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 14, outline: 'none', background: '#fff' }}>
-              <option value="">— Sem campanha —</option>
-              {campanhas.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
+          {/* Hint */}
+          {!importPreview && !importError && (
+            <div style={{ background: '#F8FAFC', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#94A3B8', lineHeight: 1.6 }}>
+              Colunas detetadas automaticamente: <strong style={{ color: '#64748B' }}>nome, telefone</strong> (obrigatorias) +
+              email, morada, codigo_postal, localidade, operador, observacoes
+            </div>
+          )}
 
-          <div>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Ficheiro (.xlsx ou .csv)</label>
-            <input
-              ref={fileRef} type="file" accept=".xlsx,.xls,.csv"
-              onChange={handleFileChange}
-              style={{ width: '100%', padding: '9px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 13, cursor: 'pointer', boxSizing: 'border-box' }}
-            />
-          </div>
-
+          {/* Error */}
           {importError && (
             <div style={{ background: '#FEE2E2', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#991B1B' }}>
               {importError}
             </div>
           )}
 
-          {importPreview && (
-            <div style={{ background: '#F0FDF4', borderRadius: 10, padding: '12px 16px', border: '1px solid #BBF7D0' }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#166534', marginBottom: 4 }}>
-                {importPreview.length} lead{importPreview.length !== 1 ? 's' : ''} prontas para importar
-              </div>
-              {duplicatesRemoved > 0 && (
-                <div style={{ fontSize: 12, color: '#D97706', marginBottom: 8 }}>
-                  {duplicatesRemoved} duplicado{duplicatesRemoved !== 1 ? 's' : ''} removido{duplicatesRemoved !== 1 ? 's' : ''} (mesmo numero)
-                </div>
-              )}
-              <div style={{ maxHeight: 160, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {importPreview.slice(0, 8).map((l, i) => (
-                  <div key={i} style={{ fontSize: 13, color: '#374151' }}>
-                    {l.nome} &mdash; {l.telefone}{l.operador ? ` (${l.operador})` : ''}
-                    {l.localidade ? ` · ${l.localidade}` : ''}
+          {/* Preview table */}
+          {importPreview && importPreview.length > 0 && (
+            <div>
+              {/* Summary bar */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ background: '#F0FDF4', borderRadius: 6, padding: '4px 10px', fontSize: 13, fontWeight: 700, color: '#166534', border: '1px solid #BBF7D0' }}>
+                    {importPreview.length} lead{importPreview.length !== 1 ? 's' : ''} detetadas
                   </div>
-                ))}
-                {importPreview.length > 8 && (
-                  <div style={{ fontSize: 12, color: '#94A3B8' }}>...e mais {importPreview.length - 8}</div>
+                  {duplicatesRemoved > 0 && (
+                    <div style={{ background: '#FFFBEB', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, color: '#92400E', border: '1px solid #FDE68A' }}>
+                      {duplicatesRemoved} duplicado{duplicatesRemoved !== 1 ? 's' : ''} removido{duplicatesRemoved !== 1 ? 's' : ''}
+                    </div>
+                  )}
+                </div>
+                <span style={{ fontSize: 12, color: '#94A3B8' }}>Previa das primeiras {Math.min(5, importPreview.length)} linhas</span>
+              </div>
+
+              {/* Table */}
+              <div style={{ borderRadius: 10, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                        <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#374151', whiteSpace: 'nowrap' }}>#</th>
+                        {(['nome', 'telefone', 'email', 'morada', 'localidade', 'operador'] as const)
+                          .filter(col => importPreview.some(r => r[col]))
+                          .map(col => (
+                            <th key={col} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#374151', whiteSpace: 'nowrap', textTransform: 'capitalize' }}>
+                              {col === 'codigo_postal' ? 'Cod. Postal' : col.replace(/_/g, ' ')}
+                              {(col === 'nome' || col === 'telefone') && <span style={{ color: '#DC2626', marginLeft: 2 }}>*</span>}
+                            </th>
+                          ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importPreview.slice(0, 5).map((row, i) => (
+                        <tr key={i} style={{ borderBottom: i < Math.min(4, importPreview.length - 1) ? '1px solid #F1F5F9' : 'none', background: i % 2 === 0 ? '#fff' : '#FAFAFA' }}>
+                          <td style={{ padding: '8px 12px', color: '#94A3B8', fontWeight: 500 }}>{i + 1}</td>
+                          {(['nome', 'telefone', 'email', 'morada', 'localidade', 'operador'] as const)
+                            .filter(col => importPreview.some(r => r[col]))
+                            .map(col => (
+                              <td key={col} style={{ padding: '8px 12px', color: '#374151', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {row[col] ?? <span style={{ color: '#CBD5E1' }}>—</span>}
+                              </td>
+                            ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {importPreview.length > 5 && (
+                  <div style={{ padding: '8px 12px', background: '#F8FAFC', borderTop: '1px solid #F1F5F9', fontSize: 12, color: '#94A3B8', textAlign: 'center' }}>
+                    ...e mais {importPreview.length - 5} linha{importPreview.length - 5 !== 1 ? 's' : ''}
+                  </div>
                 )}
               </div>
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <button onClick={() => { setModal({ type: null }); setImportPreview(null); setImportError(null) }}
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 4 }}>
+            <button onClick={() => { setModal({ type: null }); setImportPreview(null); setImportHeaders([]); setImportError(null) }}
               style={{ padding: '9px 20px', borderRadius: 10, border: '1.5px solid #E2E8F0', background: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
               Cancelar
             </button>
