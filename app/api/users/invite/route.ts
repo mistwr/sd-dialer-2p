@@ -1,11 +1,12 @@
 import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies()
 
-  // Require admin auth
+  // Verify the caller is authenticated and is an admin
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -26,15 +27,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Nao autorizado' }, { status: 401 })
   }
 
-  // Check caller is admin
   const { data: caller } = await supabase
     .from('usuarios')
     .select('role, company_id')
     .eq('id', user.id)
     .single()
 
-  if (!caller || caller.role !== 'admin') {
-    return NextResponse.json({ error: 'Apenas administradores podem convidar utilizadores' }, { status: 403 })
+  if (!caller || (caller.role !== 'admin' && caller.role !== 'supervisor')) {
+    return NextResponse.json({ error: 'Apenas administradores podem criar utilizadores' }, { status: 403 })
   }
 
   const body = await request.json()
@@ -44,67 +44,52 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'email e full_name sao obrigatorios' }, { status: 400 })
   }
 
-  // Use admin client to send invite
-  const supabaseAdmin = createServerClient(
+  // Admin client: uses createClient from @supabase/supabase-js (not SSR)
+  // so that .auth.admin methods are available
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!serviceKey) {
+    return NextResponse.json({ error: 'Configuracao do servidor incompleta (SUPABASE_SERVICE_ROLE_KEY em falta)' }, { status: 500 })
+  }
+
+  const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll() {},
-      },
-      auth: { persistSession: false },
-    }
+    serviceKey,
+    { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
-  // Invite via Supabase (sends magic link email)
-  const { data: inviteData, error: inviteError } = await (supabaseAdmin.auth.admin as any).inviteUserByEmail(email, {
-    data: { full_name },
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? request.nextUrl.origin}/api/auth/callback?next=/parceiro`,
-  }).catch(() => ({ data: null, error: new Error('invite_not_available') }))
+  // Try to create user with password directly (most reliable path)
+  const effectivePassword = password?.trim() || (Math.random().toString(36).slice(-10) + 'A1!')
+  const { data: signUpData, error: signUpError } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password: effectivePassword,
+    email_confirm: true,       // skip email confirmation
+    user_metadata: { full_name },
+  })
 
-  if (inviteError) {
-    // Fall back: create with provided password or a generated one
-    const tempPassword = password ?? (Math.random().toString(36).slice(-10) + 'A1!')
-    const { data: signUpData, error: signUpError } = await supabaseAdmin.auth.signUp({
-      email,
-      password: tempPassword,
-      options: { data: { full_name } },
-    })
-    if (signUpError) {
-      return NextResponse.json({ error: signUpError.message }, { status: 400 })
-    }
-    if (!signUpData.user) {
-      return NextResponse.json({ error: 'Utilizador nao criado' }, { status: 500 })
-    }
-    const { error: profileError } = await supabaseAdmin.from('usuarios').insert({
-      id: signUpData.user.id,
-      email,
-      full_name,
-      phone: phone ?? null,
-      company_id: caller.company_id,
-      role,
-      status: 'active',
-    })
-    if (profileError) {
-      return NextResponse.json({ error: profileError.message }, { status: 400 })
-    }
-    return NextResponse.json({ id: signUpData.user.id, ...(password ? {} : { temp_password: tempPassword }) })
+  if (signUpError) {
+    return NextResponse.json({ error: signUpError.message }, { status: 400 })
   }
 
-  // Insert profile row
-  const newUserId = inviteData?.user?.id
-  if (newUserId) {
-    await supabaseAdmin.from('usuarios').insert({
-      id: newUserId,
-      email,
-      full_name,
-      phone: phone ?? null,
-      company_id: caller.company_id,
-      role,
-      status: 'active',
-    }).then(() => {})
+  if (!signUpData.user) {
+    return NextResponse.json({ error: 'Utilizador nao criado' }, { status: 500 })
   }
 
-  return NextResponse.json({ id: newUserId, invited: true })
+  // Insert the profile row in the public usuarios table
+  const { error: profileError } = await supabaseAdmin.from('usuarios').insert({
+    id: signUpData.user.id,
+    email,
+    full_name,
+    phone: phone ?? null,
+    company_id: caller.company_id,
+    role,
+    status: 'active',
+  })
+
+  if (profileError) {
+    // Clean up the auth user so the admin can retry
+    await supabaseAdmin.auth.admin.deleteUser(signUpData.user.id)
+    return NextResponse.json({ error: profileError.message }, { status: 400 })
+  }
+
+  return NextResponse.json({ id: signUpData.user.id })
 }
