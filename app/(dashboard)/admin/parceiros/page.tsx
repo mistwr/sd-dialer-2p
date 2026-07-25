@@ -5,7 +5,7 @@ import {
   Users, Plus, Pencil, Search, Mail, Phone, Clock,
   Trash2, KeyRound, ShieldCheck, MoreVertical, X
 } from 'lucide-react'
-import { usuarioService, companyService } from '@/lib/services'
+import { usuarioService } from '@/lib/services'
 import { createClient } from '@/lib/supabase/client'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
@@ -19,11 +19,32 @@ function fmtDate(d: string | null) {
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
-async function getCallerJwt() {
+async function getCallerJwt(): Promise<string> {
   const sb = createClient()
+
+  // 1. Try getSession first (fast, uses localStorage cache)
   const { data: { session } } = await sb.auth.getSession()
-  if (!session?.access_token) throw new Error('Sessao expirada. Faca login novamente.')
-  return session.access_token
+  if (session?.access_token) return session.access_token
+
+  // 2. Force a token refresh (network round-trip, always works if cookie/storage is valid)
+  const { data: refreshed } = await sb.auth.refreshSession()
+  if (refreshed?.session?.access_token) return refreshed.session.access_token
+
+  // 3. Last resort: read raw from localStorage (Supabase key pattern)
+  if (typeof window !== 'undefined') {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i) ?? ''
+      if (key.includes('auth-token') || key.includes('supabase.auth.token')) {
+        try {
+          const val = JSON.parse(localStorage.getItem(key) ?? '{}')
+          const token = val?.access_token ?? val?.currentSession?.access_token
+          if (token) return token
+        } catch { /* ignore */ }
+      }
+    }
+  }
+
+  throw new Error('Sessao expirada. Faca login novamente.')
 }
 
 // ── Form component ────────────────────────────────────────────────────────────
@@ -234,8 +255,15 @@ export default function ParceirosPage() {
     { revalidateOnMount: true, dedupingInterval: 0 }
   )
   const { data: companies = [], isLoading: loadingCompanies } = useSWR(
-    'companies',
-    () => companyService.getAll(),
+    'companies-api',
+    async () => {
+      try {
+        const jwt = await getCallerJwt()
+        const res = await fetch('/api/companies', { headers: { Authorization: `Bearer ${jwt}` } })
+        if (!res.ok) return []
+        return res.json()
+      } catch { return [] }
+    },
     { revalidateOnMount: true, dedupingInterval: 0 }
   )
 

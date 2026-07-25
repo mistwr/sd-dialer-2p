@@ -192,12 +192,23 @@ export default function LeadsAdminPage() {
     if (!file) return
     try {
       const { rows, headers, duplicatesRemoved: dups } = await parseFile(file)
-      if (!rows.length) { setImportError('Nenhuma linha valida encontrada. Verifique as colunas: nome, telefone.'); return }
+      if (!rows.length) {
+        if (headers.length === 0) {
+          setImportError('Ficheiro vazio ou sem dados. Verifique se o ficheiro tem conteudo.')
+        } else {
+          setImportError(
+            `Nenhuma linha valida encontrada. Colunas detetadas: "${headers.slice(0, 5).join('", "')}". ` +
+            `Sao necessarias as colunas "nome" e "telefone" (ou equivalentes como "cliente", "contacto", "n telefone", etc.)`
+          )
+        }
+        return
+      }
       setImportPreview(rows)
       setImportHeaders(headers)
       setDuplicatesRemoved(dups)
-    } catch {
-      setImportError('Erro ao ler ficheiro. Use .xlsx ou .csv com colunas nome e telefone.')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setImportError(`Erro ao ler ficheiro: ${msg}. Verifique se e um .xlsx ou .csv valido.`)
     }
   }
 
