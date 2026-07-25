@@ -38,10 +38,10 @@ export const usuarioService = {
     const sb = createClient()
     const { data, error } = await sb
       .from('usuarios')
-      .select('*, companies(id,name)')
+      .select('*')
       .order('full_name')
     if (error) throw error
-    return (data ?? []) as (Usuario & { companies: { id: string; name: string } | null })[]
+    return (data ?? []) as Usuario[]
   },
   async getByCompany(companyId: string) {
     const sb = createClient()
