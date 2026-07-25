@@ -16,13 +16,13 @@ import Link from 'next/link'
 
 // ---- Call Results Config ----
 const RESULTS: { key: CallResult; label: string; color: string; bg: string; Icon: React.ElementType }[] = [
-  { key: 'venda',          label: 'Venda',          color: '#16A34A', bg: '#F0FDF4', Icon: CheckCircle2 },
-  { key: 'nao_interessado',label: 'Nao Interessado', color: '#DC2626', bg: '#FEF2F2', Icon: PhoneOff },
-  { key: 'nao_atende',     label: 'Nao Atende',      color: '#6B7280', bg: '#F9FAFB', Icon: PhoneMissed },
-  { key: 'numero_errado',  label: 'Numero Errado',   color: '#7C3AED', bg: '#F5F3FF', Icon: AlertCircle },
-  { key: 'ligar_depois',   label: 'Ligar Depois',    color: '#0891B2', bg: '#ECFEFF', Icon: Calendar },
-  { key: 'sem_cobertura',  label: 'Sem Cobertura',   color: '#EA580C', bg: '#FFF7ED', Icon: Wifi },
-  { key: 'outro',          label: 'Outro',           color: '#6B7280', bg: '#F9FAFB', Icon: HelpCircle },
+  { key: 'venda',          label: 'Venda',           color: '#16A34A', bg: '#F0FDF4', Icon: CheckCircle2 },
+  { key: 'nao_interessado',label: 'Nao Interessado',  color: '#DC2626', bg: '#FEF2F2', Icon: PhoneOff },
+  { key: 'nao_atende',     label: 'Nao Atende',       color: '#6B7280', bg: '#F9FAFB', Icon: PhoneMissed },
+  { key: 'numero_errado',  label: 'Numero Errado',    color: '#7C3AED', bg: '#F5F3FF', Icon: AlertCircle },
+  { key: 'ligar_depois',   label: 'Ligar Depois',     color: '#0891B2', bg: '#ECFEFF', Icon: Calendar },
+  { key: 'sem_cobertura',  label: 'Sem Cobertura',    color: '#EA580C', bg: '#FFF7ED', Icon: Wifi },
+  { key: 'outro',          label: 'Outro',            color: '#6B7280', bg: '#F9FAFB', Icon: HelpCircle },
 ]
 
 function formatDuration(seconds: number): string {
@@ -51,9 +51,12 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
   const [elapsed, setElapsed] = useState(0)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const startTimeRef = useRef<number>(0)
+  // Track whether call was initiated (so returning forces feedback)
+  const callInitiated = useRef(false)
 
-  // Result modal
+  // Result sheet
   const [showResult, setShowResult] = useState(false)
+  const [resultForced, setResultForced] = useState(false) // if forced, cannot dismiss
   const [selectedResult, setSelectedResult] = useState<CallResult | null>(null)
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
@@ -68,7 +71,6 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
   // Tab
   const [tab, setTab] = useState<'info' | 'history'>('info')
 
-  // Timer: start on call, stop when page regains visibility
   const startTimer = useCallback(() => {
     setElapsed(0)
     startTimeRef.current = Date.now()
@@ -83,10 +85,13 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
     setTimerActive(false)
   }, [])
 
+  // When user returns from phone app → force feedback sheet
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible' && timerActive) {
+      if (document.visibilityState === 'visible' && callInitiated.current) {
         stopTimer()
+        callInitiated.current = false
+        setResultForced(true)
         setShowResult(true)
       }
     }
@@ -95,14 +100,14 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
       document.removeEventListener('visibilitychange', handleVisibility)
       if (timerRef.current) clearInterval(timerRef.current)
     }
-  }, [timerActive, stopTimer])
+  }, [stopTimer])
 
   const handleCall = () => {
     if (!lead) return
     const phone = lead.telefone.replace(/\s/g, '')
-    const telUrl = `tel:${phone}`
+    callInitiated.current = true
     startTimer()
-    window.location.href = telUrl
+    window.location.href = `tel:${phone}`
   }
 
   const handleWhatsApp = () => {
@@ -130,7 +135,6 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
         notes: notes.trim() || undefined,
       })
 
-      // Map call result to lead status
       const statusMap: Record<CallResult, Lead['status']> = {
         venda:          'vendido',
         nao_interessado:'nao_interessado',
@@ -145,11 +149,11 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
       await mutateHistory()
 
       setShowResult(false)
+      setResultForced(false)
       setSelectedResult(null)
       setNotes('')
       setElapsed(0)
 
-      // If "ligar_depois", show follow-up dialog
       if (selectedResult === 'ligar_depois') setShowFollowUp(true)
     } finally {
       setSaving(false)
@@ -183,13 +187,12 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
 
   return (
     <>
-    <div style={{ maxWidth: 600, margin: '0 auto' }} className="anim-fade-in">
+      <div style={{ maxWidth: 600, margin: '0 auto' }} className="anim-fade-in">
 
         {/* Back */}
         <Link href="/parceiro" style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
           color: '#64748B', textDecoration: 'none', fontSize: 13, marginBottom: 20,
-          transition: 'color 0.15s',
         }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#2563EB' }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#64748B' }}
@@ -212,7 +215,6 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
                   {lead.telefone}
                 </div>
               </div>
-              {/* Status badge */}
               <div style={{
                 padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
                 background: 'rgba(255,255,255,0.1)', color: '#E2E8F0',
@@ -222,7 +224,7 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
               </div>
             </div>
 
-            {/* Timer */}
+            {/* Active call timer */}
             {timerActive && (
               <div style={{
                 marginTop: 14, display: 'flex', alignItems: 'center', gap: 8,
@@ -237,86 +239,81 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
             )}
           </div>
 
-          {/* Action Buttons */}
-          <div style={{ padding: '16px 20px', display: 'flex', gap: 10 }}>
+          {/* ---- CALL BUTTON (main CTA) ---- */}
+          <div style={{ padding: '20px 20px 8px' }}>
             <button
               onClick={handleCall}
               style={{
-                flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                background: '#16A34A', color: '#fff', border: 'none', borderRadius: 12,
-                padding: '14px 0', fontSize: 15, fontWeight: 700, cursor: 'pointer',
-                boxShadow: '0 4px 14px rgba(22,163,74,0.3)',
-                transition: 'transform 0.1s, box-shadow 0.15s',
+                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                background: timerActive ? '#15803D' : '#16A34A',
+                color: '#fff', border: 'none', borderRadius: 14,
+                padding: '18px 0', fontSize: 17, fontWeight: 700, cursor: 'pointer',
+                boxShadow: timerActive ? 'none' : '0 6px 20px rgba(22,163,74,0.35)',
+                transition: 'all 0.15s',
               }}
-              onMouseEnter={e => {
-                (e.currentTarget as HTMLElement).style.transform = 'scale(1.02)'
-                ;(e.currentTarget as HTMLElement).style.boxShadow = '0 6px 20px rgba(22,163,74,0.4)'
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLElement).style.transform = 'scale(1)'
-                ;(e.currentTarget as HTMLElement).style.boxShadow = '0 4px 14px rgba(22,163,74,0.3)'
-              }}
+              onMouseEnter={e => { if (!timerActive) (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 28px rgba(22,163,74,0.45)' }}
+              onMouseLeave={e => { if (!timerActive) (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 20px rgba(22,163,74,0.35)' }}
             >
-              <Phone size={20} />
-              Chamar
+              <Phone size={22} />
+              {timerActive ? `Em chamada — ${formatDuration(elapsed)}` : `Chamar  ${lead.telefone}`}
             </button>
+          </div>
+
+          {/* Secondary actions */}
+          <div style={{ padding: '8px 20px 16px', display: 'flex', gap: 8 }}>
             <button
               onClick={handleWhatsApp}
               style={{
                 flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 background: '#F0FDF4', color: '#16A34A', border: '1px solid #BBF7D0',
-                borderRadius: 12, padding: '14px 0', fontSize: 13, fontWeight: 600,
-                cursor: 'pointer', transition: 'all 0.15s',
+                borderRadius: 10, padding: '10px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                transition: 'background 0.15s',
               }}
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#DCFCE7' }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#F0FDF4' }}
             >
-              <MessageCircle size={18} />
+              <MessageCircle size={16} />
               WhatsApp
             </button>
             <button
               onClick={handleNavigate}
+              disabled={!lead.morada && !lead.localidade}
               style={{
                 flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE',
-                borderRadius: 12, padding: '14px 0', fontSize: 13, fontWeight: 600,
-                cursor: 'pointer', transition: 'all 0.15s',
+                borderRadius: 10, padding: '10px 0', fontSize: 13, fontWeight: 600,
+                cursor: (!lead.morada && !lead.localidade) ? 'not-allowed' : 'pointer',
+                opacity: (!lead.morada && !lead.localidade) ? 0.5 : 1,
+                transition: 'background 0.15s',
               }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#DBEAFE' }}
+              onMouseEnter={e => { if (lead.morada || lead.localidade) (e.currentTarget as HTMLElement).style.background = '#DBEAFE' }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#EFF6FF' }}
             >
-              <MapPin size={18} />
+              <MapPin size={16} />
               Navegar
             </button>
+            {/* Registar manually */}
+            <button
+              onClick={() => { setResultForced(false); setShowResult(true) }}
+              style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                background: '#F8FAFC', color: '#64748B', border: '1px solid #E2E8F0',
+                borderRadius: 10, padding: '10px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLElement).style.borderColor = '#2563EB'
+                ;(e.currentTarget as HTMLElement).style.color = '#2563EB'
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLElement).style.borderColor = '#E2E8F0'
+                ;(e.currentTarget as HTMLElement).style.color = '#64748B'
+              }}
+            >
+              <Plus size={15} />
+              Registar
+            </button>
           </div>
-
-          {/* Register result manually */}
-          {!timerActive && (
-            <div style={{ padding: '0 20px 16px' }}>
-              <button
-                onClick={() => setShowResult(true)}
-                style={{
-                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  background: '#F8FAFC', border: '1px dashed #CBD5E1', borderRadius: 10,
-                  padding: '10px 0', fontSize: 13, fontWeight: 500, color: '#64748B',
-                  cursor: 'pointer', transition: 'all 0.15s',
-                }}
-                onMouseEnter={e => {
-                  (e.currentTarget as HTMLElement).style.borderColor = '#2563EB'
-                  ;(e.currentTarget as HTMLElement).style.color = '#2563EB'
-                  ;(e.currentTarget as HTMLElement).style.background = '#EFF6FF'
-                }}
-                onMouseLeave={e => {
-                  (e.currentTarget as HTMLElement).style.borderColor = '#CBD5E1'
-                  ;(e.currentTarget as HTMLElement).style.color = '#64748B'
-                  ;(e.currentTarget as HTMLElement).style.background = '#F8FAFC'
-                }}
-              >
-                <Plus size={15} />
-                Registar resultado manualmente
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Tabs */}
@@ -430,41 +427,59 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
         )}
       </div>
 
-      {/* ---- Result Modal ---- */}
+      {/* ---- Result Sheet (bottom sheet, forced after call) ---- */}
       {showResult && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 100,
-          background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)',
+          background: resultForced ? 'rgba(15,23,42,0.75)' : 'rgba(15,23,42,0.5)',
+          backdropFilter: 'blur(4px)',
           display: 'flex', alignItems: 'flex-end',
         }}>
           <div style={{
             width: '100%', background: '#fff',
             borderRadius: '20px 20px 0 0',
-            padding: '24px 20px 32px',
-            maxHeight: '85vh', overflowY: 'auto',
+            padding: '24px 20px 36px',
+            maxHeight: '88vh', overflowY: 'auto',
           }} className="anim-scale-in">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6 }}>
               <div>
-                <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', margin: 0 }}>Resultado da Chamada</h2>
+                <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', margin: 0 }}>
+                  {resultForced ? 'Como correu a chamada?' : 'Resultado da Chamada'}
+                </h2>
                 {elapsed > 0 && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, color: '#64748B', fontSize: 12 }}>
                     <Clock size={12} />
                     Duracao: {formatDuration(elapsed)}
                   </div>
                 )}
+                {resultForced && (
+                  <p style={{ margin: '6px 0 0', fontSize: 13, color: '#64748B' }}>
+                    Preenche o resultado antes de continuar.
+                  </p>
+                )}
               </div>
-              <button onClick={() => setShowResult(false)} style={{
-                background: '#F1F5F9', border: 'none', borderRadius: 8, cursor: 'pointer',
-                width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <X size={16} color="#64748B" />
-              </button>
+              {/* Only show X if not forced */}
+              {!resultForced && (
+                <button onClick={() => setShowResult(false)} style={{
+                  background: '#F1F5F9', border: 'none', borderRadius: 8, cursor: 'pointer',
+                  width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  <X size={16} color="#64748B" />
+                </button>
+              )}
+            </div>
+
+            {/* Result lead info */}
+            <div style={{ background: '#F8FAFC', borderRadius: 10, padding: '10px 14px', marginBottom: 16, marginTop: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{lead.nome}</div>
+              <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{lead.telefone}</div>
             </div>
 
             {/* Result options */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 20 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
               {RESULTS.map(r => {
-                const selected = selectedResult === r.key
+                const isSelected = selectedResult === r.key
                 const Icon = r.Icon
                 return (
                   <button
@@ -473,13 +488,13 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10,
                       padding: '13px 14px', borderRadius: 12, cursor: 'pointer',
-                      border: `2px solid ${selected ? r.color : '#E2E8F0'}`,
-                      background: selected ? r.bg : '#fff',
+                      border: `2px solid ${isSelected ? r.color : '#E2E8F0'}`,
+                      background: isSelected ? r.bg : '#fff',
                       transition: 'all 0.15s',
                     }}
                   >
                     <Icon size={18} color={r.color} />
-                    <span style={{ fontSize: 13, fontWeight: selected ? 700 : 500, color: selected ? r.color : '#374151' }}>
+                    <span style={{ fontSize: 13, fontWeight: isSelected ? 700 : 500, color: isSelected ? r.color : '#374151' }}>
                       {r.label}
                     </span>
                   </button>
@@ -488,27 +503,35 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
             </div>
 
             {/* Notes */}
-            <textarea
-              placeholder="Notas adicionais (opcional)..."
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              rows={3}
-              style={{
-                width: '100%', padding: '12px 14px', borderRadius: 10, border: '1px solid #E2E8F0',
-                fontSize: 13, resize: 'none', outline: 'none', fontFamily: 'inherit',
-                boxSizing: 'border-box', color: '#0F172A', marginBottom: 16,
-              }}
-            />
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                Notas adicionais <span style={{ fontWeight: 400, color: '#94A3B8' }}>(opcional)</span>
+              </label>
+              <textarea
+                placeholder="Ex: Cliente interessado, pedir proposta..."
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                rows={3}
+                style={{
+                  width: '100%', padding: '12px 14px', borderRadius: 10, border: '1px solid #E2E8F0',
+                  fontSize: 13, resize: 'none', outline: 'none', fontFamily: 'inherit',
+                  boxSizing: 'border-box', color: '#0F172A',
+                }}
+                onFocus={e => e.target.style.borderColor = '#2563EB'}
+                onBlur={e => e.target.style.borderColor = '#E2E8F0'}
+              />
+            </div>
 
             {/* Save */}
             <button
               onClick={handleSaveResult}
               disabled={!selectedResult || saving}
               style={{
-                width: '100%', padding: '14px', borderRadius: 12, border: 'none',
+                width: '100%', padding: '15px', borderRadius: 12, border: 'none',
                 background: selectedResult ? '#2563EB' : '#E2E8F0',
                 color: selectedResult ? '#fff' : '#9CA3AF',
-                fontSize: 15, fontWeight: 700, cursor: selectedResult ? 'pointer' : 'not-allowed',
+                fontSize: 15, fontWeight: 700,
+                cursor: selectedResult ? 'pointer' : 'not-allowed',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                 transition: 'background 0.15s',
               }}
@@ -522,7 +545,7 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
       {/* ---- Follow-up Modal ---- */}
       {showFollowUp && (
         <div style={{
-          position: 'fixed', inset: 0, zIndex: 100,
+          position: 'fixed', inset: 0, zIndex: 110,
           background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
         }}>
@@ -542,50 +565,34 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                  Data
-                </label>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Data</label>
                 <input
                   type="date"
                   value={followUpDate}
                   onChange={e => setFollowUpDate(e.target.value)}
                   min={new Date().toISOString().split('T')[0]}
-                  style={{
-                    width: '100%', padding: '10px 12px', borderRadius: 8,
-                    border: '1px solid #E2E8F0', fontSize: 13, outline: 'none',
-                    boxSizing: 'border-box', color: '#0F172A',
-                  }}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #E2E8F0', fontSize: 13, outline: 'none', boxSizing: 'border-box', color: '#0F172A' }}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                  Hora
-                </label>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Hora</label>
                 <input
                   type="time"
                   value={followUpTime}
                   onChange={e => setFollowUpTime(e.target.value)}
-                  style={{
-                    width: '100%', padding: '10px 12px', borderRadius: 8,
-                    border: '1px solid #E2E8F0', fontSize: 13, outline: 'none',
-                    boxSizing: 'border-box', color: '#0F172A',
-                  }}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #E2E8F0', fontSize: 13, outline: 'none', boxSizing: 'border-box', color: '#0F172A' }}
                 />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                  Nota (opcional)
+                  Nota <span style={{ fontWeight: 400, color: '#94A3B8' }}>(opcional)</span>
                 </label>
                 <textarea
                   value={followUpNotes}
                   onChange={e => setFollowUpNotes(e.target.value)}
                   rows={2}
-                  placeholder="Ex: Cliente pede para ligar depois das 18h"
-                  style={{
-                    width: '100%', padding: '10px 12px', borderRadius: 8,
-                    border: '1px solid #E2E8F0', fontSize: 13, resize: 'none',
-                    outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', color: '#0F172A',
-                  }}
+                  placeholder="Ex: Ligar depois das 18h"
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #E2E8F0', fontSize: 13, resize: 'none', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', color: '#0F172A' }}
                 />
               </div>
             </div>
@@ -604,7 +611,8 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
                   flex: 2, padding: '12px', borderRadius: 10, border: 'none',
                   background: followUpDate && followUpTime ? '#2563EB' : '#E2E8F0',
                   color: followUpDate && followUpTime ? '#fff' : '#9CA3AF',
-                  fontSize: 13, fontWeight: 700, cursor: followUpDate && followUpTime ? 'pointer' : 'not-allowed',
+                  fontSize: 13, fontWeight: 700,
+                  cursor: followUpDate && followUpTime ? 'pointer' : 'not-allowed',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 }}
               >
