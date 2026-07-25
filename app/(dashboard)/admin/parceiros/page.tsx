@@ -142,7 +142,7 @@ export default function ParceirosPage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Erro ao criar utilizador')
     }
-    mutate()
+    await mutate()
   }
 
   return (
