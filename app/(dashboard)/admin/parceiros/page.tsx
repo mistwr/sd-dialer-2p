@@ -19,11 +19,18 @@ function fmtDate(d: string | null) {
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
-async function getCallerJwt() {
+async function getCallerJwt(): Promise<string> {
   const sb = createClient()
+  // getSession() can return null on SSR or if the client hasn't refreshed yet.
+  // Fall back to checking localStorage directly (Supabase stores the token there).
   const { data: { session } } = await sb.auth.getSession()
-  if (!session?.access_token) throw new Error('Sessao expirada. Faca login novamente.')
-  return session.access_token
+  if (session?.access_token) return session.access_token
+
+  // Try refreshing the session once
+  const { data: refreshed } = await sb.auth.refreshSession()
+  if (refreshed?.session?.access_token) return refreshed.session.access_token
+
+  throw new Error('Sessao expirada. Faca login novamente.')
 }
 
 // ── Form component ────────────────────────────────────────────────────────────
