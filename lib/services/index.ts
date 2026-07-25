@@ -185,6 +185,16 @@ export const callHistoryService = {
     if (error) throw error
     return (data ?? []) as CallHistory[]
   },
+  async getByParceiro(parceiroId: string) {
+    const sb = createClient()
+    const { data, error } = await sb
+      .from('call_history')
+      .select('*, lead:lead_id(id,nome,telefone)')
+      .eq('parceiro_id', parceiroId)
+      .order('called_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []) as CallHistory[]
+  },
   async getStats(companyId: string, from?: string, to?: string) {
     const sb = createClient()
     let q = sb.from('call_history').select('*').eq('company_id', companyId)
@@ -193,6 +203,43 @@ export const callHistoryService = {
     const { data, error } = await q
     if (error) throw error
     return data ?? []
+  },
+}
+
+// -------------------------------------------------------
+// NOTIFICATIONS
+// -------------------------------------------------------
+export const notificacaoService = {
+  async getByUser(userId: string) {
+    const sb = createClient()
+    const { data, error } = await sb
+      .from('notificacoes')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(50)
+    if (error) throw error
+    return (data ?? []) as import('@/lib/types').Notificacao[]
+  },
+  async markRead(id: string) {
+    const sb = createClient()
+    const { error } = await sb.from('notificacoes').update({ read: true }).eq('id', id)
+    if (error) throw error
+  },
+  async markAllRead(userId: string) {
+    const sb = createClient()
+    const { error } = await sb.from('notificacoes').update({ read: true }).eq('user_id', userId).eq('read', false)
+    if (error) throw error
+  },
+  async getUnreadCount(userId: string) {
+    const sb = createClient()
+    const { count, error } = await sb
+      .from('notificacoes')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('read', false)
+    if (error) return 0
+    return count ?? 0
   },
 }
 

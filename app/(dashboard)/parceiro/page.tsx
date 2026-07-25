@@ -5,13 +5,13 @@ import Link from 'next/link'
 import {
   PhoneCall, Search, ChevronRight, Clock, User,
   CheckCircle2, PhoneOff, PhoneMissed, AlertCircle,
-  Calendar, Wifi, HelpCircle, Filter,
+  Calendar, Wifi, HelpCircle, Filter, Bell,
 } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useAuth } from '@/lib/hooks/useAuth'
-import { leadService } from '@/lib/services'
-import type { Lead, LeadStatus } from '@/lib/types'
+import { leadService, followUpService } from '@/lib/services'
+import type { Lead, LeadStatus, FollowUp } from '@/lib/types'
 
 const STATUS_META: Record<LeadStatus, { label: string; color: string; bg: string; Icon: React.ElementType }> = {
   novo:            { label: 'Novo',           color: '#2563EB', bg: '#EFF6FF', Icon: PhoneCall },
@@ -35,6 +35,12 @@ export default function ParceiroDashboardPage() {
   const { data: leads = [], isLoading } = useSWR(
     user ? ['parceiro-leads', user.id] : null,
     () => leadService.getAssigned(user!.id),
+    { revalidateOnFocus: true }
+  )
+
+  const { data: followUps = [], mutate: mutateFollowUps } = useSWR(
+    user ? ['follow-ups', user.id] : null,
+    () => followUpService.getUpcoming(user!.id),
     { revalidateOnFocus: true }
   )
 
@@ -144,6 +150,56 @@ export default function ParceiroDashboardPage() {
             </div>
           ))}
         </div>
+
+        {/* Follow-up reminders */}
+        {followUps.length > 0 && (
+          <div style={{ background: '#FFFBEB', borderRadius: 12, border: '1px solid #FDE68A', padding: '14px 16px', marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <Bell size={15} color="#D97706" />
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#92400E' }}>
+                {followUps.length} follow-up{followUps.length !== 1 ? 's' : ''} pendente{followUps.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {followUps.slice(0, 3).map(fu => {
+                const d = new Date(fu.scheduled_at)
+                const isOverdue = d < new Date()
+                return (
+                  <div key={fu.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <Link href={`/parceiro/leads/${fu.lead_id}`} style={{
+                      flex: 1, textDecoration: 'none',
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      background: '#fff', borderRadius: 8, padding: '10px 12px',
+                      border: `1px solid ${isOverdue ? '#FECACA' : '#FDE68A'}`,
+                    }}>
+                      <Calendar size={13} color={isOverdue ? '#DC2626' : '#D97706'} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {(fu.lead as any)?.nome ?? 'Lead'}
+                        </div>
+                        <div style={{ fontSize: 11, color: isOverdue ? '#DC2626' : '#D97706', marginTop: 1 }}>
+                          {isOverdue ? 'Atrasado — ' : ''}
+                          {d.toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' })} {d.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    </Link>
+                    <button
+                      onClick={async () => { await followUpService.markDone(fu.id); mutateFollowUps() }}
+                      style={{
+                        background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8,
+                        padding: '8px 10px', cursor: 'pointer', color: '#16A34A',
+                        display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <CheckCircle2 size={13} /> Feito
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Search + Filter */}
         <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>

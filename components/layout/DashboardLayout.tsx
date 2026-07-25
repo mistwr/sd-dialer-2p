@@ -1,13 +1,16 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, Building2, Megaphone,
   PhoneCall, BarChart2, LogOut, Menu, X, Bell,
-  ChevronRight, PhoneIncoming,
+  ChevronRight, PhoneIncoming, History, UserCircle,
+  Shuffle, CheckCircle2, Calendar, BellOff,
 } from 'lucide-react'
+import useSWR from 'swr'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { notificacaoService } from '@/lib/services'
 import { Spinner } from '@/components/ui/Spinner'
 
 interface NavItem {
@@ -18,23 +21,46 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { label: 'Dashboard',   href: '/admin',           icon: LayoutDashboard, roles: ['admin', 'supervisor'] },
-  { label: 'Empresas',    href: '/admin/empresas',   icon: Building2,       roles: ['admin'] },
-  { label: 'Parceiros',   href: '/admin/parceiros',  icon: Users,           roles: ['admin', 'supervisor'] },
-  { label: 'Campanhas',   href: '/admin/campanhas',  icon: Megaphone,       roles: ['admin', 'supervisor'] },
-  { label: 'Leads',       href: '/admin/leads',      icon: PhoneCall,       roles: ['admin', 'supervisor'] },
-  { label: 'Relatorios',  href: '/admin/relatorios', icon: BarChart2,       roles: ['admin', 'supervisor'] },
-  { label: 'Supervisor',  href: '/supervisor',       icon: LayoutDashboard, roles: ['supervisor'] },
-  { label: 'Minhas Leads', href: '/parceiro',        icon: PhoneIncoming,   roles: ['parceiro'] },
+  { label: 'Dashboard',    href: '/admin',               icon: LayoutDashboard, roles: ['admin', 'supervisor'] },
+  { label: 'Empresas',     href: '/admin/empresas',       icon: Building2,       roles: ['admin'] },
+  { label: 'Parceiros',    href: '/admin/parceiros',      icon: Users,           roles: ['admin', 'supervisor'] },
+  { label: 'Campanhas',    href: '/admin/campanhas',      icon: Megaphone,       roles: ['admin', 'supervisor'] },
+  { label: 'Leads',        href: '/admin/leads',          icon: PhoneCall,       roles: ['admin', 'supervisor'] },
+  { label: 'Distribuicao', href: '/admin/distribuicao',   icon: Shuffle,         roles: ['admin', 'supervisor'] },
+  { label: 'Relatorios',   href: '/admin/relatorios',     icon: BarChart2,       roles: ['admin', 'supervisor'] },
+  { label: 'Supervisor',   href: '/supervisor',           icon: LayoutDashboard, roles: ['supervisor'] },
+  { label: 'Minhas Leads', href: '/parceiro',             icon: PhoneIncoming,   roles: ['parceiro'] },
+  { label: 'Historico',    href: '/parceiro/historico',   icon: History,         roles: ['parceiro'] },
+  { label: 'Meu Perfil',   href: '/parceiro/perfil',      icon: UserCircle,      roles: ['parceiro'] },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { profile, loading, logout } = useAuth()
+  const { user, profile, loading, logout } = useAuth()
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [bellOpen, setBellOpen] = useState(false)
+  const bellRef = useRef<HTMLDivElement>(null)
+
+  const { data: notifications = [], mutate: mutateNotifs } = useSWR(
+    user?.id ? ['notifs', user.id] : null,
+    () => notificacaoService.getByUser(user!.id),
+    { refreshInterval: 30000 }
+  )
+  const unread = notifications.filter(n => !n.read).length
+
+  // Close bell on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) {
+        setBellOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   // Close sidebar on route change
-  useEffect(() => { setSidebarOpen(false) }, [pathname])
+  useEffect(() => { setSidebarOpen(false); setBellOpen(false) }, [pathname])
 
   const role = profile?.role ?? 'parceiro'
   const visibleNav = NAV.filter(n => n.roles.includes(role))
@@ -173,13 +199,90 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Menu size={20} />
           </button>
           <div style={{ flex: 1 }} />
-          <button style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: '#64748B', padding: '6px', borderRadius: 8,
-            display: 'flex', alignItems: 'center', position: 'relative',
-          }} aria-label="Notificacoes">
-            <Bell size={18} />
-          </button>
+          <div ref={bellRef} style={{ position: 'relative' }}>
+            <button
+              onClick={() => {
+                setBellOpen(v => !v)
+                if (!bellOpen && unread > 0 && user?.id) {
+                  notificacaoService.markAllRead(user.id).then(() => mutateNotifs())
+                }
+              }}
+              style={{
+                background: bellOpen ? '#EFF6FF' : 'none', border: 'none', cursor: 'pointer',
+                color: bellOpen ? '#2563EB' : '#64748B', padding: '6px', borderRadius: 8,
+                display: 'flex', alignItems: 'center', position: 'relative',
+                transition: 'all 0.15s',
+              }}
+              aria-label="Notificacoes"
+            >
+              <Bell size={18} />
+              {unread > 0 && (
+                <span style={{
+                  position: 'absolute', top: 3, right: 3,
+                  width: 8, height: 8, borderRadius: '50%',
+                  background: '#EF4444', border: '1.5px solid #fff',
+                }} />
+              )}
+            </button>
+
+            {/* Notifications dropdown */}
+            {bellOpen && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 8px)', right: 0,
+                width: 340, background: '#fff', borderRadius: 14,
+                border: '1px solid #E2E8F0', boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                zIndex: 50, overflow: 'hidden',
+              }}>
+                <div style={{ padding: '14px 16px', borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Notificacoes</span>
+                  {unread > 0 && (
+                    <span style={{ fontSize: 11, background: '#EFF6FF', color: '#2563EB', padding: '2px 8px', borderRadius: 12, fontWeight: 600 }}>
+                      {unread} novas
+                    </span>
+                  )}
+                </div>
+                <div style={{ maxHeight: 380, overflowY: 'auto' }}>
+                  {notifications.length === 0 ? (
+                    <div style={{ padding: '32px 20px', textAlign: 'center' }}>
+                      <BellOff size={28} color="#CBD5E1" style={{ margin: '0 auto 10px' }} />
+                      <p style={{ color: '#94A3B8', fontSize: 13, margin: 0 }}>Sem notificacoes</p>
+                    </div>
+                  ) : (
+                    notifications.slice(0, 20).map(n => (
+                      <div key={n.id} style={{
+                        padding: '12px 16px', borderBottom: '1px solid #F8FAFC',
+                        background: n.read ? '#fff' : '#FAFEFF',
+                        display: 'flex', gap: 12, alignItems: 'flex-start',
+                      }}>
+                        <div style={{
+                          width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                          background: n.type === 'nova_lead' ? '#EFF6FF' : n.type === 'follow_up' ? '#ECFEFF' : '#F0FDF4',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          {n.type === 'nova_lead' && <PhoneCall size={14} color="#2563EB" />}
+                          {n.type === 'follow_up' && <Calendar size={14} color="#0891B2" />}
+                          {n.type === 'objetivo'  && <CheckCircle2 size={14} color="#16A34A" />}
+                          {n.type === 'sistema'   && <Bell size={14} color="#D97706" />}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: n.read ? 500 : 700, color: '#0F172A', marginBottom: 2 }}>{n.title}</div>
+                          <div style={{ fontSize: 12, color: '#64748B', lineHeight: 1.4 }}>{n.message}</div>
+                          <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
+                            {new Date(n.created_at).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' })}
+                            {' '}
+                            {new Date(n.created_at).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+                        {!n.read && (
+                          <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#2563EB', flexShrink: 0, marginTop: 5 }} />
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </header>
 
         {/* Content */}
