@@ -255,13 +255,14 @@ export const followUpService = {
   },
   async getUpcoming(userId: string) {
     const sb = createClient()
+    // No date filter: return ALL non-done follow-ups (overdue + upcoming)
+    // Order ascending so overdue (oldest) appear first
     const { data, error } = await sb
       .from('follow_ups')
       .select('*, lead:lead_id(id,nome,telefone)')
       .eq('parceiro_id', userId)
       .eq('done', false)
-      .gte('scheduled_at', new Date().toISOString())
-      .order('scheduled_at')
+      .order('scheduled_at', { ascending: true })
     if (error) throw error
     return (data ?? []) as FollowUp[]
   },

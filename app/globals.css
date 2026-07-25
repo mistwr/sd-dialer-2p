@@ -195,8 +195,6 @@ body {
 .sd-label      { display: block; font-size: 0.875rem; font-weight: 500; color: #111827; margin-bottom: 0.5rem; }
 .sd-spinner    { display: inline-block; animation: spin 1s linear infinite; }
 
-@keyframes spin { to { transform: rotate(360deg); } }
-
 @media print {
   .no-print   { display: none; }
   .print-only { display: block; }

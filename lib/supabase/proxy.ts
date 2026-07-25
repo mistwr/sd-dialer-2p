@@ -46,7 +46,7 @@ export async function updateSession(request: NextRequest) {
   const isProtected =
     pathname.startsWith('/admin') ||
     pathname.startsWith('/supervisor') ||
-    pathname.startsWith('/comercial')
+    pathname.startsWith('/parceiro')
   const isAuthPage = pathname === '/login' || pathname === '/signup'
 
   // Redirect root to login (or admin dashboard if already authenticated)
