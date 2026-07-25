@@ -6,7 +6,7 @@
  * - Notificações push
  */
 
-const CACHE_NAME = 'sd-dialer-v1'
+const CACHE_NAME = 'sd-dialer-v2'
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -70,7 +70,21 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Para assets estáticos, usar cache-first
+  // Para navegação HTML (page requests), usar sempre network-first para que
+  // os redirects do servidor (Next.js middleware) funcionem correctamente.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        return new Response('Offline - página não disponível', {
+          status: 503,
+          headers: new Headers({ 'Content-Type': 'text/plain' }),
+        })
+      })
+    )
+    return
+  }
+
+  // Para assets estáticos (JS, CSS, imagens), usar cache-first
   event.respondWith(
     caches.match(event.request).then((response) => {
       if (response) {
@@ -91,7 +105,6 @@ self.addEventListener('fetch', (event) => {
           return response
         })
         .catch(() => {
-          // Offline fallback
           return new Response('Offline - página não disponível', {
             status: 503,
             statusText: 'Service Unavailable',

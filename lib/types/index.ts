@@ -1,48 +1,56 @@
-/**
- * SD Dialer - Main Types & Interfaces
- * Tipos centralizados para todo o projeto
- */
+// ============================================================
+// SD Dialer v2 — Shared TypeScript Types
+// ============================================================
 
-export type UserRole = 'admin' | 'supervisor' | 'comercial'
-export type LeadStatus = 'new' | 'contactado' | 'vendido' | 'nao_interessado' | 'agendar' | 'outras'
-export type CallResult = 'venda' | 'nao_interessado' | 'nao_atende' | 'numero_errado' | 'ligar_depois' | 'cliente_aderiu' | 'sem_cobertura' | 'outro'
-export type CampaignStatus = 'draft' | 'active' | 'paused' | 'completed'
-export type DistributionType = 'manual' | 'automatic' | 'by_team' | 'by_percentage'
-export type FollowUpStatus = 'pending' | 'completed' | 'cancelled'
-export type NotificationType = 'new_lead' | 'follow_up_reminder' | 'objective_reached' | 'assignment'
-export type SubscriptionPlan = 'free' | 'basic' | 'pro' | 'enterprise'
-export type UserStatus = 'active' | 'inactive'
+export type UserRole = 'admin' | 'supervisor' | 'parceiro'
+export type UserStatus = 'active' | 'inactive' | 'suspended'
+export type CompanyPlan = 'free' | 'starter' | 'pro' | 'enterprise'
+export type CompanyStatus = 'active' | 'inactive' | 'trial'
+export type LeadStatus =
+  | 'novo'
+  | 'contactado'
+  | 'vendido'
+  | 'nao_interessado'
+  | 'nao_atende'
+  | 'numero_errado'
+  | 'ligar_depois'
+  | 'sem_cobertura'
+  | 'outro'
+export type CallResult =
+  | 'venda'
+  | 'nao_interessado'
+  | 'nao_atende'
+  | 'numero_errado'
+  | 'ligar_depois'
+  | 'sem_cobertura'
+  | 'outro'
+export type CampaignStatus = 'draft' | 'active' | 'paused' | 'completed' | 'archived'
+export type NotificationType = 'nova_lead' | 'follow_up' | 'objetivo' | 'sistema'
 
-// Database Types
 export interface Company {
   id: string
   name: string
-  nif: string
-  email: string
-  phone: string
-  address: string
-  postal_code: string
-  city: string
   logo_url: string | null
-  subscription_plan: SubscriptionPlan
-  max_users: number
-  max_leads: number
+  nif: string | null
+  address: string | null
+  email: string | null
+  phone: string | null
+  status: CompanyStatus
+  plan: CompanyPlan
   created_at: string
   updated_at: string
-  active: boolean
 }
 
 export interface Usuario {
   id: string
+  company_id: string | null
   email: string
   full_name: string
-  phone: string
-  company_id: string
+  phone: string | null
   role: UserRole
-  supervisor_id: string | null
-  avatar_url: string | null
   status: UserStatus
-  last_login: string | null
+  avatar_url: string | null
+  last_seen_at: string | null
   created_at: string
   updated_at: string
 }
@@ -51,12 +59,11 @@ export interface Campanha {
   id: string
   company_id: string
   name: string
-  description: string
+  description: string | null
   status: CampaignStatus
-  start_date: string
-  end_date: string
-  target_count: number
-  created_by: string
+  created_by: string | null
+  starts_at: string | null
+  ends_at: string | null
   created_at: string
   updated_at: string
 }
@@ -64,185 +71,103 @@ export interface Campanha {
 export interface Lead {
   id: string
   company_id: string
-  campaign_id: string
-  first_name: string
-  last_name: string
-  email: string | null
-  phone: string
-  mobile: string | null
-  address: string | null
-  postal_code: string | null
-  city: string | null
-  nif: string | null
-  operator: string | null
-  status: LeadStatus
+  campanha_id: string | null
   assigned_to: string | null
-  notes: string | null
+  nome: string
+  telefone: string
+  email: string | null
+  morada: string | null
+  codigo_postal: string | null
+  localidade: string | null
+  operador: string | null
+  observacoes: string | null
+  status: LeadStatus
+  priority: number
+  imported_at: string
   created_at: string
   updated_at: string
-  deleted_at: string | null
+  // Joined fields
+  campanha?: Pick<Campanha, 'id' | 'name'> | null
+  parceiro?: Pick<Usuario, 'id' | 'full_name' | 'avatar_url'> | null
 }
 
 export interface CallHistory {
   id: string
   lead_id: string
+  parceiro_id: string
   company_id: string
-  usuario_id: string
-  campaign_id: string
-  call_date: string
-  call_time: string
-  duration_seconds: number
   result: CallResult
+  duration_sec: number
   notes: string | null
-  follow_up_date: string | null
-  follow_up_time: string | null
+  called_at: string
   created_at: string
-  updated_at: string
+  // Joined
+  lead?: Pick<Lead, 'id' | 'nome' | 'telefone'> | null
+  parceiro?: Pick<Usuario, 'id' | 'full_name'> | null
 }
 
 export interface FollowUp {
   id: string
   lead_id: string
-  usuario_id: string
+  parceiro_id: string
   company_id: string
-  scheduled_date: string
-  scheduled_time: string
-  status: FollowUpStatus
+  scheduled_at: string
   notes: string | null
+  done: boolean
   created_at: string
-  updated_at: string
-}
-
-export interface Distribuicao {
-  id: string
-  company_id: string
-  campaign_id: string | null
-  distribution_type: DistributionType
-  created_by: string
-  total_leads: number
-  created_at: string
-  updated_at: string
-}
-
-export interface DistribuicaoLead {
-  id: string
-  distribuicao_id: string
-  lead_id: string
-  usuario_id: string
-  percentage: number | null
-  created_at: string
+  lead?: Pick<Lead, 'id' | 'nome' | 'telefone'> | null
 }
 
 export interface Notificacao {
   id: string
-  usuario_id: string
-  company_id: string
+  user_id: string
   type: NotificationType
   title: string
   message: string
-  related_entity_id: string | null
   read: boolean
+  data: Record<string, unknown> | null
   created_at: string
-  read_at: string | null
 }
 
-export interface Objetivo {
-  id: string
-  company_id: string
-  usuario_id: string | null
-  period: 'daily' | 'weekly' | 'monthly'
-  calls_target: number
-  sales_target: number
-  conversion_target: number
-  start_date: string
-  end_date: string
-  created_at: string
-  updated_at: string
+// ============================================================
+// UI helpers
+// ============================================================
+export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
+  novo: 'Novo',
+  contactado: 'Contactado',
+  vendido: 'Vendido',
+  nao_interessado: 'Nao Interessado',
+  nao_atende: 'Nao Atende',
+  numero_errado: 'Numero Errado',
+  ligar_depois: 'Ligar Depois',
+  sem_cobertura: 'Sem Cobertura',
+  outro: 'Outro',
 }
 
-// Session/Auth Types
-export interface AuthUser {
-  id: string
-  email: string
-  role: UserRole
-  company_id: string
-  full_name: string
+export const CALL_RESULT_LABELS: Record<CallResult, string> = {
+  venda: 'Venda',
+  nao_interessado: 'Nao Interessado',
+  nao_atende: 'Nao Atende',
+  numero_errado: 'Numero Errado',
+  ligar_depois: 'Ligar Depois',
+  sem_cobertura: 'Sem Cobertura',
+  outro: 'Outro',
 }
 
-export interface AuthSession {
-  user: AuthUser
-  access_token: string
-  refresh_token: string
-  expires_at: number
+export const ROLE_LABELS: Record<UserRole, string> = {
+  admin: 'Administrador',
+  supervisor: 'Supervisor',
+  parceiro: 'Parceiro',
 }
 
-// API Response Types
-export interface ApiResponse<T> {
-  success: boolean
-  data?: T
-  error?: string
-  message?: string
-}
-
-// Form Types
-export interface LoginFormData {
-  email: string
-  password: string
-}
-
-export interface RegisterFormData {
-  email: string
-  password: string
-  passwordConfirm: string
-  fullName: string
-  companyName: string
-  nif: string
-}
-
-export interface UsuarioFormData {
-  email: string
-  fullName: string
-  phone: string
-  role: UserRole
-  supervisorId?: string
-}
-
-export interface CampanhaFormData {
-  name: string
-  description: string
-  startDate: string
-  endDate: string
-  targetCount: number
-  status: CampaignStatus
-}
-
-export interface CallResultFormData {
-  result: CallResult
-  notes: string
-  followUpDate?: string
-  followUpTime?: string
-  followUp: boolean
-}
-
-// Dashboard Stats
-export interface DashboardStats {
-  comerciaisOnline: number
-  totalLeads: number
-  leadsParaContactar: number
-  chamadosHoje: number
-  tempoTotalChamadas: number
-  tempoMedioChamadas: number
-  vendas: number
-  taxaConversao: number
-}
-
-// Relatório Types
-export interface RelatorioData {
-  comercial: string
-  totalChamadas: number
-  tempoMedio: number
-  tempoTotal: number
-  conversao: number
-  leadsTrabalhas: number
-  vendas: number
+export const STATUS_COLORS: Record<LeadStatus, string> = {
+  novo: '#2563EB',
+  contactado: '#D97706',
+  vendido: '#16A34A',
+  nao_interessado: '#DC2626',
+  nao_atende: '#6B7280',
+  numero_errado: '#7C3AED',
+  ligar_depois: '#0891B2',
+  sem_cobertura: '#EA580C',
+  outro: '#6B7280',
 }
