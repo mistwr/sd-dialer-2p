@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { email, full_name, role = 'parceiro', phone } = body
+  const { email, full_name, role = 'parceiro', phone, password } = body
 
   if (!email || !full_name) {
     return NextResponse.json({ error: 'email e full_name sao obrigatorios' }, { status: 400 })
@@ -64,8 +64,8 @@ export async function POST(request: NextRequest) {
   }).catch(() => ({ data: null, error: new Error('invite_not_available') }))
 
   if (inviteError) {
-    // Fall back: create with temporary password
-    const tempPassword = Math.random().toString(36).slice(-10) + 'A1!'
+    // Fall back: create with provided password or a generated one
+    const tempPassword = password ?? (Math.random().toString(36).slice(-10) + 'A1!')
     const { data: signUpData, error: signUpError } = await supabaseAdmin.auth.signUp({
       email,
       password: tempPassword,
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
     if (profileError) {
       return NextResponse.json({ error: profileError.message }, { status: 400 })
     }
-    return NextResponse.json({ id: signUpData.user.id, temp_password: tempPassword })
+    return NextResponse.json({ id: signUpData.user.id, ...(password ? {} : { temp_password: tempPassword }) })
   }
 
   // Insert profile row

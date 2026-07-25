@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { createClient } from '@/lib/supabase/client'
 import type { Usuario } from '@/lib/types'
 
 function fmtDate(d: string | null) {
@@ -119,24 +118,29 @@ export default function ParceirosPage() {
   )
 
   const handleSave = async (data: any) => {
-    const sb = createClient()
     if (modal.editing) {
-      await usuarioService.update(modal.editing.id, { full_name: data.full_name, phone: data.phone, company_id: data.company_id, status: data.status, role: data.role })
+      await usuarioService.update(modal.editing.id, {
+        full_name: data.full_name,
+        phone: data.phone,
+        company_id: data.company_id,
+        status: data.status,
+        role: data.role,
+      })
     } else {
-      // Create auth user then profile
-      const { data: authData, error } = await sb.auth.admin.createUser({ email: data.email, password: data.password, email_confirm: true })
-      if (error) throw error
-      if (authData.user) {
-        await sb.from('usuarios').insert({
-          id: authData.user.id,
+      // Server-side route uses service role key to create the auth user
+      const res = await fetch('/api/users/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           email: data.email,
           full_name: data.full_name,
-          phone: data.phone,
-          company_id: data.company_id,
+          phone: data.phone || null,
           role: data.role,
-          status: 'active',
-        })
-      }
+          password: data.password || undefined,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Erro ao criar utilizador')
     }
     mutate()
   }
