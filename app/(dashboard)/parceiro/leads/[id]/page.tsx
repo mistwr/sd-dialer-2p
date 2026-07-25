@@ -13,6 +13,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { leadService, callHistoryService, followUpService } from '@/lib/services'
 import type { Lead, CallResult, CallHistory } from '@/lib/types'
 import Link from 'next/link'
+import CallRecorder from '@/components/ai/CallRecorder'
 
 // ---- Call Results Config ----
 const RESULTS: { key: CallResult; label: string; color: string; bg: string; Icon: React.ElementType }[] = [
@@ -313,6 +314,16 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
               <Plus size={15} />
               Registar
             </button>
+          </div>
+
+          {/* ── Chamada Inteligente IA (additive module — CRM unaffected) ── */}
+          <div style={{ padding: '0 20px 16px' }}>
+            <CallRecorder
+              callActive={timerActive}
+              leadId={lead.id}
+              leadName={lead.nome}
+              campanhaId={lead.campanha_id ?? null}
+            />
           </div>
         </div>
 
