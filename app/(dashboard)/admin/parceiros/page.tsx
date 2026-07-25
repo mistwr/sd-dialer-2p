@@ -2,8 +2,8 @@
 import { useState } from 'react'
 import useSWR from 'swr'
 import { Users, Plus, Pencil, Search, Mail, Phone, Clock } from 'lucide-react'
-import { usuarioService } from '@/lib/services'
-import { companyService } from '@/lib/services'
+import { usuarioService, companyService } from '@/lib/services'
+import { createClient } from '@/lib/supabase/client'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
 import { PageSpinner } from '@/components/ui/Spinner'
@@ -107,7 +107,11 @@ function ParceirosForm({ initial, companies, onSave, onClose }: {
 }
 
 export default function ParceirosPage() {
-  const { data: users = [], isLoading: loadingUsers, mutate } = useSWR('usuarios-all', () => usuarioService.getAll())
+  const { data: users = [], isLoading: loadingUsers, mutate } = useSWR(
+    'usuarios-list-v2',
+    () => usuarioService.getAll(),
+    { revalidateOnMount: true, dedupingInterval: 0 }
+  )
   const { data: companies = [] } = useSWR('companies', () => companyService.getAll())
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState<{ open: boolean; editing?: Usuario }>({ open: false })
@@ -127,22 +131,30 @@ export default function ParceirosPage() {
         role: data.role,
       })
     } else {
-      // Server-side route uses service role key to create the auth user
+      // Get the caller's current JWT to pass to the server route
+      const sb = createClient()
+      const { data: { session } } = await sb.auth.getSession()
+      if (!session?.access_token) throw new Error('Sessao expirada. Faca login novamente.')
+
       const res = await fetch('/api/users/invite', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({
           email: data.email,
           full_name: data.full_name,
           phone: data.phone || null,
           role: data.role,
-          password: data.password || undefined,
+          password: data.password,
+          company_id: data.company_id,
         }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Erro ao criar utilizador')
     }
-    mutate()
+    await mutate()
   }
 
   return (
