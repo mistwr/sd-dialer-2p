@@ -104,8 +104,15 @@ export default function LoginPage() {
       } else {
         router.push('/admin')
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Email ou password incorretos')
+    } catch (err: any) {
+      const msg = err?.message ?? ''
+      if (msg.includes('Invalid login credentials') || msg.includes('invalid_credentials') || msg.includes('Email not confirmed')) {
+        setError('Email ou password incorretos. Verifique os seus dados e tente novamente.')
+      } else if (msg.includes('Email not confirmed')) {
+        setError('Email ainda nao confirmado. Contacte o administrador.')
+      } else {
+        setError(msg || 'Erro ao entrar. Tente novamente.')
+      }
     } finally {
       setLoading(false)
     }
