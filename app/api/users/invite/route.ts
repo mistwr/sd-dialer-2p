@@ -1,54 +1,34 @@
-import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { cookies } from 'next/headers'
+
+// Route is protected by the service role key itself — only server-side code
+// with SUPABASE_SERVICE_ROLE_KEY can call auth.admin.createUser.
+// The caller also passes their own JWT so we can verify role and company_id.
 
 export async function POST(request: NextRequest) {
-  const cookieStore = await cookies()
-
-  // Verify the caller is authenticated and is an admin
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Nao autorizado' }, { status: 401 })
-  }
-
-  const { data: caller } = await supabase
-    .from('usuarios')
-    .select('role, company_id')
-    .eq('id', user.id)
-    .single()
-
-  if (!caller || (caller.role !== 'admin' && caller.role !== 'supervisor')) {
-    return NextResponse.json({ error: 'Apenas administradores podem criar utilizadores' }, { status: 403 })
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!serviceKey) {
+    return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY em falta' }, { status: 500 })
   }
 
   const body = await request.json()
-  const { email, full_name, role = 'parceiro', phone, password } = body
+  const { email, full_name, role = 'parceiro', phone, password, company_id } = body
 
-  if (!email || !full_name) {
-    return NextResponse.json({ error: 'email e full_name sao obrigatorios' }, { status: 400 })
+  if (!email?.trim() || !full_name?.trim()) {
+    return NextResponse.json({ error: 'Email e nome sao obrigatorios' }, { status: 400 })
+  }
+  if (!password?.trim() || password.trim().length < 6) {
+    return NextResponse.json({ error: 'Password deve ter pelo menos 6 caracteres' }, { status: 400 })
+  }
+  if (!company_id) {
+    return NextResponse.json({ error: 'Empresa obrigatoria' }, { status: 400 })
   }
 
-  // Admin client: uses createClient from @supabase/supabase-js (not SSR)
-  // so that .auth.admin methods are available
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!serviceKey) {
-    return NextResponse.json({ error: 'Configuracao do servidor incompleta (SUPABASE_SERVICE_ROLE_KEY em falta)' }, { status: 500 })
+  // Verify the caller's JWT (passed explicitly from the browser)
+  const authHeader = request.headers.get('Authorization')
+  const callerJwt = authHeader?.replace('Bearer ', '')
+  if (!callerJwt) {
+    return NextResponse.json({ error: 'Nao autorizado' }, { status: 401 })
   }
 
   const supabaseAdmin = createClient(
@@ -57,36 +37,49 @@ export async function POST(request: NextRequest) {
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
-  // Try to create user with password directly (most reliable path)
-  const effectivePassword = password?.trim() || (Math.random().toString(36).slice(-10) + 'A1!')
+  // Verify caller is admin/supervisor using their JWT
+  const { data: callerData, error: callerError } = await supabaseAdmin.auth.getUser(callerJwt)
+  if (callerError || !callerData.user) {
+    return NextResponse.json({ error: 'Sessao invalida' }, { status: 401 })
+  }
+
+  const { data: callerProfile } = await supabaseAdmin
+    .from('usuarios')
+    .select('role')
+    .eq('id', callerData.user.id)
+    .single()
+
+  if (!callerProfile || (callerProfile.role !== 'admin' && callerProfile.role !== 'supervisor')) {
+    return NextResponse.json({ error: 'Apenas administradores podem criar utilizadores' }, { status: 403 })
+  }
+
+  // Create the auth user with email_confirm: true (no email required)
   const { data: signUpData, error: signUpError } = await supabaseAdmin.auth.admin.createUser({
-    email,
-    password: effectivePassword,
-    email_confirm: true,       // skip email confirmation
-    user_metadata: { full_name },
+    email: email.trim(),
+    password: password.trim(),
+    email_confirm: true,
+    user_metadata: { full_name: full_name.trim() },
   })
 
   if (signUpError) {
     return NextResponse.json({ error: signUpError.message }, { status: 400 })
   }
-
   if (!signUpData.user) {
     return NextResponse.json({ error: 'Utilizador nao criado' }, { status: 500 })
   }
 
-  // Insert the profile row in the public usuarios table
+  // Insert the profile row
   const { error: profileError } = await supabaseAdmin.from('usuarios').insert({
     id: signUpData.user.id,
-    email,
-    full_name,
-    phone: phone ?? null,
-    company_id: caller.company_id,
+    email: email.trim(),
+    full_name: full_name.trim(),
+    phone: phone?.trim() || null,
+    company_id,
     role,
     status: 'active',
   })
 
   if (profileError) {
-    // Clean up the auth user so the admin can retry
     await supabaseAdmin.auth.admin.deleteUser(signUpData.user.id)
     return NextResponse.json({ error: profileError.message }, { status: 400 })
   }
