@@ -210,7 +210,11 @@ function RecordingRow({ recording, onAnalyse }: { recording: Recording; onAnalys
       {/* AI Analysis panel */}
       {analysis && expanded && (
         <div style={{ padding: '0 16px 16px' }}>
-          <AIAnalysisPanel analysis={analysis} />
+          <AIAnalysisPanel
+            analysis={analysis}
+            recordingId={recording.id}
+            leadName={recording.leads?.nome ?? null}
+          />
         </div>
       )}
     </div>
