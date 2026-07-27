@@ -11,16 +11,19 @@ import { useState } from 'react'
 import {
   FileText, Star, Lightbulb, Target, Calendar,
   TrendingUp, MessageSquare, ChevronDown, ChevronUp,
-  BookOpen, Award, BarChart2,
+  BookOpen, Award, BarChart2, Bot,
 } from 'lucide-react'
+import AIChat from './AIChat'
 
 interface Props {
   analysis: any  // ai_analyses row from API
+  recordingId?: string
+  leadName?: string | null
 }
 
-type Tab = 'resumo' | 'transcricao' | 'comercial' | 'treinador'
+type Tab = 'resumo' | 'transcricao' | 'comercial' | 'treinador' | 'chat'
 
-export default function AIAnalysisPanel({ analysis }: Props) {
+export default function AIAnalysisPanel({ analysis, recordingId, leadName }: Props) {
   const [tab, setTab] = useState<Tab>('resumo')
   const [showFull, setShowFull] = useState(false)
 
@@ -31,10 +34,11 @@ export default function AIAnalysisPanel({ analysis }: Props) {
   const scoreBg = score >= 70 ? '#DCFCE7' : score >= 40 ? '#FEF3C7' : '#FEE2E2'
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: 'resumo',      label: 'Resumo',     icon: <FileText size={13} /> },
-    { key: 'transcricao', label: 'Transcricao', icon: <BookOpen size={13} /> },
-    { key: 'comercial',   label: 'Comercial',   icon: <BarChart2 size={13} /> },
-    { key: 'treinador',   label: 'Treinador IA',icon: <Award size={13} /> },
+    { key: 'resumo',      label: 'Resumo',      icon: <FileText size={13} /> },
+    { key: 'transcricao', label: 'Transcricao',  icon: <BookOpen size={13} /> },
+    { key: 'comercial',   label: 'Comercial',    icon: <BarChart2 size={13} /> },
+    { key: 'treinador',   label: 'Treinador IA', icon: <Award size={13} /> },
+    { key: 'chat',        label: 'Chat IA',      icon: <Bot size={13} /> },
   ]
 
   return (
@@ -370,6 +374,16 @@ export default function AIAnalysisPanel({ analysis }: Props) {
               </div>
             ) : null)}
           </div>
+        )}
+
+        {/* ── CHAT IA ── */}
+        {tab === 'chat' && (
+          <AIChat
+            recordingId={recordingId ?? analysis.recording_id ?? ''}
+            leadName={leadName ?? null}
+            score={analysis.score ?? null}
+            hasAnalysis={true}
+          />
         )}
       </div>
     </div>
