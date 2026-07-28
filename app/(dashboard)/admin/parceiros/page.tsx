@@ -303,13 +303,20 @@ export default function ParceirosPage() {
   // ── Edit ────────────────────────────────────────────────────────────────────
   const handleEdit = async (data: any) => {
     if (modal.type !== 'edit') return
-    await usuarioService.update(modal.user.id, {
-      full_name: data.full_name,
-      phone: data.phone || null,
-      company_id: data.company_id,
-      status: data.status,
-      role: data.role,
+    const jwt = await getCallerJwt()
+    const res = await fetch(`/api/users/${modal.user.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+      body: JSON.stringify({
+        full_name: data.full_name,
+        phone: data.phone || null,
+        company_id: data.company_id,
+        status: data.status,
+        role: data.role,
+      }),
     })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.error ?? 'Erro ao guardar alteracoes')
     await mutate()
   }
 
