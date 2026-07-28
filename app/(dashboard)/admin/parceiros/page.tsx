@@ -390,8 +390,8 @@ export default function ParceirosPage() {
       {isLoading ? <PageSpinner /> : !filtered.length ? (
         <EmptyState icon={Users} title="Nenhum utilizador" description="Adicione o primeiro utilizador." />
       ) : (
-        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', overflowX: 'auto', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
             <thead>
               <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
                 {['Utilizador', 'Contacto', 'Funcao', 'Estado', 'Ultimo Acesso', 'Acoes'].map(h => (
@@ -440,44 +440,30 @@ export default function ParceirosPage() {
                       <Clock size={13} />{fmtDate((u as any).last_seen_at)}
                     </div>
                   </td>
-                  {/* Actions menu */}
+                  {/* Actions — always visible buttons */}
                   <td style={{ padding: '14px 16px' }}>
-                    <div style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={e => e.stopPropagation()}>
                       <button
-                        onClick={() => setOpenMenuId(openMenuId === u.id ? null : u.id)}
-                        style={{ background: '#F1F5F9', border: 'none', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center' }}
-                        title="Opcoes"
+                        onClick={() => setModal({ type: 'edit', user: u })}
+                        title="Editar dados"
+                        style={actionBtnStyle('#2563EB', '#EFF6FF')}
                       >
-                        <MoreVertical size={15} />
+                        <Pencil size={15} />
                       </button>
-                      {openMenuId === u.id && (
-                        <div style={{
-                          position: 'absolute', right: 0, top: 36, zIndex: 50,
-                          background: '#fff', borderRadius: 10, border: '1px solid #E2E8F0',
-                          boxShadow: '0 4px 20px rgba(0,0,0,0.12)', minWidth: 180,
-                          overflow: 'hidden',
-                        }}>
-                          <button
-                            onClick={() => { setOpenMenuId(null); setModal({ type: 'edit', user: u }) }}
-                            style={menuItemStyle}
-                          >
-                            <Pencil size={14} /> Editar dados
-                          </button>
-                          <button
-                            onClick={() => { setOpenMenuId(null); setModal({ type: 'password', user: u }) }}
-                            style={menuItemStyle}
-                          >
-                            <KeyRound size={14} /> Alterar password
-                          </button>
-                          <div style={{ height: 1, background: '#F1F5F9', margin: '4px 0' }} />
-                          <button
-                            onClick={() => { setOpenMenuId(null); setModal({ type: 'delete', user: u }) }}
-                            style={{ ...menuItemStyle, color: '#DC2626' }}
-                          >
-                            <Trash2 size={14} /> Apagar utilizador
-                          </button>
-                        </div>
-                      )}
+                      <button
+                        onClick={() => setModal({ type: 'password', user: u })}
+                        title="Alterar password"
+                        style={actionBtnStyle('#0891B2', '#ECFEFF')}
+                      >
+                        <KeyRound size={15} />
+                      </button>
+                      <button
+                        onClick={() => setModal({ type: 'delete', user: u })}
+                        title="Apagar utilizador"
+                        style={actionBtnStyle('#DC2626', '#FEF2F2')}
+                      >
+                        <Trash2 size={15} />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -537,10 +523,9 @@ export default function ParceirosPage() {
   )
 }
 
-const menuItemStyle: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 8,
-  width: '100%', padding: '10px 14px',
-  background: 'none', border: 'none',
-  fontSize: 13, fontWeight: 500, color: '#374151',
-  cursor: 'pointer', textAlign: 'left',
-}
+const actionBtnStyle = (color: string, bg: string): React.CSSProperties => ({
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  width: 32, height: 32, borderRadius: 8,
+  background: bg, color, border: 'none',
+  cursor: 'pointer', flexShrink: 0,
+})
