@@ -3,23 +3,16 @@
 /**
  * CallRecorder
  *
- * Adds a "Gravar Chamada" button during a call.
- * On call end, shows the post-call modal.
- *
- * Usage:
- *   <CallRecorder
- *     callActive={isCallActive}
- *     callHistoryId={historyId}
- *     leadId={lead.id}
- *     campanhaId={campanha?.id}
- *     onClose={() => {}}
- *   />
+ * Adds a "Gravar Chamada" button, always available (not gated by callActive,
+ * since the native tel: call takes the browser to background instantly and
+ * the old callActive-only button was unreachable in practice).
+ * Recommended flow: partner taps "Gravar Chamada" FIRST, then "Chamar".
  *
  * The CRM works fully without this — it is purely additive.
  */
 
 import { useState, useRef, useEffect } from 'react'
-import { Mic, MicOff, Upload, Brain, X, CheckCircle, AlertCircle, Loader2, Download, Smartphone } from 'lucide-react'
+import { Mic, MicOff, Upload, Brain, X, CheckCircle, AlertCircle, Loader2, Download, Smartphone, Info } from 'lucide-react'
 import PostCallModal from './PostCallModal'
 
 interface Props {
@@ -40,6 +33,7 @@ export default function CallRecorder({ callActive, callHistoryId, leadId, campan
   const [recordingId, setRecordingId] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [showUnsupportedHint, setShowUnsupportedHint] = useState(false)
+  const [showTip, setShowTip] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const mediaRef = useRef<MediaRecorder | null>(null)
@@ -56,12 +50,10 @@ export default function CallRecorder({ callActive, callHistoryId, leadId, campan
     )
   }, [])
 
-  // Stop recording when call ends
-  useEffect(() => {
-    if (!callActive && state === 'recording') {
-      stopRecording()
-    }
-  }, [callActive]) // eslint-disable-line
+  // NOTE: recording used to auto-stop when callActive went false. Removed —
+  // callActive flips almost immediately after tel: is triggered (before the
+  // partner can interact), so tying recording lifecycle to it made the
+  // feature unreachable. The partner now stops recording manually.
 
   // Cleanup on unmount
   useEffect(() => {
@@ -187,21 +179,47 @@ export default function CallRecorder({ callActive, callHistoryId, leadId, campan
       {/* Recording controls */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
 
-        {/* Record / Stop button — only visible during active call */}
-        {callActive && state === 'idle' && (
-          <button
-            onClick={startRecording}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '8px 14px', borderRadius: 8,
-              background: '#DC2626', color: '#fff',
-              border: 'none', fontSize: 13, fontWeight: 600,
-              cursor: 'pointer', transition: 'background 0.15s',
-            }}
-          >
-            <Mic size={15} />
-            Gravar Chamada
-          </button>
+        {/* Record button — always visible now. Tapping tel: sends the browser
+            to background almost instantly, so gating this on callActive made
+            it practically unreachable. Partner should record BEFORE calling. */}
+        {state === 'idle' && (
+          <>
+            <button
+              onClick={startRecording}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '8px 14px', borderRadius: 8,
+                background: '#DC2626', color: '#fff',
+                border: 'none', fontSize: 13, fontWeight: 600,
+                cursor: 'pointer', transition: 'background 0.15s',
+              }}
+            >
+              <Mic size={15} />
+              Gravar Chamada
+            </button>
+            <button
+              onClick={() => setShowTip(v => !v)}
+              title="Como gravar corretamente"
+              style={{
+                width: 30, height: 30, borderRadius: 8, border: '1px solid #E2E8F0',
+                background: '#F8FAFC', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}
+            >
+              <Info size={14} color="#64748B" />
+            </button>
+          </>
+        )}
+
+        {showTip && state === 'idle' && (
+          <div style={{
+            width: '100%', marginTop: 4, padding: '10px 14px', borderRadius: 8,
+            background: '#EFF6FF', border: '1px solid #BFDBFE',
+            fontSize: 12, color: '#1E3A8A',
+          }}>
+            Toca em <strong>"Gravar Chamada"</strong> antes de tocar em "Chamar", e usa o altifalante —
+            assim o microfone capta as duas vozes durante a chamada.
+          </div>
         )}
 
         {state === 'recording' && (
@@ -219,7 +237,7 @@ export default function CallRecorder({ callActive, callHistoryId, leadId, campan
               width: 8, height: 8, borderRadius: '50%',
               background: '#FCA5A5', display: 'inline-block',
             }} />
-            Gravar {formatDuration(duration)}
+            Gravar {formatDuration(duration)} — toca para parar
           </button>
         )}
 
