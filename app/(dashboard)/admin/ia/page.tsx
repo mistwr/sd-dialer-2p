@@ -10,9 +10,10 @@
 
 import { useState } from 'react'
 import useSWR from 'swr'
+import Link from 'next/link'
 import {
   Brain, Target, Award, TrendingUp, Clock,
-  BarChart2, Users, Megaphone, RefreshCw, Loader2, Mic,
+  BarChart2, Users, Megaphone, RefreshCw, Loader2, Mic, Sparkles,
 } from 'lucide-react'
 
 async function fetcher(url: string) {
@@ -127,6 +128,18 @@ export default function IADashboardPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <Link
+            href="/admin/ia/chat"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '8px 14px', borderRadius: 8,
+              border: 'none', background: '#2563EB', color: '#fff',
+              fontSize: 13, fontWeight: 700, textDecoration: 'none',
+            }}
+          >
+            <Sparkles size={14} />
+            Assistente IA
+          </Link>
           {/* Period selector */}
           <div style={{ display: 'flex', border: '1px solid #E2E8F0', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
             {[7, 14, 30].map(d => (
