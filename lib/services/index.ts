@@ -169,6 +169,10 @@ export const callHistoryService = {
     result: string
     duration_sec: number
     notes?: string
+    ai_summary?: string | null
+    ai_sentiment?: string | null
+    ai_next_best_action?: string | null
+    ai_objections_detected?: string[]
   }) {
     const sb = createClient()
     const { data, error } = await sb.from('call_history').insert(payload).select().single()

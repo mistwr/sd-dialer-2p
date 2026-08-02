@@ -6,7 +6,7 @@ import {
   Phone, MessageCircle, MapPin, ChevronLeft, Clock,
   User, MapPinned, Hash, Wifi, FileText, CheckCircle2,
   PhoneOff, PhoneMissed, AlertCircle, Calendar,
-  HelpCircle, Plus, History, X,
+  HelpCircle, Plus, History, X, Sparkles, Brain,
 } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -14,6 +14,7 @@ import { leadService, callHistoryService, followUpService } from '@/lib/services
 import type { Lead, CallResult, CallHistory } from '@/lib/types'
 import Link from 'next/link'
 import CallRecorder from '@/components/ai/CallRecorder'
+import AssistanteIA from '@/components/ai/AssistanteIA'
 
 // ---- Call Results Config ----
 const RESULTS: { key: CallResult; label: string; color: string; bg: string; Icon: React.ElementType }[] = [
@@ -70,7 +71,14 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
   const [savingFollowUp, setSavingFollowUp] = useState(false)
 
   // Tab
-  const [tab, setTab] = useState<'info' | 'history'>('info')
+  const [tab, setTab] = useState<'info' | 'history' | 'assistente'>('info')
+
+  // AI summary state
+  const [aiSummary, setAiSummary] = useState('')
+  const [aiSentiment, setAiSentiment] = useState('')
+  const [aiNextAction, setAiNextAction] = useState('')
+  const [aiObjections, setAiObjections] = useState<string[]>([])
+  const [aiLoading, setAiLoading] = useState(false)
 
   const startTimer = useCallback(() => {
     setElapsed(0)
@@ -123,6 +131,41 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
     window.open(`https://maps.google.com/?q=${encodeURIComponent(address)}`, '_blank')
   }
 
+  const handleAiSummary = async () => {
+    if (!notes.trim() || !lead || !profile) return
+    setAiLoading(true)
+    try {
+      const sb = (await import('@/lib/supabase/client')).createClient()
+      const { data: objecoes } = await sb
+        .from('banco_objecoes')
+        .select('objecao')
+        .eq('company_id', profile.company_id!)
+        .eq('ativo', true)
+
+      const res = await fetch('/api/call-ai-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          notes: notes.trim(),
+          lead_nome: lead.nome,
+          lead_operador: lead.operador,
+          campanha_nome: (lead as any).campanhas?.name,
+          banco_objecoes: objecoes ?? [],
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Erro da IA')
+      setAiSummary(data.ai_summary ?? '')
+      setAiSentiment(data.ai_sentiment ?? 'neutro')
+      setAiNextAction(data.ai_next_best_action ?? '')
+      setAiObjections(data.ai_objections_detected ?? [])
+    } catch (err: any) {
+      alert('Erro ao gerar resumo: ' + err.message)
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
   const handleSaveResult = async () => {
     if (!selectedResult || !lead || !user || !profile) return
     setSaving(true)
@@ -134,6 +177,10 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
         result: selectedResult,
         duration_sec: elapsed,
         notes: notes.trim() || undefined,
+        ai_summary: aiSummary || undefined,
+        ai_sentiment: aiSentiment || undefined,
+        ai_next_best_action: aiNextAction || undefined,
+        ai_objections_detected: aiObjections.length ? aiObjections : undefined,
       })
 
       const statusMap: Record<CallResult, Lead['status']> = {
@@ -154,6 +201,10 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
       setSelectedResult(null)
       setNotes('')
       setElapsed(0)
+      setAiSummary('')
+      setAiSentiment('')
+      setAiNextAction('')
+      setAiObjections([])
 
       if (selectedResult === 'ligar_depois') setShowFollowUp(true)
     } finally {
