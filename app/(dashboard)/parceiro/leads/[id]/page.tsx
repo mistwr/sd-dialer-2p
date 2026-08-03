@@ -14,7 +14,7 @@ import { leadService, callHistoryService, followUpService } from '@/lib/services
 import type { Lead, CallResult, CallHistory } from '@/lib/types'
 import Link from 'next/link'
 import CallRecorder from '@/components/ai/CallRecorder'
-import AssistanteIA from '@/components/ai/AssistanteIA'
+import AssistenteIA from '@/components/ai/AssistenteIA'
 
 // ---- Call Results Config ----
 const RESULTS: { key: CallResult; label: string; color: string; bg: string; Icon: React.ElementType }[] = [
@@ -73,12 +73,14 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
   // Tab
   const [tab, setTab] = useState<'info' | 'history' | 'assistente'>('info')
 
-  // AI summary state
+  // AI summary state — populated AFTER save
+  const [lastSavedHistoryId, setLastSavedHistoryId] = useState<string | null>(null)
   const [aiSummary, setAiSummary] = useState('')
   const [aiSentiment, setAiSentiment] = useState('')
   const [aiNextAction, setAiNextAction] = useState('')
   const [aiObjections, setAiObjections] = useState<string[]>([])
   const [aiLoading, setAiLoading] = useState(false)
+  const [resultSaved, setResultSaved] = useState(false)
 
   const startTimer = useCallback(() => {
     setElapsed(0)
@@ -132,25 +134,16 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
   }
 
   const handleAiSummary = async () => {
-    if (!notes.trim() || !lead || !profile) return
+    if (!lastSavedHistoryId || !profile) return
     setAiLoading(true)
     try {
-      const sb = (await import('@/lib/supabase/client')).createClient()
-      const { data: objecoes } = await sb
-        .from('banco_objecoes')
-        .select('objecao')
-        .eq('company_id', profile.company_id!)
-        .eq('ativo', true)
-
-      const res = await fetch('/api/call-ai-summary', {
+      const res = await fetch('/api/ai/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          call_history_id: lastSavedHistoryId,
           notes: notes.trim(),
-          lead_nome: lead.nome,
-          lead_operador: lead.operador,
-          campanha_nome: (lead as any).campanhas?.name,
-          banco_objecoes: objecoes ?? [],
+          company_id: profile.company_id!,
         }),
       })
       const data = await res.json()
@@ -170,18 +163,17 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
     if (!selectedResult || !lead || !user || !profile) return
     setSaving(true)
     try {
-      await callHistoryService.create({
+      const saved = await callHistoryService.create({
         lead_id: lead.id,
         parceiro_id: user.id,
         company_id: profile.company_id!,
         result: selectedResult,
         duration_sec: elapsed,
         notes: notes.trim() || undefined,
-        ai_summary: aiSummary || undefined,
-        ai_sentiment: aiSentiment || undefined,
-        ai_next_best_action: aiNextAction || undefined,
-        ai_objections_detected: aiObjections.length ? aiObjections : undefined,
       })
+
+      setLastSavedHistoryId(saved.id)
+      setResultSaved(true)
 
       const statusMap: Record<CallResult, Lead['status']> = {
         venda:          'vendido',
@@ -195,21 +187,25 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
       await leadService.update(lead.id, { status: statusMap[selectedResult] })
       await mutateLead()
       await mutateHistory()
-
-      setShowResult(false)
-      setResultForced(false)
-      setSelectedResult(null)
-      setNotes('')
-      setElapsed(0)
-      setAiSummary('')
-      setAiSentiment('')
-      setAiNextAction('')
-      setAiObjections([])
-
-      if (selectedResult === 'ligar_depois') setShowFollowUp(true)
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleCloseResult = () => {
+    const wasLigarDepois = selectedResult === 'ligar_depois' && resultSaved
+    setShowResult(false)
+    setResultForced(false)
+    setSelectedResult(null)
+    setNotes('')
+    setElapsed(0)
+    setAiSummary('')
+    setAiSentiment('')
+    setAiNextAction('')
+    setAiObjections([])
+    setLastSavedHistoryId(null)
+    setResultSaved(false)
+    if (wasLigarDepois) setShowFollowUp(true)
   }
 
   const handleSaveFollowUp = async () => {
@@ -380,22 +376,31 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4, marginBottom: 16 }}>
-          {(['info', 'history'] as const).map(t => (
+          {[
+            { key: 'info'       as const, label: 'Informacao' },
+            { key: 'assistente' as const, label: 'Assistente IA' },
+            { key: 'history'    as const, label: `Historico (${history.length})` },
+          ].map(t => (
             <button
-              key={t}
-              onClick={() => setTab(t)}
+              key={t.key}
+              onClick={() => setTab(t.key)}
               style={{
                 flex: 1, padding: '8px 0', borderRadius: 7, border: 'none',
-                fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
-                background: tab === t ? '#fff' : 'transparent',
-                color: tab === t ? '#0F172A' : '#64748B',
-                boxShadow: tab === t ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
+                background: tab === t.key ? '#fff' : 'transparent',
+                color: tab === t.key ? '#0F172A' : '#64748B',
+                boxShadow: tab === t.key ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
               }}
             >
-              {t === 'info' ? 'Informacao' : `Historico (${history.length})`}
+              {t.label}
             </button>
           ))}
         </div>
+
+        {/* Assistente IA Tab */}
+        {tab === 'assistente' && profile?.company_id && (
+          <AssistenteIA companyId={profile.company_id} />
+        )}
 
         {/* Info Tab */}
         {tab === 'info' && (
@@ -521,9 +526,9 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
                   </p>
                 )}
               </div>
-              {/* Only show X if not forced */}
-              {!resultForced && (
-                <button onClick={() => setShowResult(false)} style={{
+              {/* Only show X if not forced OR if already saved */}
+              {(!resultForced || resultSaved) && (
+                <button onClick={handleCloseResult} style={{
                   background: '#F1F5F9', border: 'none', borderRadius: 8, cursor: 'pointer',
                   width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                 }}>
@@ -584,22 +589,107 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
               />
             </div>
 
-            {/* Save */}
-            <button
-              onClick={handleSaveResult}
-              disabled={!selectedResult || saving}
-              style={{
-                width: '100%', padding: '15px', borderRadius: 12, border: 'none',
-                background: selectedResult ? '#2563EB' : '#E2E8F0',
-                color: selectedResult ? '#fff' : '#9CA3AF',
-                fontSize: 15, fontWeight: 700,
-                cursor: selectedResult ? 'pointer' : 'not-allowed',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                transition: 'background 0.15s',
-              }}
-            >
-              {saving ? <Spinner size={18} color="#fff" /> : 'Guardar Resultado'}
-            </button>
+            {/* Save / AI section */}
+            {!resultSaved ? (
+              <button
+                onClick={handleSaveResult}
+                disabled={!selectedResult || saving}
+                style={{
+                  width: '100%', padding: '15px', borderRadius: 12, border: 'none',
+                  background: selectedResult ? '#2563EB' : '#E2E8F0',
+                  color: selectedResult ? '#fff' : '#9CA3AF',
+                  fontSize: 15, fontWeight: 700,
+                  cursor: selectedResult ? 'pointer' : 'not-allowed',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  transition: 'background 0.15s',
+                }}
+              >
+                {saving ? <Spinner size={18} color="#fff" /> : 'Guardar Resultado'}
+              </button>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {/* Success confirmation */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px',
+                  borderRadius: 10, background: '#F0FDF4', border: '1px solid #BBF7D0',
+                  color: '#16A34A', fontSize: 13, fontWeight: 600,
+                }}>
+                  <CheckCircle2 size={16} />
+                  Resultado guardado com sucesso!
+                </div>
+
+                {/* Resumir com IA */}
+                {notes.trim() && !aiSummary && (
+                  <button
+                    onClick={handleAiSummary}
+                    disabled={aiLoading}
+                    style={{
+                      width: '100%', padding: '13px', borderRadius: 12, border: 'none',
+                      background: '#4F46E5', color: '#fff', fontSize: 14, fontWeight: 700,
+                      cursor: aiLoading ? 'not-allowed' : 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      opacity: aiLoading ? 0.7 : 1,
+                    }}
+                  >
+                    {aiLoading
+                      ? <><Spinner size={16} color="#fff" /> A analisar com IA...</>
+                      : <><Brain size={16} /> Resumir com IA (Groq)</>
+                    }
+                  </button>
+                )}
+
+                {/* AI results */}
+                {aiSummary && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ padding: '12px 14px', borderRadius: 10, background: '#F0F7FF', border: '1px solid #BFDBFE' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#2563EB', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Resumo</div>
+                      <div style={{ fontSize: 13, color: '#1E293B', lineHeight: 1.6 }}>{aiSummary}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <div style={{ flex: 1, padding: '10px 12px', borderRadius: 10, border: '1px solid #E2E8F0', background: '#F8FAFC' }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', marginBottom: 4, textTransform: 'uppercase' }}>Sentimento</div>
+                        <div style={{
+                          fontSize: 13, fontWeight: 700,
+                          color: aiSentiment === 'positivo' ? '#16A34A' : aiSentiment === 'negativo' ? '#DC2626' : '#D97706',
+                        }}>
+                          {aiSentiment === 'positivo' ? 'Positivo' : aiSentiment === 'negativo' ? 'Negativo' : 'Neutro'}
+                        </div>
+                      </div>
+                      {aiNextAction && (
+                        <div style={{ flex: 2, padding: '10px 12px', borderRadius: 10, border: '1px solid #E2E8F0', background: '#F8FAFC' }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', marginBottom: 4, textTransform: 'uppercase' }}>Proxima Acao</div>
+                          <div style={{ fontSize: 12, color: '#0F172A', lineHeight: 1.5 }}>{aiNextAction}</div>
+                        </div>
+                      )}
+                    </div>
+                    {aiObjections.length > 0 && (
+                      <div style={{ padding: '10px 12px', borderRadius: 10, background: '#FEF2F2', border: '1px solid #FECACA' }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#DC2626', marginBottom: 6, textTransform: 'uppercase' }}>Objecoes Detetadas</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {aiObjections.map((o, i) => (
+                            <span key={i} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: '#FEE2E2', color: '#991B1B', fontWeight: 500 }}>
+                              {o}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Close / follow-up */}
+                <button
+                  onClick={handleCloseResult}
+                  style={{
+                    width: '100%', padding: '13px', borderRadius: 12, border: '1px solid #E2E8F0',
+                    background: '#F8FAFC', color: '#374151', fontSize: 14, fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Fechar
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
