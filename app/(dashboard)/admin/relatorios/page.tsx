@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { BarChart2, PhoneCall, Clock, TrendingUp, CheckCircle, XCircle, Download } from 'lucide-react'
+import { BarChart2, PhoneCall, Clock, TrendingUp, CheckCircle, XCircle, Download, MapPin, Users, Heart } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { PageSpinner } from '@/components/ui/Spinner'
@@ -31,9 +31,11 @@ function pastStr(days: number) {
 
 export default function RelatoriosPage() {
   const { profile, loading: authLoading } = useAuth()
+  const [tab, setTab] = useState<'chamadas' | 'porta' | 'fidelizacao' | 'porta-cliente'>('chamadas')
   const [from, setFrom] = useState(pastStr(30))
   const [to, setTo] = useState(todayStr())
   const [calls, setCalls] = useState<any[]>([])
+  const [doorReports, setDoorReports] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -41,24 +43,76 @@ export default function RelatoriosPage() {
     const fetch = async () => {
       setLoading(true)
       const sb = createClient()
-      const { data } = await sb
+      
+      // Carrega dados de chamadas
+      const { data: callsData } = await sb
         .from('call_history')
         .select('*, parceiro:parceiro_id(id,full_name), lead:lead_id(nome,telefone)')
         .eq('company_id', profile.company_id!)
         .gte('called_at', from + 'T00:00:00')
         .lte('called_at', to + 'T23:59:59')
         .order('called_at', { ascending: false })
-      setCalls(data ?? [])
+      setCalls(callsData ?? [])
+      
+      // Carrega dados de porta
+      const { data: doorData } = await sb
+        .from('door_reports')
+        .select('*')
+        .eq('company_id', profile.company_id!)
+        .gte('data', from)
+        .lte('data', to)
+        .order('data', { ascending: false })
+      setDoorReports(doorData ?? [])
+      
       setLoading(false)
     }
     fetch()
   }, [profile, from, to])
 
+  // ---- ANÁLISE DE CHAMADAS ----
   const total = calls.length
   const vendas = calls.filter(c => c.result === 'venda').length
   const totalSec = calls.reduce((s, c) => s + (c.duration_sec ?? 0), 0)
   const avgSec = total > 0 ? Math.round(totalSec / total) : 0
   const conversao = total > 0 ? ((vendas / total) * 100).toFixed(1) : '0'
+
+  // ---- ANÁLISE DE PORTAS ----
+  const byAddress: Record<string, { morada: string; numero_porta: string; clientes: Set<string>; fidelizados: number; contactos: number; adesoes: string[] }> = {}
+  doorReports.forEach(d => {
+    const key = `${d.morada}-${d.numero_porta}`
+    if (!byAddress[key]) {
+      byAddress[key] = { morada: d.morada || '', numero_porta: d.numero_porta || '', clientes: new Set(), fidelizados: 0, contactos: 0, adesoes: [] }
+    }
+    if (d.cliente_nome) byAddress[key].clientes.add(d.cliente_nome)
+    if (d.fidelizada === 'sim') byAddress[key].fidelizados++
+    if (d.chamadas || d.fixo_chamadas) byAddress[key].contactos++
+    if (d.adesao && d.adesao !== 'nao') byAddress[key].adesoes.push(d.adesao)
+  })
+  
+  // ---- ANÁLISE DE FIDELIZAÇÃO ----
+  const fidelizacaoStats = {
+    total_portas: doorReports.length,
+    fidelizadas: doorReports.filter(d => d.fidelizada === 'sim').length,
+    nao_fidelizadas: doorReports.filter(d => d.fidelizada === 'nao').length,
+    por_operadora: {} as Record<string, number>,
+    adesoes_sim: doorReports.filter(d => d.adesao === 'sim').length,
+    adesoes_nao: doorReports.filter(d => d.adesao === 'nao').length,
+  }
+  doorReports.forEach(d => {
+    if (d.operadora) fidelizacaoStats.por_operadora[d.operadora] = (fidelizacaoStats.por_operadora[d.operadora] ?? 0) + 1
+  })
+
+  // ---- MATRIZ PORTA x CLIENTE ----
+  const portaClienteMatrix = Object.entries(byAddress).map(([key, data]) => ({
+    key,
+    morada: data.morada,
+    numero_porta: data.numero_porta,
+    clientes: Array.from(data.clientes),
+    clientes_count: data.clientes.size,
+    fidelizados: data.fidelizados,
+    contactos: data.contactos,
+    adesoes: data.adesoes,
+  })).sort((a, b) => b.clientes_count - a.clientes_count)
 
   const byResult: Record<string, number> = {}
   calls.forEach(c => { byResult[c.result] = (byResult[c.result] ?? 0) + 1 })
@@ -87,11 +141,11 @@ export default function RelatoriosPage() {
   if (authLoading) return <PageSpinner />
 
   return (
-    <div className="anim-fade-in" style={{ maxWidth: 1100 }}>
+    <div className="anim-fade-in" style={{ maxWidth: 1200 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: 0 }}>Relatorios</h1>
-          <p style={{ color: '#64748B', fontSize: 14, margin: '3px 0 0' }}>Analise de chamadas e desempenho</p>
+          <p style={{ color: '#64748B', fontSize: 14, margin: '3px 0 0' }}>Analise de chamadas, porta, fidelizacao e contactos</p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <input type="date" value={from} onChange={e => setFrom(e.target.value)}
@@ -105,15 +159,50 @@ export default function RelatoriosPage() {
         </div>
       </div>
 
+      {/* ABAS */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, borderBottom: '2px solid #E2E8F0' }}>
+        {[
+          { id: 'chamadas', label: 'Chamadas', icon: PhoneCall },
+          { id: 'porta', label: 'Relatorio Porta', icon: MapPin },
+          { id: 'fidelizacao', label: 'Fidelizacao', icon: Heart },
+          { id: 'porta-cliente', label: 'Porta x Cliente', icon: Users },
+        ].map(tabConfig => (
+          <button
+            key={tabConfig.id}
+            onClick={() => setTab(tabConfig.id as any)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '12px 16px',
+              background: 'none',
+              border: 'none',
+              borderBottom: tab === tabConfig.id ? '3px solid #2563EB' : 'none',
+              color: tab === tabConfig.id ? '#2563EB' : '#64748B',
+              fontWeight: tab === tabConfig.id ? 700 : 500,
+              fontSize: 14,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+          >
+            <tabConfig.icon size={16} />
+            {tabConfig.label}
+          </button>
+        ))}
+      </div>
+
       {loading ? <PageSpinner /> : (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14, marginBottom: 28 }}>
-            <StatCard label="Total Chamadas" value={total}              icon={PhoneCall}   color="#2563EB" />
-            <StatCard label="Vendas"          value={vendas}            icon={CheckCircle} color="#16A34A" />
-            <StatCard label="Taxa Conversao"  value={`${conversao}%`}  icon={TrendingUp}  color="#16A34A" />
-            <StatCard label="Tempo Total"     value={fmtTime(totalSec)} icon={Clock}       color="#8B5CF6" />
-            <StatCard label="Tempo Medio"     value={fmtTime(avgSec)}   icon={Clock}       color="#D97706" />
-          </div>
+          {/* ABA: CHAMADAS */}
+          {tab === 'chamadas' && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14, marginBottom: 28 }}>
+                <StatCard label="Total Chamadas" value={total}              icon={PhoneCall}   color="#2563EB" />
+                <StatCard label="Vendas"          value={vendas}            icon={CheckCircle} color="#16A34A" />
+                <StatCard label="Taxa Conversao"  value={`${conversao}%`}  icon={TrendingUp}  color="#16A34A" />
+                <StatCard label="Tempo Total"     value={fmtTime(totalSec)} icon={Clock}       color="#8B5CF6" />
+                <StatCard label="Tempo Medio"     value={fmtTime(avgSec)}   icon={Clock}       color="#D97706" />
+              </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 28 }}>
             {/* By Result */}
