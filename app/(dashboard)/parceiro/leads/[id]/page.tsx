@@ -71,7 +71,7 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
   const [savingFollowUp, setSavingFollowUp] = useState(false)
 
   // Tab
-  const [tab, setTab] = useState<'info' | 'history' | 'assistente'>('info')
+  const [tab, setTab] = useState<'info' | 'history' | 'assistente' | 'porta'>('info')
 
   // AI summary state — populated AFTER save
   const [lastSavedHistoryId, setLastSavedHistoryId] = useState<string | null>(null)
@@ -81,6 +81,16 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
   const [aiObjections, setAiObjections] = useState<string[]>([])
   const [aiLoading, setAiLoading] = useState(false)
   const [resultSaved, setResultSaved] = useState(false)
+
+  // Porta (door knock) state
+  const [portaOperador, setPortaOperador] = useState('')
+  const [portaServiços, setPortaServiços] = useState({ tv: false, internet: false, fixo: false, movel: false })
+  const [portaMensalidade, setPortaMensalidade] = useState('')
+  const [portaSatisfacao, setPortaSatisfacao] = useState<1 | 2 | 3 | 4 | 5 | null>(null)
+  const [portaProblemas, setPortaProblemas] = useState<string[]>([])
+  const [portaResultado, setPortaResultado] = useState('')
+  const [portaNotas, setPortaNotas] = useState('')
+  const [portaSalving, setPortaSaving] = useState(false)
 
   const startTimer = useCallback(() => {
     setElapsed(0)
@@ -379,6 +389,7 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
           {[
             { key: 'info'       as const, label: 'Informacao' },
             { key: 'assistente' as const, label: 'Assistente IA' },
+            { key: 'porta'      as const, label: 'Relatório Porta' },
             { key: 'history'    as const, label: `Historico (${history.length})` },
           ].map(t => (
             <button
@@ -400,6 +411,209 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
         {/* Assistente IA Tab */}
         {tab === 'assistente' && profile?.company_id && (
           <AssistenteIA companyId={profile.company_id} />
+        )}
+
+        {/* Porta Tab */}
+        {tab === 'porta' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Operador Atual */}
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Operador Atual</label>
+              <input
+                type="text"
+                placeholder="MEO, Vodafone, NOS, Outros..."
+                value={portaOperador}
+                onChange={e => setPortaOperador(e.target.value)}
+                style={{
+                  width: '100%', padding: '12px 14px', borderRadius: 10, border: '1px solid #E2E8F0',
+                  fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            {/* Serviços Contratados */}
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Serviços Contratados</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  { key: 'tv' as const, label: 'TV' },
+                  { key: 'internet' as const, label: 'Internet' },
+                  { key: 'fixo' as const, label: 'Telefone Fixo' },
+                  { key: 'movel' as const, label: 'Telemóvel' },
+                ].map(s => (
+                  <button
+                    key={s.key}
+                    onClick={() => setPortaServiços({ ...portaServiços, [s.key]: !portaServiços[s.key] })}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px',
+                      borderRadius: 10, border: `2px solid ${portaServiços[s.key] ? '#2563EB' : '#E2E8F0'}`,
+                      background: portaServiços[s.key] ? '#EFF6FF' : '#fff',
+                      cursor: 'pointer', textAlign: 'left', fontSize: 13, color: '#374151',
+                      fontWeight: portaServiços[s.key] ? 600 : 500,
+                    }}
+                  >
+                    <div style={{
+                      width: 18, height: 18, borderRadius: 4, border: `2px solid ${portaServiços[s.key] ? '#2563EB' : '#D1D5DB'}`,
+                      background: portaServiços[s.key] ? '#2563EB' : '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    }}>
+                      {portaServiços[s.key] && <div style={{ width: 6, height: 6, borderRadius: 1, background: '#fff' }} />}
+                    </div>
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Mensalidade */}
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Mensalidade Atual (€)</label>
+              <input
+                type="number"
+                placeholder="Ex: 45.50"
+                value={portaMensalidade}
+                onChange={e => setPortaMensalidade(e.target.value)}
+                style={{
+                  width: '100%', padding: '12px 14px', borderRadius: 10, border: '1px solid #E2E8F0',
+                  fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            {/* Satisfação */}
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Nível de Satisfação</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {[1, 2, 3, 4, 5].map(n => (
+                  <button
+                    key={n}
+                    onClick={() => setPortaSatisfacao(n as 1 | 2 | 3 | 4 | 5)}
+                    style={{
+                      flex: 1, padding: '12px', borderRadius: 10, border: `2px solid ${portaSatisfacao === n ? '#FBBF24' : '#E2E8F0'}`,
+                      background: portaSatisfacao === n ? '#FFFBEB' : '#fff',
+                      cursor: 'pointer', fontSize: 13, fontWeight: portaSatisfacao === n ? 700 : 500,
+                      color: portaSatisfacao === n ? '#D97706' : '#9CA3B8',
+                    }}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Problemas */}
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Problemas Identificados</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {['Preço', 'Cobertura', 'Velocidade', 'Avarias', 'Apoio'].map(p => {
+                  const isSelected = portaProblemas.includes(p)
+                  return (
+                    <button
+                      key={p}
+                      onClick={() =>
+                        setPortaProblemas(isSelected
+                          ? portaProblemas.filter(x => x !== p)
+                          : [...portaProblemas, p]
+                        )
+                      }
+                      style={{
+                        padding: '8px 12px', borderRadius: 8, border: `1.5px solid ${isSelected ? '#DC2626' : '#D1D5DB'}`,
+                        background: isSelected ? '#FEF2F2' : '#fff',
+                        cursor: 'pointer', fontSize: 12, fontWeight: isSelected ? 600 : 500,
+                        color: isSelected ? '#DC2626' : '#6B7280',
+                      }}
+                    >
+                      {p}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Resultado */}
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Resultado da Abordagem</label>
+              <select
+                value={portaResultado}
+                onChange={e => setPortaResultado(e.target.value)}
+                style={{
+                  width: '100%', padding: '12px 14px', borderRadius: 10, border: '1px solid #E2E8F0',
+                  fontSize: 13, outline: 'none', boxSizing: 'border-box', color: '#374151',
+                }}
+              >
+                <option value="">Escolhe um resultado...</option>
+                <option value="interessado">Interessado</option>
+                <option value="follow-up">Follow-up</option>
+                <option value="sem-interesse">Sem Interesse</option>
+                <option value="cliente">Já é Cliente</option>
+                <option value="venda">Venda</option>
+              </select>
+            </div>
+
+            {/* Notas */}
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Notas</label>
+              <textarea
+                placeholder="Observações adicionais sobre a abordagem..."
+                value={portaNotas}
+                onChange={e => setPortaNotas(e.target.value)}
+                rows={3}
+                style={{
+                  width: '100%', padding: '12px 14px', borderRadius: 10, border: '1px solid #E2E8F0',
+                  fontSize: 13, resize: 'none', outline: 'none', fontFamily: 'inherit',
+                  boxSizing: 'border-box', color: '#0F172A',
+                }}
+              />
+            </div>
+
+            {/* Save Porta Button */}
+            <button
+              onClick={async () => {
+                if (!portaResultado || !profile || !user) return
+                setPortaSaving(true)
+                try {
+                  const sb = (await import('@/lib/supabase/client')).createClient()
+                  await sb.from('door_reports').insert({
+                    seller_id: user.id,
+                    created_by: user.id,
+                    numero_porta: '',
+                    morada: lead.morada || '',
+                    codigo_postal: lead.codigo_postal || '',
+                    cliente_nome: lead.nome,
+                    cliente_telefone: lead.telefone,
+                    operadora: portaOperador,
+                    observacoes: portaNotas,
+                    adesao: portaResultado,
+                    estado: 'registado',
+                    data: new Date().toISOString().split('T')[0],
+                  })
+                  alert('Relatório de Porta guardado com sucesso!')
+                  setPortaOperador('')
+                  setPortaServiços({ tv: false, internet: false, fixo: false, movel: false })
+                  setPortaMensalidade('')
+                  setPortaSatisfacao(null)
+                  setPortaProblemas([])
+                  setPortaResultado('')
+                  setPortaNotas('')
+                } catch (err: any) {
+                  alert('Erro ao guardar: ' + err.message)
+                } finally {
+                  setPortaSaving(false)
+                }
+              }}
+              disabled={!portaResultado || portaSalving}
+              style={{
+                width: '100%', padding: '15px', borderRadius: 12, border: 'none',
+                background: portaResultado ? '#10B981' : '#E2E8F0',
+                color: portaResultado ? '#fff' : '#9CA3AF',
+                fontSize: 15, fontWeight: 700,
+                cursor: portaResultado ? 'pointer' : 'not-allowed',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}
+            >
+              {portaSalving ? <><Spinner size={18} color="#fff" /> Guardando...</> : 'Guardar Relatório de Porta'}
+            </button>
+          </div>
         )}
 
         {/* Info Tab */}
