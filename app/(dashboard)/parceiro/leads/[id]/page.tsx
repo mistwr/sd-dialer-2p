@@ -15,6 +15,7 @@ import type { Lead, CallResult, CallHistory } from '@/lib/types'
 import Link from 'next/link'
 import CallRecorder from '@/components/ai/CallRecorder'
 import AssistenteIA from '@/components/ai/AssistenteIA'
+import VendaIAChat from '@/components/ai/VendaIAChat'
 
 // ---- Call Results Config ----
 const RESULTS: { key: CallResult; label: string; color: string; bg: string; Icon: React.ElementType }[] = [
@@ -71,7 +72,7 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
   const [savingFollowUp, setSavingFollowUp] = useState(false)
 
   // Tab
-  const [tab, setTab] = useState<'info' | 'history' | 'assistente' | 'porta'>('info')
+  const [tab, setTab] = useState<'info' | 'history' | 'assistente' | 'porta' | 'venda-ia'>('info')
 
   // AI summary state — populated AFTER save
   const [lastSavedHistoryId, setLastSavedHistoryId] = useState<string | null>(null)
@@ -91,6 +92,21 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
   const [portaResultado, setPortaResultado] = useState('')
   const [portaNotas, setPortaNotas] = useState('')
   const [portaSalving, setPortaSaving] = useState(false)
+  const [portaSalvo, setPortaSalvo] = useState(false)
+
+  // VendaIAChat context
+  const [mostrarVendaIA, setMostrarVendaIA] = useState(false)
+  const [vendaContexto, setVendaContexto] = useState({
+    operador: '',
+    comercializador: '',
+    servicos: {},
+    mensalidade: '',
+    satisfacao: undefined as number | undefined,
+    problemas: [] as string[],
+    tipo: 'telecom' as 'telecom' | 'energia',
+    lead_nome: lead?.nome,
+    lead_telefone: lead?.telefone,
+  })
 
   const startTimer = useCallback(() => {
     setElapsed(0)
@@ -184,6 +200,23 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
 
       setLastSavedHistoryId(saved.id)
       setResultSaved(true)
+
+      // Ativar VendaIA se houver operador/notes relevantes
+      if (lead?.operador || notes.trim()) {
+        setVendaContexto({
+          operador: lead?.operador || '',
+          comercializador: '',
+          servicos: {},
+          mensalidade: '',
+          satisfacao: undefined,
+          problemas: [],
+          tipo: 'telecom',
+          lead_nome: lead?.nome,
+          lead_telefone: lead?.telefone,
+        })
+        setMostrarVendaIA(true)
+        setTab('venda-ia')
+      }
 
       const statusMap: Record<CallResult, Lead['status']> = {
         venda:          'vendido',
@@ -390,6 +423,7 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
             { key: 'info'       as const, label: 'Informacao' },
             { key: 'assistente' as const, label: 'Assistente IA' },
             { key: 'porta'      as const, label: 'Relatório Porta' },
+            ...(mostrarVendaIA ? [{ key: 'venda-ia' as const, label: 'Venda IA' }] : []),
             { key: 'history'    as const, label: `Historico (${history.length})` },
           ].map(t => (
             <button
@@ -588,6 +622,24 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
                     data: new Date().toISOString().split('T')[0],
                   })
                   alert('Relatório de Porta guardado com sucesso!')
+                  setPortaSalvo(true)
+                  
+                  // Ativar VendaIA com contexto da porta
+                  setVendaContexto({
+                    operador: portaOperador,
+                    comercializador: '',
+                    servicos: portaServiços,
+                    mensalidade: portaMensalidade,
+                    satisfacao: portaSatisfacao || undefined,
+                    problemas: portaProblemas,
+                    tipo: 'telecom',
+                    lead_nome: lead.nome,
+                    lead_telefone: lead.telefone,
+                  })
+                  setMostrarVendaIA(true)
+                  setTab('venda-ia')
+                  
+                  // Limpar formulário
                   setPortaOperador('')
                   setPortaServiços({ tv: false, internet: false, fixo: false, movel: false })
                   setPortaMensalidade('')
@@ -613,6 +665,13 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
             >
               {portaSalving ? <><Spinner size={18} color="#fff" /> Guardando...</> : 'Guardar Relatório de Porta'}
             </button>
+          </div>
+        )}
+
+        {/* VendaIA Tab */}
+        {tab === 'venda-ia' && mostrarVendaIA && (
+          <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+            <VendaIAChat contexto={vendaContexto} />
           </div>
         )}
 
