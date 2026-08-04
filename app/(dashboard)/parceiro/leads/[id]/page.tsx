@@ -6,7 +6,7 @@ import {
   Phone, MessageCircle, MapPin, ChevronLeft, Clock,
   User, MapPinned, Hash, Wifi, FileText, CheckCircle2,
   PhoneOff, PhoneMissed, AlertCircle, Calendar,
-  HelpCircle, Plus, History, X,
+  HelpCircle, Plus, History, X, Sparkles, Brain,
 } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -14,6 +14,8 @@ import { leadService, callHistoryService, followUpService } from '@/lib/services
 import type { Lead, CallResult, CallHistory } from '@/lib/types'
 import Link from 'next/link'
 import CallRecorder from '@/components/ai/CallRecorder'
+import AssistenteIA from '@/components/ai/AssistenteIA'
+import VendaIAChat from '@/components/ai/VendaIAChat'
 
 // ---- Call Results Config ----
 const RESULTS: { key: CallResult; label: string; color: string; bg: string; Icon: React.ElementType }[] = [
@@ -70,7 +72,41 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
   const [savingFollowUp, setSavingFollowUp] = useState(false)
 
   // Tab
-  const [tab, setTab] = useState<'info' | 'history'>('info')
+  const [tab, setTab] = useState<'info' | 'history' | 'assistente' | 'porta' | 'venda-ia'>('info')
+
+  // AI summary state — populated AFTER save
+  const [lastSavedHistoryId, setLastSavedHistoryId] = useState<string | null>(null)
+  const [aiSummary, setAiSummary] = useState('')
+  const [aiSentiment, setAiSentiment] = useState('')
+  const [aiNextAction, setAiNextAction] = useState('')
+  const [aiObjections, setAiObjections] = useState<string[]>([])
+  const [aiLoading, setAiLoading] = useState(false)
+  const [resultSaved, setResultSaved] = useState(false)
+
+  // Porta (door knock) state
+  const [portaOperador, setPortaOperador] = useState('')
+  const [portaServiços, setPortaServiços] = useState({ tv: false, internet: false, fixo: false, movel: false })
+  const [portaMensalidade, setPortaMensalidade] = useState('')
+  const [portaSatisfacao, setPortaSatisfacao] = useState<1 | 2 | 3 | 4 | 5 | null>(null)
+  const [portaProblemas, setPortaProblemas] = useState<string[]>([])
+  const [portaResultado, setPortaResultado] = useState('')
+  const [portaNotas, setPortaNotas] = useState('')
+  const [portaSalving, setPortaSaving] = useState(false)
+  const [portaSalvo, setPortaSalvo] = useState(false)
+
+  // VendaIAChat context
+  const [mostrarVendaIA, setMostrarVendaIA] = useState(false)
+  const [vendaContexto, setVendaContexto] = useState({
+    operador: '',
+    comercializador: '',
+    servicos: {},
+    mensalidade: '',
+    satisfacao: undefined as number | undefined,
+    problemas: [] as string[],
+    tipo: 'telecom' as 'telecom' | 'energia',
+    lead_nome: lead?.nome,
+    lead_telefone: lead?.telefone,
+  })
 
   const startTimer = useCallback(() => {
     setElapsed(0)
@@ -123,11 +159,37 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
     window.open(`https://maps.google.com/?q=${encodeURIComponent(address)}`, '_blank')
   }
 
+  const handleAiSummary = async () => {
+    if (!lastSavedHistoryId || !profile) return
+    setAiLoading(true)
+    try {
+      const res = await fetch('/api/ai/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          call_history_id: lastSavedHistoryId,
+          notes: notes.trim(),
+          company_id: profile.company_id!,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Erro da IA')
+      setAiSummary(data.ai_summary ?? '')
+      setAiSentiment(data.ai_sentiment ?? 'neutro')
+      setAiNextAction(data.ai_next_best_action ?? '')
+      setAiObjections(data.ai_objections_detected ?? [])
+    } catch (err: any) {
+      alert('Erro ao gerar resumo: ' + err.message)
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
   const handleSaveResult = async () => {
     if (!selectedResult || !lead || !user || !profile) return
     setSaving(true)
     try {
-      await callHistoryService.create({
+      const saved = await callHistoryService.create({
         lead_id: lead.id,
         parceiro_id: user.id,
         company_id: profile.company_id!,
@@ -135,6 +197,26 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
         duration_sec: elapsed,
         notes: notes.trim() || undefined,
       })
+
+      setLastSavedHistoryId(saved.id)
+      setResultSaved(true)
+
+      // Ativar VendaIA se houver operador/notes relevantes
+      if (lead?.operador || notes.trim()) {
+        setVendaContexto({
+          operador: lead?.operador || '',
+          comercializador: '',
+          servicos: {},
+          mensalidade: '',
+          satisfacao: undefined,
+          problemas: [],
+          tipo: 'telecom',
+          lead_nome: lead?.nome,
+          lead_telefone: lead?.telefone,
+        })
+        setMostrarVendaIA(true)
+        setTab('venda-ia')
+      }
 
       const statusMap: Record<CallResult, Lead['status']> = {
         venda:          'vendido',
@@ -148,17 +230,25 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
       await leadService.update(lead.id, { status: statusMap[selectedResult] })
       await mutateLead()
       await mutateHistory()
-
-      setShowResult(false)
-      setResultForced(false)
-      setSelectedResult(null)
-      setNotes('')
-      setElapsed(0)
-
-      if (selectedResult === 'ligar_depois') setShowFollowUp(true)
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleCloseResult = () => {
+    const wasLigarDepois = selectedResult === 'ligar_depois' && resultSaved
+    setShowResult(false)
+    setResultForced(false)
+    setSelectedResult(null)
+    setNotes('')
+    setElapsed(0)
+    setAiSummary('')
+    setAiSentiment('')
+    setAiNextAction('')
+    setAiObjections([])
+    setLastSavedHistoryId(null)
+    setResultSaved(false)
+    if (wasLigarDepois) setShowFollowUp(true)
   }
 
   const handleSaveFollowUp = async () => {
@@ -329,22 +419,261 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4, marginBottom: 16 }}>
-          {(['info', 'history'] as const).map(t => (
+          {[
+            { key: 'info'       as const, label: 'Informacao' },
+            { key: 'assistente' as const, label: 'Assistente IA' },
+            { key: 'porta'      as const, label: 'Relatório Porta' },
+            ...(mostrarVendaIA ? [{ key: 'venda-ia' as const, label: 'Venda IA' }] : []),
+            { key: 'history'    as const, label: `Historico (${history.length})` },
+          ].map(t => (
             <button
-              key={t}
-              onClick={() => setTab(t)}
+              key={t.key}
+              onClick={() => setTab(t.key)}
               style={{
                 flex: 1, padding: '8px 0', borderRadius: 7, border: 'none',
-                fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
-                background: tab === t ? '#fff' : 'transparent',
-                color: tab === t ? '#0F172A' : '#64748B',
-                boxShadow: tab === t ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
+                background: tab === t.key ? '#fff' : 'transparent',
+                color: tab === t.key ? '#0F172A' : '#64748B',
+                boxShadow: tab === t.key ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
               }}
             >
-              {t === 'info' ? 'Informacao' : `Historico (${history.length})`}
+              {t.label}
             </button>
           ))}
         </div>
+
+        {/* Assistente IA Tab */}
+        {tab === 'assistente' && profile?.company_id && (
+          <AssistenteIA companyId={profile.company_id} />
+        )}
+
+        {/* Porta Tab */}
+        {tab === 'porta' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Operador Atual */}
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Operador Atual</label>
+              <input
+                type="text"
+                placeholder="MEO, Vodafone, NOS, Outros..."
+                value={portaOperador}
+                onChange={e => setPortaOperador(e.target.value)}
+                style={{
+                  width: '100%', padding: '12px 14px', borderRadius: 10, border: '1px solid #E2E8F0',
+                  fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            {/* Serviços Contratados */}
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Serviços Contratados</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  { key: 'tv' as const, label: 'TV' },
+                  { key: 'internet' as const, label: 'Internet' },
+                  { key: 'fixo' as const, label: 'Telefone Fixo' },
+                  { key: 'movel' as const, label: 'Telemóvel' },
+                ].map(s => (
+                  <button
+                    key={s.key}
+                    onClick={() => setPortaServiços({ ...portaServiços, [s.key]: !portaServiços[s.key] })}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px',
+                      borderRadius: 10, border: `2px solid ${portaServiços[s.key] ? '#2563EB' : '#E2E8F0'}`,
+                      background: portaServiços[s.key] ? '#EFF6FF' : '#fff',
+                      cursor: 'pointer', textAlign: 'left', fontSize: 13, color: '#374151',
+                      fontWeight: portaServiços[s.key] ? 600 : 500,
+                    }}
+                  >
+                    <div style={{
+                      width: 18, height: 18, borderRadius: 4, border: `2px solid ${portaServiços[s.key] ? '#2563EB' : '#D1D5DB'}`,
+                      background: portaServiços[s.key] ? '#2563EB' : '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    }}>
+                      {portaServiços[s.key] && <div style={{ width: 6, height: 6, borderRadius: 1, background: '#fff' }} />}
+                    </div>
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Mensalidade */}
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Mensalidade Atual (€)</label>
+              <input
+                type="number"
+                placeholder="Ex: 45.50"
+                value={portaMensalidade}
+                onChange={e => setPortaMensalidade(e.target.value)}
+                style={{
+                  width: '100%', padding: '12px 14px', borderRadius: 10, border: '1px solid #E2E8F0',
+                  fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            {/* Satisfação */}
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Nível de Satisfação</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {[1, 2, 3, 4, 5].map(n => (
+                  <button
+                    key={n}
+                    onClick={() => setPortaSatisfacao(n as 1 | 2 | 3 | 4 | 5)}
+                    style={{
+                      flex: 1, padding: '12px', borderRadius: 10, border: `2px solid ${portaSatisfacao === n ? '#FBBF24' : '#E2E8F0'}`,
+                      background: portaSatisfacao === n ? '#FFFBEB' : '#fff',
+                      cursor: 'pointer', fontSize: 13, fontWeight: portaSatisfacao === n ? 700 : 500,
+                      color: portaSatisfacao === n ? '#D97706' : '#9CA3B8',
+                    }}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Problemas */}
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Problemas Identificados</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {['Preço', 'Cobertura', 'Velocidade', 'Avarias', 'Apoio'].map(p => {
+                  const isSelected = portaProblemas.includes(p)
+                  return (
+                    <button
+                      key={p}
+                      onClick={() =>
+                        setPortaProblemas(isSelected
+                          ? portaProblemas.filter(x => x !== p)
+                          : [...portaProblemas, p]
+                        )
+                      }
+                      style={{
+                        padding: '8px 12px', borderRadius: 8, border: `1.5px solid ${isSelected ? '#DC2626' : '#D1D5DB'}`,
+                        background: isSelected ? '#FEF2F2' : '#fff',
+                        cursor: 'pointer', fontSize: 12, fontWeight: isSelected ? 600 : 500,
+                        color: isSelected ? '#DC2626' : '#6B7280',
+                      }}
+                    >
+                      {p}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Resultado */}
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Resultado da Abordagem</label>
+              <select
+                value={portaResultado}
+                onChange={e => setPortaResultado(e.target.value)}
+                style={{
+                  width: '100%', padding: '12px 14px', borderRadius: 10, border: '1px solid #E2E8F0',
+                  fontSize: 13, outline: 'none', boxSizing: 'border-box', color: '#374151',
+                }}
+              >
+                <option value="">Escolhe um resultado...</option>
+                <option value="interessado">Interessado</option>
+                <option value="follow-up">Follow-up</option>
+                <option value="sem-interesse">Sem Interesse</option>
+                <option value="cliente">Já é Cliente</option>
+                <option value="venda">Venda</option>
+              </select>
+            </div>
+
+            {/* Notas */}
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Notas</label>
+              <textarea
+                placeholder="Observações adicionais sobre a abordagem..."
+                value={portaNotas}
+                onChange={e => setPortaNotas(e.target.value)}
+                rows={3}
+                style={{
+                  width: '100%', padding: '12px 14px', borderRadius: 10, border: '1px solid #E2E8F0',
+                  fontSize: 13, resize: 'none', outline: 'none', fontFamily: 'inherit',
+                  boxSizing: 'border-box', color: '#0F172A',
+                }}
+              />
+            </div>
+
+            {/* Save Porta Button */}
+            <button
+              onClick={async () => {
+                if (!portaResultado || !profile || !user) return
+                setPortaSaving(true)
+                try {
+                  const sb = (await import('@/lib/supabase/client')).createClient()
+                  await sb.from('door_reports').insert({
+                    seller_id: user.id,
+                    created_by: user.id,
+                    numero_porta: '',
+                    morada: lead.morada || '',
+                    codigo_postal: lead.codigo_postal || '',
+                    cliente_nome: lead.nome,
+                    cliente_telefone: lead.telefone,
+                    operadora: portaOperador,
+                    observacoes: portaNotas,
+                    adesao: portaResultado,
+                    estado: 'registado',
+                    data: new Date().toISOString().split('T')[0],
+                  })
+                  alert('Relatório de Porta guardado com sucesso!')
+                  setPortaSalvo(true)
+                  
+                  // Ativar VendaIA com contexto da porta
+                  setVendaContexto({
+                    operador: portaOperador,
+                    comercializador: '',
+                    servicos: portaServiços,
+                    mensalidade: portaMensalidade,
+                    satisfacao: portaSatisfacao || undefined,
+                    problemas: portaProblemas,
+                    tipo: 'telecom',
+                    lead_nome: lead.nome,
+                    lead_telefone: lead.telefone,
+                  })
+                  setMostrarVendaIA(true)
+                  setTab('venda-ia')
+                  
+                  // Limpar formulário
+                  setPortaOperador('')
+                  setPortaServiços({ tv: false, internet: false, fixo: false, movel: false })
+                  setPortaMensalidade('')
+                  setPortaSatisfacao(null)
+                  setPortaProblemas([])
+                  setPortaResultado('')
+                  setPortaNotas('')
+                } catch (err: any) {
+                  alert('Erro ao guardar: ' + err.message)
+                } finally {
+                  setPortaSaving(false)
+                }
+              }}
+              disabled={!portaResultado || portaSalving}
+              style={{
+                width: '100%', padding: '15px', borderRadius: 12, border: 'none',
+                background: portaResultado ? '#10B981' : '#E2E8F0',
+                color: portaResultado ? '#fff' : '#9CA3AF',
+                fontSize: 15, fontWeight: 700,
+                cursor: portaResultado ? 'pointer' : 'not-allowed',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}
+            >
+              {portaSalving ? <><Spinner size={18} color="#fff" /> Guardando...</> : 'Guardar Relatório de Porta'}
+            </button>
+          </div>
+        )}
+
+        {/* VendaIA Tab */}
+        {tab === 'venda-ia' && mostrarVendaIA && (
+          <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+            <VendaIAChat contexto={vendaContexto} />
+          </div>
+        )}
 
         {/* Info Tab */}
         {tab === 'info' && (
@@ -470,9 +799,9 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
                   </p>
                 )}
               </div>
-              {/* Only show X if not forced */}
-              {!resultForced && (
-                <button onClick={() => setShowResult(false)} style={{
+              {/* Only show X if not forced OR if already saved */}
+              {(!resultForced || resultSaved) && (
+                <button onClick={handleCloseResult} style={{
                   background: '#F1F5F9', border: 'none', borderRadius: 8, cursor: 'pointer',
                   width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                 }}>
@@ -533,22 +862,107 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
               />
             </div>
 
-            {/* Save */}
-            <button
-              onClick={handleSaveResult}
-              disabled={!selectedResult || saving}
-              style={{
-                width: '100%', padding: '15px', borderRadius: 12, border: 'none',
-                background: selectedResult ? '#2563EB' : '#E2E8F0',
-                color: selectedResult ? '#fff' : '#9CA3AF',
-                fontSize: 15, fontWeight: 700,
-                cursor: selectedResult ? 'pointer' : 'not-allowed',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                transition: 'background 0.15s',
-              }}
-            >
-              {saving ? <Spinner size={18} color="#fff" /> : 'Guardar Resultado'}
-            </button>
+            {/* Save / AI section */}
+            {!resultSaved ? (
+              <button
+                onClick={handleSaveResult}
+                disabled={!selectedResult || saving}
+                style={{
+                  width: '100%', padding: '15px', borderRadius: 12, border: 'none',
+                  background: selectedResult ? '#2563EB' : '#E2E8F0',
+                  color: selectedResult ? '#fff' : '#9CA3AF',
+                  fontSize: 15, fontWeight: 700,
+                  cursor: selectedResult ? 'pointer' : 'not-allowed',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  transition: 'background 0.15s',
+                }}
+              >
+                {saving ? <Spinner size={18} color="#fff" /> : 'Guardar Resultado'}
+              </button>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {/* Success confirmation */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px',
+                  borderRadius: 10, background: '#F0FDF4', border: '1px solid #BBF7D0',
+                  color: '#16A34A', fontSize: 13, fontWeight: 600,
+                }}>
+                  <CheckCircle2 size={16} />
+                  Resultado guardado com sucesso!
+                </div>
+
+                {/* Resumir com IA */}
+                {notes.trim() && !aiSummary && (
+                  <button
+                    onClick={handleAiSummary}
+                    disabled={aiLoading}
+                    style={{
+                      width: '100%', padding: '13px', borderRadius: 12, border: 'none',
+                      background: '#4F46E5', color: '#fff', fontSize: 14, fontWeight: 700,
+                      cursor: aiLoading ? 'not-allowed' : 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      opacity: aiLoading ? 0.7 : 1,
+                    }}
+                  >
+                    {aiLoading
+                      ? <><Spinner size={16} color="#fff" /> A analisar com IA...</>
+                      : <><Brain size={16} /> Resumir com IA (Groq)</>
+                    }
+                  </button>
+                )}
+
+                {/* AI results */}
+                {aiSummary && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ padding: '12px 14px', borderRadius: 10, background: '#F0F7FF', border: '1px solid #BFDBFE' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#2563EB', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Resumo</div>
+                      <div style={{ fontSize: 13, color: '#1E293B', lineHeight: 1.6 }}>{aiSummary}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <div style={{ flex: 1, padding: '10px 12px', borderRadius: 10, border: '1px solid #E2E8F0', background: '#F8FAFC' }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', marginBottom: 4, textTransform: 'uppercase' }}>Sentimento</div>
+                        <div style={{
+                          fontSize: 13, fontWeight: 700,
+                          color: aiSentiment === 'positivo' ? '#16A34A' : aiSentiment === 'negativo' ? '#DC2626' : '#D97706',
+                        }}>
+                          {aiSentiment === 'positivo' ? 'Positivo' : aiSentiment === 'negativo' ? 'Negativo' : 'Neutro'}
+                        </div>
+                      </div>
+                      {aiNextAction && (
+                        <div style={{ flex: 2, padding: '10px 12px', borderRadius: 10, border: '1px solid #E2E8F0', background: '#F8FAFC' }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', marginBottom: 4, textTransform: 'uppercase' }}>Proxima Acao</div>
+                          <div style={{ fontSize: 12, color: '#0F172A', lineHeight: 1.5 }}>{aiNextAction}</div>
+                        </div>
+                      )}
+                    </div>
+                    {aiObjections.length > 0 && (
+                      <div style={{ padding: '10px 12px', borderRadius: 10, background: '#FEF2F2', border: '1px solid #FECACA' }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#DC2626', marginBottom: 6, textTransform: 'uppercase' }}>Objecoes Detetadas</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {aiObjections.map((o, i) => (
+                            <span key={i} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: '#FEE2E2', color: '#991B1B', fontWeight: 500 }}>
+                              {o}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Close / follow-up */}
+                <button
+                  onClick={handleCloseResult}
+                  style={{
+                    width: '100%', padding: '13px', borderRadius: 12, border: '1px solid #E2E8F0',
+                    background: '#F8FAFC', color: '#374151', fontSize: 14, fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Fechar
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

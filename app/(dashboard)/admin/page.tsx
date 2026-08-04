@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Users, PhoneCall, TrendingUp, Building2, Clock, Trophy, Wifi, CheckCircle } from 'lucide-react'
+import { Users, PhoneCall, TrendingUp, Building2, Clock, Trophy, Wifi, CheckCircle, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { StatCard } from '@/components/ui/StatCard'
@@ -19,6 +19,7 @@ interface DashStats {
   tempoTotalSec: number
   conversao: number
   parceirosOnline: number
+  negativosSemana: number
   ranking: { id: string; full_name: string; vendas: number; chamadas: number; avatar_url: string | null }[]
 }
 
@@ -41,12 +42,14 @@ export default function AdminDashboard() {
         const sb = createClient()
         const companyId = profile.company_id!
         const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
+        const weekStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
 
         const [
           { count: totalEmpresas },
           { count: totalParceiros },
           { count: totalLeads },
           { count: chamadasHoje },
+          { count: negativosSemana },
           { data: callData },
           { data: rankData },
           { data: onlineData },
@@ -55,6 +58,7 @@ export default function AdminDashboard() {
           sb.from('usuarios').select('*', { count: 'exact', head: true }).eq('company_id', companyId).eq('role', 'parceiro'),
           sb.from('leads').select('*', { count: 'exact', head: true }).eq('company_id', companyId),
           sb.from('call_history').select('*', { count: 'exact', head: true }).eq('company_id', companyId).gte('called_at', todayStart.toISOString()),
+          sb.from('call_history').select('*', { count: 'exact', head: true }).eq('company_id', companyId).eq('ai_sentiment', 'negativo').gte('called_at', weekStart.toISOString()),
           sb.from('call_history').select('result, duration_sec, parceiro_id').eq('company_id', companyId),
           sb.from('call_history').select('parceiro_id, result, usuarios!parceiro_id(id,full_name,avatar_url)').eq('company_id', companyId),
           sb.from('usuarios').select('id').eq('company_id', companyId).eq('role', 'parceiro').gte('last_seen_at', new Date(Date.now() - 15 * 60 * 1000).toISOString()),
@@ -89,6 +93,7 @@ export default function AdminDashboard() {
           tempoTotalSec: tempoTotal,
           conversao,
           parceirosOnline: onlineData?.length ?? 0,
+          negativosSemana: negativosSemana ?? 0,
           ranking,
         })
       } finally {
@@ -111,18 +116,38 @@ export default function AdminDashboard() {
         </p>
       </div>
 
+      {/* Negative sentiment alert banner */}
+      {(stats?.negativosSemana ?? 0) > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20,
+          padding: '14px 18px', borderRadius: 12,
+          background: '#FEF2F2', border: '1px solid #FECACA',
+        }}>
+          <AlertTriangle size={20} color="#DC2626" style={{ flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#991B1B' }}>
+              {stats!.negativosSemana} chamada{stats!.negativosSemana !== 1 ? 's' : ''} com sentimento negativo esta semana
+            </div>
+            <div style={{ fontSize: 12, color: '#DC2626', marginTop: 2 }}>
+              Revê o historico e intervem com as leads insatisfeitas antes que percam o interesse.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Stats grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16, marginBottom: 28 }}>
-        <StatCard label="Empresas"         value={stats?.totalEmpresas ?? 0}  icon={Building2}   color="#6366F1" />
-        <StatCard label="Parceiros"        value={stats?.totalParceiros ?? 0} icon={Users}        color="#2563EB" />
-        <StatCard label="Total de Leads"   value={stats?.totalLeads ?? 0}     icon={PhoneCall}    color="#0891B2" />
-        <StatCard label="Chamadas Hoje"    value={stats?.chamadasHoje ?? 0}   icon={PhoneCall}    color="#D97706" />
-        <StatCard label="Chamadas Total"   value={stats?.chamadasTotal ?? 0}  icon={PhoneCall}    color="#64748B" />
-        <StatCard label="Vendas"           value={stats?.vendasTotal ?? 0}    icon={CheckCircle}  color="#16A34A" />
-        <StatCard label="Conversao"        value={`${stats?.conversao ?? 0}%`} icon={TrendingUp}  color="#16A34A" />
-        <StatCard label="Tempo Medio"      value={fmtTime(stats?.tempoMedioSec ?? 0)} icon={Clock} color="#8B5CF6" />
-        <StatCard label="Tempo Total"      value={fmtTime(stats?.tempoTotalSec ?? 0)} icon={Clock} color="#EC4899" />
-        <StatCard label="Parceiros Online" value={stats?.parceirosOnline ?? 0} icon={Wifi}        color="#16A34A" />
+        <StatCard label="Empresas"            value={stats?.totalEmpresas ?? 0}    icon={Building2}      color="#6366F1" />
+        <StatCard label="Parceiros"           value={stats?.totalParceiros ?? 0}   icon={Users}          color="#2563EB" />
+        <StatCard label="Total de Leads"      value={stats?.totalLeads ?? 0}       icon={PhoneCall}      color="#0891B2" />
+        <StatCard label="Chamadas Hoje"       value={stats?.chamadasHoje ?? 0}     icon={PhoneCall}      color="#D97706" />
+        <StatCard label="Chamadas Total"      value={stats?.chamadasTotal ?? 0}    icon={PhoneCall}      color="#64748B" />
+        <StatCard label="Vendas"              value={stats?.vendasTotal ?? 0}      icon={CheckCircle}    color="#16A34A" />
+        <StatCard label="Conversao"           value={`${stats?.conversao ?? 0}%`}  icon={TrendingUp}     color="#16A34A" />
+        <StatCard label="Tempo Medio"         value={fmtTime(stats?.tempoMedioSec ?? 0)} icon={Clock}   color="#8B5CF6" />
+        <StatCard label="Tempo Total"         value={fmtTime(stats?.tempoTotalSec ?? 0)} icon={Clock}   color="#EC4899" />
+        <StatCard label="Parceiros Online"    value={stats?.parceirosOnline ?? 0}  icon={Wifi}           color="#16A34A" />
+        <StatCard label="Negativos 7 dias"   value={stats?.negativosSemana ?? 0}  icon={AlertTriangle}  color="#DC2626" />
       </div>
 
       {/* Ranking */}
