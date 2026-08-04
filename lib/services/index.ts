@@ -97,7 +97,7 @@ export const campanhaService = {
 // LEADS
 // -------------------------------------------------------
 export const leadService = {
-  async getAll(filters?: { campanha_id?: string; status?: string; assigned_to?: string }) {
+  async getAll(filters?: { campanha_id?: string; status?: string; assigned_to?: string; origem?: string }) {
     const sb = createClient()
     let q = sb
       .from('leads')
@@ -106,6 +106,7 @@ export const leadService = {
     if (filters?.campanha_id) q = q.eq('campanha_id', filters.campanha_id)
     if (filters?.status)      q = q.eq('status', filters.status)
     if (filters?.assigned_to) q = q.eq('assigned_to', filters.assigned_to)
+    if (filters?.origem)      q = q.eq('origem', filters.origem)
     const { data, error } = await q
     if (error) throw error
     return (data ?? []) as Lead[]
@@ -400,6 +401,7 @@ export const doorCaptureService = {
         operador: door.tc_operador_atual ?? door.en_comercializador_atual ?? null,
         observacoes: door.notas ?? null,
         status: 'novo',
+        origem: 'porta',
         consentimento_rgpd: door.consentimento_rgpd ?? false,
         data_consentimento: door.data_consentimento ?? null,
       }).select().single()

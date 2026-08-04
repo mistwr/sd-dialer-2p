@@ -16,6 +16,7 @@ export type LeadStatus =
   | 'ligar_depois'
   | 'sem_cobertura'
   | 'outro'
+export type LeadOrigem = 'importacao' | 'manual' | 'porta' | 'website' | 'facebook' | 'outro'
 export type CallResult =
   | 'venda'
   | 'nao_interessado'
@@ -82,6 +83,7 @@ export interface Lead {
   operador: string | null
   observacoes: string | null
   status: LeadStatus
+  origem: LeadOrigem
   priority: number
   imported_at: string
   created_at: string
@@ -158,6 +160,24 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'Administrador',
   supervisor: 'Supervisor',
   parceiro: 'Parceiro',
+}
+
+export const LEAD_ORIGEM_LABELS: Record<LeadOrigem, string> = {
+  importacao: 'Importação',
+  manual: 'Manual',
+  porta: 'Porta a porta',
+  website: 'Website',
+  facebook: 'Facebook',
+  outro: 'Outro',
+}
+
+export const LEAD_ORIGEM_COLORS: Record<LeadOrigem, string> = {
+  importacao: '#64748B',
+  manual: '#7C3AED',
+  porta: '#EA580C',
+  website: '#2563EB',
+  facebook: '#1877F2',
+  outro: '#64748B',
 }
 
 export const STATUS_COLORS: Record<LeadStatus, string> = {

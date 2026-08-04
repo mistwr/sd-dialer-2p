@@ -276,8 +276,13 @@ export default function ParceiroDashboardPage() {
 
                     {/* Info */}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: 14, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
                         {lead.nome}
+                        {lead.origem === 'porta' && (
+                          <span style={{ fontSize: 10, fontWeight: 700, color: '#EA580C', background: '#FFF7ED', padding: '1px 7px', borderRadius: 999, flexShrink: 0 }}>
+                            🚪 Porta
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: 12, color: '#64748B', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span>{lead.telefone}</span>

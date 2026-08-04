@@ -14,6 +14,7 @@ import { PageSpinner } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useAuth } from '@/lib/hooks/useAuth'
 import type { Lead } from '@/lib/types'
+import { LEAD_ORIGEM_LABELS, LEAD_ORIGEM_COLORS } from '@/lib/types'
 
 const STATUS_OPTS = [
   'novo', 'contactado', 'vendido', 'nao_interessado',
@@ -158,6 +159,7 @@ export default function LeadsAdminPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [campanhaFilter, setCampanhaFilter] = useState('')
+  const [origemFilter, setOrigemFilter] = useState('')
   const [selected, setSelected] = useState<string[]>([])
   const [modal, setModal] = useState<{ type: 'lead' | 'import' | 'assign' | null; editing?: Lead }>({ type: null })
 
@@ -175,7 +177,8 @@ export default function LeadsAdminPage() {
     const matchSearch = !q || l.nome.toLowerCase().includes(q) || l.telefone.includes(q)
     const matchStatus = !statusFilter || l.status === statusFilter
     const matchCampanha = !campanhaFilter || l.campanha_id === campanhaFilter
-    return matchSearch && matchStatus && matchCampanha
+    const matchOrigem = !origemFilter || l.origem === origemFilter
+    return matchSearch && matchStatus && matchCampanha && matchOrigem
   })
 
   const toggleSelect = (id: string) =>
@@ -354,6 +357,11 @@ export default function LeadsAdminPage() {
           <option value="">Campanha: Todas</option>
           {campanhas.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
+        <select value={origemFilter} onChange={e => setOrigemFilter(e.target.value)}
+          style={{ padding: '9px 12px', borderRadius: 10, border: '1.5px solid #E2E8F0', fontSize: 13, outline: 'none', background: '#fff', color: origemFilter ? '#0F172A' : '#94A3B8' }}>
+          <option value="">Origem: Todas</option>
+          {Object.entries(LEAD_ORIGEM_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
       </div>
 
       {/* Table */}
@@ -375,7 +383,7 @@ export default function LeadsAdminPage() {
                       checked={selected.length === filtered.length && filtered.length > 0}
                       onChange={toggleAll} style={{ cursor: 'pointer' }} />
                   </th>
-                  {['Nome', 'Telefone', 'Operador', 'Campanha', 'Parceiro', 'Estado', 'Acoes'].map(h => (
+                  {['Nome', 'Telefone', 'Operador', 'Origem', 'Campanha', 'Parceiro', 'Estado', 'Acoes'].map(h => (
                     <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#64748B', letterSpacing: '0.05em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
                       {h}
                     </th>
@@ -400,6 +408,14 @@ export default function LeadsAdminPage() {
                       <a href={`tel:${l.telefone}`} style={{ textDecoration: 'none', color: '#374151', fontFamily: 'monospace' }}>{l.telefone}</a>
                     </td>
                     <td style={{ padding: '12px 16px', fontSize: 13, color: '#64748B' }}>{l.operador ?? '—'}</td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
+                        background: `${LEAD_ORIGEM_COLORS[l.origem]}18`, color: LEAD_ORIGEM_COLORS[l.origem],
+                      }}>
+                        {LEAD_ORIGEM_LABELS[l.origem]}
+                      </span>
+                    </td>
                     <td style={{ padding: '12px 16px', fontSize: 13, color: '#64748B' }}>{(l.campanha as any)?.name ?? '—'}</td>
                     <td style={{ padding: '12px 16px', fontSize: 13, color: '#64748B' }}>{(l.parceiro as any)?.full_name ?? '—'}</td>
                     <td style={{ padding: '12px 16px' }}><Badge value={l.status} /></td>
