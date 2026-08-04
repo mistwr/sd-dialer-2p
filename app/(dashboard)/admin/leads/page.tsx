@@ -39,7 +39,7 @@ function LeadForm({ initial, campanhas, onSave, onClose }: {
   return (
     <form onSubmit={async e => {
       e.preventDefault(); setSaving(true); setError(null)
-      try { await onSave(form); onClose() }
+      try { await onSave(form as Partial<Lead>); onClose() }
       catch (err) { setError(err instanceof Error ? err.message : 'Erro ao guardar') }
       finally { setSaving(false) }
     }} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -226,7 +226,7 @@ export default function LeadsAdminPage() {
         localidade: l.localidade || null,
         operador: l.operador || null,
         observacoes: l.observacoes || null,
-        company_id: profile.company_id,
+        company_id: profile.company_id ?? undefined,
         campanha_id: importCampanha || null,
         status: 'novo' as const,
         imported_at: new Date().toISOString(),
@@ -521,7 +521,7 @@ export default function LeadsAdminPage() {
                     <thead>
                       <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
                         <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#374151', whiteSpace: 'nowrap' }}>#</th>
-                        {(['nome', 'telefone', 'email', 'morada', 'localidade', 'operador'] as const)
+                        {(['nome', 'telefone', 'email', 'morada', 'codigo_postal', 'localidade', 'operador'] as const)
                           .filter(col => importPreview.some(r => r[col]))
                           .map(col => (
                             <th key={col} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#374151', whiteSpace: 'nowrap', textTransform: 'capitalize' }}>
@@ -535,7 +535,7 @@ export default function LeadsAdminPage() {
                       {importPreview.slice(0, 5).map((row, i) => (
                         <tr key={i} style={{ borderBottom: i < Math.min(4, importPreview.length - 1) ? '1px solid #F1F5F9' : 'none', background: i % 2 === 0 ? '#fff' : '#FAFAFA' }}>
                           <td style={{ padding: '8px 12px', color: '#94A3B8', fontWeight: 500 }}>{i + 1}</td>
-                          {(['nome', 'telefone', 'email', 'morada', 'localidade', 'operador'] as const)
+                          {(['nome', 'telefone', 'email', 'morada', 'codigo_postal', 'localidade', 'operador'] as const)
                             .filter(col => importPreview.some(r => r[col]))
                             .map(col => (
                               <td key={col} style={{ padding: '8px 12px', color: '#374151', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

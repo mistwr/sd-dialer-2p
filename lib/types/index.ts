@@ -171,3 +171,139 @@ export const STATUS_COLORS: Record<LeadStatus, string> = {
   sem_cobertura: '#EA580C',
   outro: '#6B7280',
 }
+
+// ============================================================
+// Porta → Lead (Captação de Porta)
+// ============================================================
+
+export type TipoCliente = 'particular' | 'empresa'
+export type EnergiaTipo = 'eletricidade' | 'gas' | 'ambos'
+export type Interesse = 'telecomunicacoes' | 'energia' | 'ambos'
+export type Temperatura = 'quente' | 'morna' | 'fria'
+export type ResultadoPorta = 'interessado' | 'follow_up' | 'sem_interesse' | 'ja_cliente' | 'venda'
+export type ProblemaTelecom = 'preco' | 'cobertura' | 'velocidade' | 'avarias' | 'atendimento' | 'fidelizacao' | 'outro'
+export type InteresseEnergia = 'poupanca' | 'solar' | 'wallbox' | 'mobilidade_eletrica'
+export type TipoAnexoPorta = 'fatura_telecom' | 'fatura_energia' | 'outro'
+export type TipoTimeline = 'porta' | 'chamada' | 'follow_up' | 'nota' | 'sistema'
+
+export interface DoorCapture {
+  id: string
+  company_id: string
+  lead_id: string | null
+  comercial_id: string
+  campanha_id: string | null
+
+  // Etapa 1
+  nome: string
+  telefone: string
+  email: string | null
+  tipo_cliente: TipoCliente
+  nif: string | null
+  morada: string | null
+  codigo_postal: string | null
+  localidade: string | null
+  distrito: string | null
+  latitude: number | null
+  longitude: number | null
+  consentimento_rgpd: boolean
+  data_consentimento: string | null
+
+  // Etapa 2 — Telecom
+  tc_operador_atual: string | null
+  tc_tem_tv: boolean | null
+  tc_tem_internet: boolean | null
+  tc_tem_fixo: boolean | null
+  tc_num_cartoes_moveis: number | null
+  tc_mensalidade: number | null
+  tc_velocidade_internet: string | null
+  tc_fim_fidelizacao: string | null
+  tc_satisfacao: number | null
+  tc_problemas: ProblemaTelecom[]
+  tc_interesse_comparacao: boolean | null
+
+  // Etapa 3 — Energia
+  en_comercializador_atual: string | null
+  en_tipo: EnergiaTipo | null
+  en_potencia_contratada: string | null
+  en_tipo_tarifa: string | null
+  en_valor_medio_mensal: number | null
+  en_fim_contrato: string | null
+  en_interesse: InteresseEnergia[]
+
+  // Etapa 4 — Qualificação
+  interesse: Interesse | null
+  temperatura: Temperatura | null
+  melhor_horario: string | null
+  notas: string | null
+  resultado: ResultadoPorta | null
+  proxima_acao: string | null
+  data_proximo_contacto: string | null
+
+  // Score
+  score: number
+  score_motivos: string[]
+
+  duplicado_de_lead_id: string | null
+  created_at: string
+  updated_at: string
+
+  // Joined
+  comercial?: Pick<Usuario, 'id' | 'full_name' | 'avatar_url'> | null
+  campanha?: Pick<Campanha, 'id' | 'name'> | null
+  lead?: Pick<Lead, 'id' | 'nome' | 'status'> | null
+}
+
+export interface DoorCaptureAttachment {
+  id: string
+  door_capture_id: string
+  company_id: string
+  tipo: TipoAnexoPorta
+  storage_path: string
+  file_name: string | null
+  file_size: number | null
+  content_type: string | null
+  uploaded_by: string | null
+  created_at: string
+}
+
+export interface LeadTimelineEntry {
+  id: string
+  company_id: string
+  lead_id: string
+  tipo: TipoTimeline
+  descricao: string
+  usuario_id: string | null
+  metadata: Record<string, unknown> | null
+  created_at: string
+  usuario?: Pick<Usuario, 'id' | 'full_name'> | null
+}
+
+export const RESULTADO_PORTA_LABELS: Record<ResultadoPorta, string> = {
+  interessado: 'Interessado',
+  follow_up: 'Follow-up',
+  sem_interesse: 'Sem interesse',
+  ja_cliente: 'Já é cliente',
+  venda: 'Venda',
+}
+
+export const TEMPERATURA_LABELS: Record<Temperatura, string> = {
+  quente: 'Quente',
+  morna: 'Morna',
+  fria: 'Fria',
+}
+
+export const TEMPERATURA_COLORS: Record<Temperatura, string> = {
+  quente: '#DC2626',
+  morna: '#D97706',
+  fria: '#2563EB',
+}
+
+export const PROBLEMA_TELECOM_LABELS: Record<ProblemaTelecom, string> = {
+  preco: 'Preço',
+  cobertura: 'Cobertura',
+  velocidade: 'Velocidade',
+  avarias: 'Avarias',
+  atendimento: 'Atendimento',
+  fidelizacao: 'Fidelização',
+  outro: 'Outro',
+}

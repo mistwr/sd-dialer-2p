@@ -23,7 +23,7 @@ export function calculateConversionRate(totalCalls: number, sales: number): numb
  */
 export function calculateAverageCallDuration(calls: CallHistory[]): number {
   if (calls.length === 0) return 0
-  const totalDuration = calls.reduce((sum, call) => sum + call.duration_seconds, 0)
+  const totalDuration = calls.reduce((sum, call) => sum + call.duration_sec, 0)
   return totalDuration / calls.length
 }
 
@@ -33,7 +33,7 @@ export function calculateAverageCallDuration(calls: CallHistory[]): number {
  * @returns Tempo total em segundos
  */
 export function calculateTotalCallDuration(calls: CallHistory[]): number {
-  return calls.reduce((sum, call) => sum + call.duration_seconds, 0)
+  return calls.reduce((sum, call) => sum + call.duration_sec, 0)
 }
 
 /**
@@ -42,7 +42,7 @@ export function calculateTotalCallDuration(calls: CallHistory[]): number {
  * @returns Número de leads por contactar
  */
 export function calculateLeadsToContact(leads: Lead[]): number {
-  return leads.filter((lead) => lead.status === 'new').length
+  return leads.filter((lead) => lead.status === 'novo').length
 }
 
 /**
@@ -51,7 +51,7 @@ export function calculateLeadsToContact(leads: Lead[]): number {
  * @returns Número de leads contatadas
  */
 export function calculateContactedLeads(leads: Lead[]): number {
-  return leads.filter((lead) => lead.status !== 'new').length
+  return leads.filter((lead) => lead.status !== 'novo').length
 }
 
 /**
@@ -73,10 +73,10 @@ export function groupCallsByComercial(
 ): { [usuarioId: string]: CallHistory[] } {
   return calls.reduce(
     (acc, call) => {
-      if (!acc[call.usuario_id]) {
-        acc[call.usuario_id] = []
+      if (!acc[call.parceiro_id]) {
+        acc[call.parceiro_id] = []
       }
-      acc[call.usuario_id].push(call)
+      acc[call.parceiro_id].push(call)
       return acc
     },
     {} as { [usuarioId: string]: CallHistory[] }
@@ -91,7 +91,7 @@ export function groupCallsByComercial(
 export function groupCallsByDate(calls: CallHistory[]): { [date: string]: CallHistory[] } {
   return calls.reduce(
     (acc, call) => {
-      const date = call.call_date
+      const date = call.called_at.slice(0, 10)
       if (!acc[date]) {
         acc[date] = []
       }
@@ -266,4 +266,108 @@ export function calculateAdministrativeOverhead(calls: CallHistory[]): number {
   if (calls.length === 0) return 0
   const nonSales = calls.filter((call) => call.result !== 'venda').length
   return (nonSales / calls.length) * 100
+}
+
+/**
+ * Calcula o Lead Score de uma captação de porta.
+ * Regras simples e explicáveis (não é machine learning) — cada regra soma
+ * pontos e fica registada em `motivos` para ser mostrada ao comercial.
+ * Pontuação: 0-100. Nível: fria (<40), morna (40-69), quente (>=70).
+ */
+export function calculateDoorCaptureScore(input: {
+  tc_fim_fidelizacao?: string | null
+  en_fim_contrato?: string | null
+  tc_mensalidade?: number | null
+  en_valor_medio_mensal?: number | null
+  tc_satisfacao?: number | null
+  tc_problemas?: string[]
+  interesse?: string | null
+  tc_tem_tv?: boolean | null
+  tc_tem_internet?: boolean | null
+  tc_tem_fixo?: boolean | null
+  en_tipo?: string | null
+  melhor_horario?: string | null
+  temAnexos?: boolean
+}): { score: number; motivos: string[] } {
+  let score = 0
+  const motivos: string[] = []
+
+  // Proximidade do fim da fidelização/contrato (até 90 dias = maior score)
+  const fimData = input.tc_fim_fidelizacao || input.en_fim_contrato
+  if (fimData) {
+    const dias = Math.ceil((new Date(fimData).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    if (dias <= 30 && dias >= 0) {
+      score += 25
+      motivos.push('Contrato termina em menos de 30 dias')
+    } else if (dias <= 90 && dias >= 0) {
+      score += 15
+      motivos.push('Contrato termina em menos de 90 dias')
+    }
+  }
+
+  // Mensalidade alta = mais margem de poupança para oferecer
+  const mensalidade = input.tc_mensalidade || input.en_valor_medio_mensal
+  if (mensalidade && mensalidade >= 60) {
+    score += 15
+    motivos.push('Mensalidade atual elevada (potencial de poupança alto)')
+  } else if (mensalidade && mensalidade >= 30) {
+    score += 8
+    motivos.push('Mensalidade atual moderada')
+  }
+
+  // Insatisfação (satisfação baixa = mais aberto a mudar)
+  if (typeof input.tc_satisfacao === 'number' && input.tc_satisfacao <= 2) {
+    score += 20
+    motivos.push('Cliente pouco satisfeito com o serviço atual')
+  } else if (typeof input.tc_satisfacao === 'number' && input.tc_satisfacao === 3) {
+    score += 8
+    motivos.push('Satisfação neutra com o serviço atual')
+  }
+
+  // Problemas reportados
+  const numProblemas = input.tc_problemas?.length ?? 0
+  if (numProblemas > 0) {
+    score += Math.min(numProblemas * 6, 18)
+    motivos.push(`${numProblemas} problema(s) reportado(s) com o serviço atual`)
+  }
+
+  // Interesse demonstrado
+  if (input.interesse === 'ambos') {
+    score += 12
+    motivos.push('Interesse em telecom e energia (cross-sell)')
+  } else if (input.interesse) {
+    score += 6
+    motivos.push('Interesse demonstrado')
+  }
+
+  // Número de serviços atuais (mais serviços = cliente mais "pesado", mais a ganhar)
+  const numServicos = [input.tc_tem_tv, input.tc_tem_internet, input.tc_tem_fixo].filter(Boolean).length
+  if (numServicos >= 2) {
+    score += 8
+    motivos.push('Tem múltiplos serviços contratados')
+  }
+  if (input.en_tipo === 'ambos') {
+    score += 8
+    motivos.push('Tem eletricidade e gás (duplo fuel)')
+  }
+
+  // Melhor horário confirmado facilita o follow-up
+  if (input.melhor_horario) {
+    score += 5
+    motivos.push('Melhor horário de contacto confirmado')
+  }
+
+  // Existência de fatura facilita a comparação/proposta
+  if (input.temAnexos) {
+    score += 10
+    motivos.push('Fatura anexada (permite comparação imediata)')
+  }
+
+  return { score: Math.min(score, 100), motivos }
+}
+
+export function scoreParaTemperatura(score: number): 'quente' | 'morna' | 'fria' {
+  if (score >= 70) return 'quente'
+  if (score >= 40) return 'morna'
+  return 'fria'
 }

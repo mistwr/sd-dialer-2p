@@ -21,7 +21,7 @@ function CampanhaForm({ initial, onSave, onClose }: { initial?: Partial<Campanha
   return (
     <form onSubmit={async e => {
       e.preventDefault(); setSaving(true); setError(null)
-      try { await onSave(form); onClose() } catch (err) { setError(err instanceof Error ? err.message : 'Erro') } finally { setSaving(false) }
+      try { await onSave(form as Partial<Campanha>); onClose() } catch (err) { setError(err instanceof Error ? err.message : 'Erro') } finally { setSaving(false) }
     }} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {error && <div style={{ background: '#FEE2E2', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#991B1B' }}>{error}</div>}
       <div>
@@ -72,7 +72,7 @@ export default function CampanhasPage() {
   const filtered = campanhas.filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
 
   const handleSave = async (data: Partial<Campanha>) => {
-    const payload = { ...data, company_id: profile?.company_id!, created_by: profile?.id }
+    const payload = { ...data, company_id: profile?.company_id ?? '', created_by: profile?.id }
     if (modal.editing) { await campanhaService.update(modal.editing.id, data) }
     else { await campanhaService.create(payload) }
     mutate()

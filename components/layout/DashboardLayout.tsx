@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, Building2, Megaphone,
   PhoneCall, BarChart2, LogOut, Menu, X, Bell,
   ChevronRight, PhoneIncoming, History, UserCircle,
-  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines,
+  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin,
 } from 'lucide-react'
 import useSWR from 'swr'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -28,10 +28,12 @@ const NAV: NavItem[] = [
   { label: 'Leads',        href: '/admin/leads',          icon: PhoneCall,       roles: ['admin', 'supervisor'] },
   { label: 'Distribuicao', href: '/admin/distribuicao',   icon: Shuffle,         roles: ['admin', 'supervisor'] },
   { label: 'Relatorios',   href: '/admin/relatorios',     icon: BarChart2,       roles: ['admin', 'supervisor'] },
+  { label: 'Relat. Porta', href: '/admin/relatorio-porta', icon: MapPin,         roles: ['admin', 'supervisor'] },
   { label: 'IA Dashboard', href: '/admin/ia',             icon: Brain,           roles: ['admin', 'supervisor'] },
   { label: 'Assist. IA',  href: '/admin/assistente-ia',  icon: Brain,           roles: ['admin', 'supervisor'] },
   { label: 'Supervisor',   href: '/supervisor',           icon: LayoutDashboard, roles: ['supervisor'] },
   { label: 'Minhas Leads', href: '/parceiro',             icon: PhoneIncoming,   roles: ['parceiro'] },
+  { label: 'Porta → Lead', href: '/parceiro/porta',       icon: MapPin,          roles: ['parceiro'] },
   { label: 'Historico',    href: '/parceiro/historico',   icon: History,         roles: ['parceiro'] },
   { label: 'Chamadas IA',  href: '/parceiro/chamadas-ia', icon: AudioLines,      roles: ['parceiro'] },
   { label: 'Meu Perfil',   href: '/parceiro/perfil',      icon: UserCircle,      roles: ['parceiro'] },

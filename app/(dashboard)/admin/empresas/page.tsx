@@ -25,7 +25,7 @@ function CompanyForm({ initial, onSave, onClose }: {
   return (
     <form onSubmit={async e => {
       e.preventDefault(); setSaving(true); setError(null)
-      try { await onSave(form); onClose() } catch (err) { setError(err instanceof Error ? err.message : 'Erro') } finally { setSaving(false) }
+      try { await onSave(form as Partial<Company>); onClose() } catch (err) { setError(err instanceof Error ? err.message : 'Erro') } finally { setSaving(false) }
     }} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {error && <div style={{ background: '#FEE2E2', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#991B1B' }}>{error}</div>}
       {[

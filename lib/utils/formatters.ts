@@ -137,19 +137,17 @@ export function formatAddress(
 export function getStatusColor(status: string): string {
   const colors: { [key: string]: string } = {
     // Lead Status
-    new: 'bg-blue-50 text-blue-700 border-blue-200',
+    novo: 'bg-blue-50 text-blue-700 border-blue-200',
     contactado: 'bg-yellow-50 text-yellow-700 border-yellow-200',
     vendido: 'bg-green-50 text-green-700 border-green-200',
     nao_interessado: 'bg-red-50 text-red-700 border-red-200',
     agendar: 'bg-purple-50 text-purple-700 border-purple-200',
     outras: 'bg-gray-50 text-gray-700 border-gray-200',
-    // Campaign Status
+    // Campaign Status / User Status (shared "active")
     draft: 'bg-gray-50 text-gray-700 border-gray-200',
     active: 'bg-green-50 text-green-700 border-green-200',
     paused: 'bg-yellow-50 text-yellow-700 border-yellow-200',
     completed: 'bg-blue-50 text-blue-700 border-blue-200',
-    // User Status
-    active: 'bg-green-50 text-green-700 border-green-200',
     inactive: 'bg-gray-50 text-gray-700 border-gray-200',
   }
 
