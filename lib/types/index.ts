@@ -327,3 +327,35 @@ export const PROBLEMA_TELECOM_LABELS: Record<ProblemaTelecom, string> = {
   fidelizacao: 'Fidelização',
   outro: 'Outro',
 }
+
+// ============================================================
+// Chat interno
+// ============================================================
+
+export type ConversaTipo = 'direta' | 'grupo'
+
+export interface Conversa {
+  id: string
+  company_id: string
+  tipo: ConversaTipo
+  nome: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  // Joined
+  participantes?: Pick<Usuario, 'id' | 'full_name' | 'avatar_url'>[]
+  ultima_mensagem?: Pick<Mensagem, 'conteudo' | 'created_at' | 'usuario_id'> | null
+  nao_lidas?: number
+}
+
+export interface Mensagem {
+  id: string
+  conversa_id: string
+  usuario_id: string
+  conteudo: string
+  created_at: string
+  editado_at: string | null
+  apagado: boolean
+  // Joined
+  usuario?: Pick<Usuario, 'id' | 'full_name' | 'avatar_url'> | null
+}

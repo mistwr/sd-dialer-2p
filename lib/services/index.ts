@@ -279,8 +279,181 @@ export const followUpService = {
 }
 
 // -------------------------------------------------------
-// DOOR CAPTURES (Porta → Lead)
+// CHAT INTERNO
 // -------------------------------------------------------
+import type { Conversa, Mensagem } from '@/lib/types'
+
+export const chatService = {
+  /**
+   * Lista as conversas do utilizador, ordenadas pela mais recente,
+   * com participantes, última mensagem e contagem de não lidas.
+   */
+  async getConversas(userId: string): Promise<Conversa[]> {
+    const sb = createClient()
+    const { data: participacoes, error: pErr } = await sb
+      .from('conversa_participantes')
+      .select('conversa_id, last_read_at')
+      .eq('usuario_id', userId)
+    if (pErr) throw pErr
+    const conversaIds = (participacoes ?? []).map(p => p.conversa_id)
+    if (conversaIds.length === 0) return []
+
+    const { data: conversas, error: cErr } = await sb
+      .from('conversas')
+      .select('*')
+      .in('id', conversaIds)
+      .order('updated_at', { ascending: false })
+    if (cErr) throw cErr
+
+    const readMap = new Map((participacoes ?? []).map(p => [p.conversa_id, p.last_read_at]))
+
+    const result: Conversa[] = []
+    for (const conversa of conversas ?? []) {
+      const { data: participantesRaw } = await sb
+        .from('conversa_participantes')
+        .select('usuario_id, usuarios(id, full_name, avatar_url)')
+        .eq('conversa_id', conversa.id)
+      const participantes = (participantesRaw ?? [])
+        .map(p => p.usuarios)
+        .flat()
+        .filter((u): u is Pick<Usuario, 'id' | 'full_name' | 'avatar_url'> => !!u)
+
+      const { data: ultimaMsg } = await sb
+        .from('mensagens')
+        .select('conteudo, created_at, usuario_id')
+        .eq('conversa_id', conversa.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      const lastRead = readMap.get(conversa.id)
+      let naoLidas = 0
+      if (lastRead) {
+        const { count } = await sb
+          .from('mensagens')
+          .select('*', { count: 'exact', head: true })
+          .eq('conversa_id', conversa.id)
+          .gt('created_at', lastRead)
+          .neq('usuario_id', userId)
+        naoLidas = count ?? 0
+      } else {
+        const { count } = await sb
+          .from('mensagens')
+          .select('*', { count: 'exact', head: true })
+          .eq('conversa_id', conversa.id)
+          .neq('usuario_id', userId)
+        naoLidas = count ?? 0
+      }
+
+      result.push({ ...conversa, participantes, ultima_mensagem: ultimaMsg ?? null, nao_lidas: naoLidas } as Conversa)
+    }
+    return result
+  },
+
+  /**
+   * Obtém (ou cria) a conversa direta 1:1 entre dois utilizadores.
+   */
+  async getOrCreateDirectConversa(companyId: string, userId: string, otherUserId: string): Promise<Conversa> {
+    const sb = createClient()
+
+    // Procurar conversa direta existente com ambos os participantes
+    const { data: myConvs } = await sb.from('conversa_participantes').select('conversa_id').eq('usuario_id', userId)
+    const myConvIds = (myConvs ?? []).map(c => c.conversa_id)
+    if (myConvIds.length > 0) {
+      const { data: candidatas } = await sb
+        .from('conversas')
+        .select('*, conversa_participantes(usuario_id)')
+        .in('id', myConvIds)
+        .eq('tipo', 'direta')
+      const existente = (candidatas ?? []).find(c => {
+        const ids = (c.conversa_participantes as { usuario_id: string }[]).map(p => p.usuario_id)
+        return ids.length === 2 && ids.includes(otherUserId)
+      })
+      if (existente) return existente as unknown as Conversa
+    }
+
+    const { data: nova, error } = await sb.from('conversas').insert({
+      company_id: companyId, tipo: 'direta', created_by: userId,
+    }).select().single()
+    if (error) throw error
+
+    const { error: partError } = await sb.from('conversa_participantes').insert([
+      { conversa_id: nova.id, usuario_id: userId },
+      { conversa_id: nova.id, usuario_id: otherUserId },
+    ])
+    if (partError) throw partError
+
+    return nova as Conversa
+  },
+
+  async createGroupConversa(companyId: string, userId: string, nome: string, participantIds: string[]): Promise<Conversa> {
+    const sb = createClient()
+    const { data: nova, error } = await sb.from('conversas').insert({
+      company_id: companyId, tipo: 'grupo', nome, created_by: userId,
+    }).select().single()
+    if (error) throw error
+
+    const allIds = Array.from(new Set([userId, ...participantIds]))
+    const { error: partError } = await sb.from('conversa_participantes')
+      .insert(allIds.map(id => ({ conversa_id: nova.id, usuario_id: id })))
+    if (partError) throw partError
+
+    return nova as Conversa
+  },
+
+  async getMensagens(conversaId: string, limit = 50): Promise<Mensagem[]> {
+    const sb = createClient()
+    const { data, error } = await sb
+      .from('mensagens')
+      .select('*, usuario:usuario_id(id, full_name, avatar_url)')
+      .eq('conversa_id', conversaId)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    if (error) throw error
+    return ((data ?? []) as Mensagem[]).reverse()
+  },
+
+  async sendMensagem(conversaId: string, userId: string, conteudo: string): Promise<Mensagem> {
+    const sb = createClient()
+    const { data, error } = await sb.from('mensagens').insert({
+      conversa_id: conversaId, usuario_id: userId, conteudo,
+    }).select('*, usuario:usuario_id(id, full_name, avatar_url)').single()
+    if (error) throw error
+    return data as Mensagem
+  },
+
+  async markAsRead(conversaId: string, userId: string) {
+    const sb = createClient()
+    const { error } = await sb.from('conversa_participantes')
+      .update({ last_read_at: new Date().toISOString() })
+      .eq('conversa_id', conversaId).eq('usuario_id', userId)
+    if (error) throw error
+  },
+
+  /**
+   * Subscreve mensagens novas de uma conversa em tempo real (Supabase Realtime).
+   * Devolve a função de unsubscribe.
+   */
+  subscribeToConversa(conversaId: string, onNewMessage: (msg: Mensagem) => void): () => void {
+    const sb = createClient()
+    const channel = sb
+      .channel(`mensagens:${conversaId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'mensagens', filter: `conversa_id=eq.${conversaId}` },
+        async (payload) => {
+          const { data } = await sb
+            .from('usuarios')
+            .select('id, full_name, avatar_url')
+            .eq('id', payload.new.usuario_id)
+            .single()
+          onNewMessage({ ...(payload.new as Mensagem), usuario: data })
+        }
+      )
+      .subscribe()
+    return () => { sb.removeChannel(channel) }
+  },
+}
 import type { DoorCapture, DoorCaptureAttachment, LeadTimelineEntry } from '@/lib/types'
 import { calculateDoorCaptureScore, scoreParaTemperatura } from '@/lib/utils/calculations'
 

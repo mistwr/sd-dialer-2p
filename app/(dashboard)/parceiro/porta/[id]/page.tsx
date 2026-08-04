@@ -28,7 +28,7 @@ export default function CaptacaoDetailPage({ params }: { params: Promise<{ id: s
   const fileInputRef = useRef<HTMLInputElement>(null)
   const pendingTipo = useRef<'fatura_telecom' | 'fatura_energia' | 'outro'>('outro')
 
-  const { data: capture, isLoading, mutate } = useSWR(['door-capture', id], () => doorCaptureService.getById(id))
+  const { data: capture, isLoading } = useSWR(['door-capture', id], () => doorCaptureService.getById(id))
   const { data: attachments = [], mutate: mutateAttachments } = useSWR(['door-capture-attachments', id], () => doorCaptureService.getAttachments(id))
   const { data: timeline = [] } = useSWR(
     capture?.lead_id ? ['lead-timeline', capture.lead_id] : null,
