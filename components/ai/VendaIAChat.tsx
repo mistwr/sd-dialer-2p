@@ -317,11 +317,12 @@ export default function VendaIAChat({ contexto }: { contexto: VendaContexto }) {
         )}
       </div>
 
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
-    </div>
+        <style>{`
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    </>
   )
 }
