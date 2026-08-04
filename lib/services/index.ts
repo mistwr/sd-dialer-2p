@@ -276,3 +276,104 @@ export const followUpService = {
     if (error) throw error
   },
 }
+
+// -------------------------------------------------------
+// DOOR REPORTS (Portas → Leads)
+// -------------------------------------------------------
+export const doorReportService = {
+  async getAll(companyId: string, from?: string, to?: string) {
+    const sb = createClient()
+    let q = sb.from('door_reports').select('*').eq('seller_id', companyId)
+    if (from) q = q.gte('data', from)
+    if (to) q = q.lte('data', to)
+    const { data, error } = await q.order('data', { ascending: false })
+    if (error) throw error
+    return data ?? []
+  },
+
+  // Get portas with client data (potential leads)
+  async getPortasComClientes(companyId: string, from?: string, to?: string) {
+    const sb = createClient()
+    let q = sb.from('door_reports').select('*').eq('seller_id', companyId)
+    if (from) q = q.gte('data', from)
+    if (to) q = q.lte('data', to)
+    const { data, error } = await q.order('data', { ascending: false })
+    if (error) throw error
+    
+    return (data ?? []).filter(d => 
+      (d.chamadas || d.fixo_chamadas || d.telemovel_dados || d.internet_velocidade || d.tv_canais) &&
+      d.cliente_nome && d.cliente_telefone
+    )
+  },
+
+  // Create leads from portas with client data
+  async criarLeadsFromPortas(companyId: string, portaIds: string[], campanhaId?: string | null) {
+    const sb = createClient()
+    const { data: portas, error: portalError } = await sb
+      .from('door_reports')
+      .select('*')
+      .in('id', portaIds)
+    if (portalError) throw portalError
+    
+    const leadsPayload = (portas ?? []).map(p => ({
+      nome: p.cliente_nome,
+      telefone: p.cliente_telefone,
+      email: null,
+      morada: p.morada || null,
+      codigo_postal: p.codigo_postal || null,
+      localidade: p.localidade || null,
+      operador: null,
+      observacoes: `Porta: ${p.numero_porta} | ${p.observacoes || ''}`,
+      company_id: companyId,
+      campanha_id: campanhaId || null,
+      status: 'novo' as const,
+      imported_at: new Date().toISOString(),
+    }))
+
+    return await leadService.bulkInsert(leadsPayload)
+  },
+
+  // Create single report
+  async create(payload: any) {
+    const sb = createClient()
+    const { data, error } = await sb.from('door_reports').insert(payload).select().single()
+    if (error) throw error
+    return data
+  },
+
+  // Update report
+  async update(id: string, payload: any) {
+    const sb = createClient()
+    const { data, error } = await sb.from('door_reports').update(payload).eq('id', id).select().single()
+    if (error) throw error
+    return data
+  },
+
+  // Delete report
+  async delete(id: string) {
+    const sb = createClient()
+    const { error } = await sb.from('door_reports').delete().eq('id', id)
+    if (error) throw error
+  },
+
+  // Get stats
+  async getStats(companyId: string, from?: string, to?: string) {
+    const sb = createClient()
+    let q = sb.from('door_reports').select('*').eq('seller_id', companyId)
+    if (from) q = q.gte('data', from)
+    if (to) q = q.lte('data', to)
+    const { data, error } = await q
+    if (error) throw error
+
+    const stats = {
+      total_portas: (data ?? []).length,
+      fidelizadas: (data ?? []).filter(d => d.fidelizada === 'sim').length,
+      nao_fidelizadas: (data ?? []).filter(d => d.fidelizada === 'nao').length,
+      adesoes_sim: (data ?? []).filter(d => d.adesao === 'sim').length,
+      adesoes_nao: (data ?? []).filter(d => d.adesao === 'nao').length,
+      com_dados: (data ?? []).filter(d => d.chamadas || d.fixo_chamadas || d.telemovel_dados || d.internet_velocidade || d.tv_canais).length,
+      com_clientes: (data ?? []).filter(d => d.cliente_nome && d.cliente_telefone).length,
+    }
+    return stats
+  },
+}
