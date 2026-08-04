@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import { Send, Loader2, Brain, ShoppingCart, HelpCircle } from 'lucide-react'
+import { Send, Loader2, Brain, ShoppingCart, HelpCircle, Zap, X } from 'lucide-react'
 
 interface VendaContexto {
   operador?: string
@@ -27,7 +27,41 @@ export default function VendaIAChat({ contexto }: { contexto: VendaContexto }) {
   const [loading, setLoading] = useState(false)
   const [scriptGerado, setScriptGerado] = useState('')
   const [mostraScript, setMostraScript] = useState(false)
+  const [mostraElite, setMostraElite] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  const tecnicasElite = [
+    {
+      nome: 'Fecho Assumido',
+      descricao: 'Aja como se a decisão já estivesse tomada. Passe direto para recolha de dados.',
+      script: '"Perfeito, vamos ativar a sua poupança hoje. Preciso do seu Cartão de Cidadão."',
+    },
+    {
+      nome: 'Alternativa Forçada',
+      descricao: 'Ofereça 2 opções positivas. Ambas resultam no fecho.',
+      script: '"Excelente decisão. Prefere a instalação quinta de manhã ou sexta à tarde?"',
+    },
+    {
+      nome: 'Fecho Silencioso',
+      descricao: 'Pergunta e CALA. Silêncio cria pressão psicológica que força a decisão.',
+      script: '"Então, avançamos com a opção mais económica para a sua casa? [SILÊNCIO]"',
+    },
+    {
+      nome: 'Amplificação da Dor',
+      descricao: 'Quantifique a perda financeira anual. Pessoas agem 2x mais rápido para evitar perda.',
+      script: '"Isso significa €1.080 perdidos este ano. O que faria com esse dinheiro se não desperdiçasse?"',
+    },
+    {
+      nome: 'Reenquadramento',
+      descricao: 'Transforme objeções em oportunidades de fecho.',
+      script: '"Mudar dá trabalho? Não mudar é que dá: obriga-o a pagar mais cada mês."',
+    },
+    {
+      nome: 'Prova Social Local',
+      descricao: 'Mencione vizinhos ou portas que já aderiram. Reduz desconfiança.',
+      script: '"Já tratei do Sr. António em cima e da D. Maria em frente."',
+    },
+  ]
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -107,20 +141,92 @@ export default function VendaIAChat({ contexto }: { contexto: VendaContexto }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', maxHeight: 600 }}>
-      {/* Header */}
-      <div style={{
-        padding: '14px 16px', borderBottom: '1px solid #E2E8F0',
-        background: '#F8FAFC', display: 'flex', alignItems: 'center', gap: 10,
-      }}>
-        <Brain size={18} color="#6366F1" />
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>IA de Vendas</div>
-          <div style={{ fontSize: 11, color: '#64748B' }}>
-            Script personalizado para {contexto.operador || contexto.comercializador || 'esta lead'}
+    <>
+      {/* Elite Techniques Modal */}
+      {mostraElite && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000, padding: 16,
+        }}>
+          <div style={{
+            background: '#fff', borderRadius: 16, maxWidth: 500, maxHeight: '80vh',
+            overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+          }}>
+            <div style={{
+              padding: '20px 24px', borderBottom: '1px solid #E2E8F0',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Zap size={20} color="#DC2626" />
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#0F172A' }}>Técnicas de Elite</div>
+              </div>
+              <button
+                onClick={() => setMostraElite(false)}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}
+              >
+                <X size={18} color="#64748B" />
+              </button>
+            </div>
+
+            <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {tecnicasElite.map((t, i) => (
+                <div
+                  key={i}
+                  style={{
+                    padding: '14px 16px', borderRadius: 12, border: '1px solid #FED7AA',
+                    background: '#FFFBEB',
+                  }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#B45309', marginBottom: 6 }}>
+                    {t.nome}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#92400E', marginBottom: 8, lineHeight: 1.5 }}>
+                    {t.descricao}
+                  </div>
+                  <div style={{
+                    fontSize: 11, color: '#DC2626', fontStyle: 'italic',
+                    padding: '8px 12px', borderRadius: 8, background: '#FEE2E2',
+                    border: '1px solid #FECACA',
+                  }}>
+                    Script: {t.script}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', maxHeight: 600 }}>
+        {/* Header */}
+        <div style={{
+          padding: '14px 16px', borderBottom: '1px solid #E2E8F0',
+          background: '#F8FAFC', display: 'flex', alignItems: 'center', gap: 10,
+          justifyContent: 'space-between',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Brain size={18} color="#6366F1" />
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>IA de Vendas</div>
+              <div style={{ fontSize: 11, color: '#64748B' }}>
+                Script personalizado para {contexto.operador || contexto.comercializador || 'esta lead'}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => setMostraElite(true)}
+            title="Ver Técnicas de Elite"
+            style={{
+              padding: '6px 10px', borderRadius: 8, border: '1px solid #FED7AA',
+              background: '#FFFBEB', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+              fontSize: 11, fontWeight: 600, color: '#B45309',
+            }}
+          >
+            <Zap size={12} />
+            Elite
+          </button>
+        </div>
 
       {/* Messages */}
       <div style={{
