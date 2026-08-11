@@ -54,6 +54,15 @@ export interface Usuario {
   last_seen_at: string | null
   created_at: string
   updated_at: string
+  numero_cc: string | null
+  morada: string | null
+  codigo_postal: string | null
+  localidade: string | null
+  cc_frente_url: string | null
+  cc_verso_url: string | null
+  contrato_url: string | null
+  tabela_comissoes_url: string | null
+  onboarding_completo: boolean
 }
 
 export interface Campanha {
