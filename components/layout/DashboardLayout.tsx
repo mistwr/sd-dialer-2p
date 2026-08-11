@@ -37,6 +37,8 @@ const NAV: NavItem[] = [
   { label: 'Porta → Lead', href: '/parceiro/porta',       icon: MapPin,          roles: ['parceiro'] },
   { label: 'Historico',    href: '/parceiro/historico',   icon: History,         roles: ['parceiro'] },
   { label: 'Chamadas IA',  href: '/parceiro/chamadas-ia', icon: AudioLines,      roles: ['parceiro'] },
+  { label: 'IA Dashboard', href: '/parceiro/ia',          icon: Brain,           roles: ['parceiro'] },
+  { label: 'Assist. IA',  href: '/parceiro/assistente-ia', icon: Brain,          roles: ['parceiro'] },
   { label: 'Meu Perfil',   href: '/parceiro/perfil',      icon: UserCircle,      roles: ['parceiro'] },
 ]
 
