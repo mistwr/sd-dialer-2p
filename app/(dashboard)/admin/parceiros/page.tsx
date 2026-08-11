@@ -3,7 +3,7 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import {
   Users, Plus, Pencil, Search, Mail, Phone, Clock,
-  Trash2, KeyRound, ShieldCheck, MoreVertical, X
+  Trash2, KeyRound, ShieldCheck, MoreVertical, X, FileText
 } from 'lucide-react'
 import { usuarioService } from '@/lib/services'
 import { createClient } from '@/lib/supabase/client'
@@ -235,6 +235,93 @@ function ChangePasswordForm({ user, onSave, onClose }: { user: Usuario; onSave: 
   )
 }
 
+// ── Documentos (contrato + comissoes) modal ───────────────────────────────────
+function DocumentsForm({ user, onClose, onSaved }: { user: Usuario; onClose: () => void; onSaved: () => void }) {
+  const [contrato, setContrato] = useState<File | null>(null)
+  const [comissoes, setComissoes] = useState<File | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const hasContrato = !!user.contrato_url
+  const hasComissoes = !!user.tabela_comissoes_url
+
+  const fileBox = (has: boolean, label: string) => ({
+    display: 'flex', alignItems: 'center', gap: 8,
+    padding: '12px 14px', borderRadius: 8,
+    border: `1.5px dashed ${has ? '#22C55E' : '#CBD5E1'}`,
+    background: has ? '#F0FDF4' : '#F8FAFC',
+    cursor: 'pointer', fontSize: 13, fontWeight: 600,
+    color: has ? '#166534' : '#64748B',
+  })
+
+  const handleUpload = async () => {
+    setSaving(true); setError(null)
+    try {
+      const sb = createClient()
+      const updates: Record<string, string> = {}
+      if (contrato) {
+        const ext = contrato.name.split('.').pop()
+        const path = `${user.id}/contrato.${ext}`
+        const { error: e } = await sb.storage.from('documentos-parceiros').upload(path, contrato, { upsert: true })
+        if (e) throw e
+        updates.contrato_url = path
+      }
+      if (comissoes) {
+        const ext = comissoes.name.split('.').pop()
+        const path = `${user.id}/tabela-comissoes.${ext}`
+        const { error: e } = await sb.storage.from('documentos-parceiros').upload(path, comissoes, { upsert: true })
+        if (e) throw e
+        updates.tabela_comissoes_url = path
+      }
+      if (Object.keys(updates).length > 0) {
+        const { error: e } = await sb.from('usuarios').update(updates).eq('id', user.id)
+        if (e) throw e
+      }
+      onSaved()
+      onClose()
+    } catch (err: any) {
+      setError(err?.message || 'Erro ao enviar ficheiro.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ background: '#F8FAFC', borderRadius: 10, padding: '12px 14px', fontSize: 13, color: '#374151' }}>
+        A anexar documentos de <strong>{user.full_name}</strong>
+      </div>
+      {error && <div style={{ background: '#FEE2E2', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#991B1B' }}>{error}</div>}
+
+      <div>
+        <label style={labelStyle}>Contrato de Parceria {hasContrato && <span style={{ color: '#16A34A', fontWeight: 400 }}>(ja enviado — substituir)</span>}</label>
+        <label style={fileBox(!!contrato, 'contrato')}>
+          {contrato ? contrato.name : 'Escolher ficheiro (PDF)'}
+          <input type="file" accept=".pdf,.doc,.docx" hidden onChange={e => setContrato(e.target.files?.[0] ?? null)} />
+        </label>
+      </div>
+
+      <div>
+        <label style={labelStyle}>Tabela de Comissoes {hasComissoes && <span style={{ color: '#16A34A', fontWeight: 400 }}>(ja enviada — substituir)</span>}</label>
+        <label style={fileBox(!!comissoes, 'comissoes')}>
+          {comissoes ? comissoes.name : 'Escolher ficheiro (PDF/XLSX)'}
+          <input type="file" accept=".pdf,.xlsx,.xls,.csv" hidden onChange={e => setComissoes(e.target.files?.[0] ?? null)} />
+        </label>
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+        <button type="button" onClick={onClose}
+          style={{ padding: '9px 20px', borderRadius: 10, border: '1.5px solid #E2E8F0', background: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
+          Cancelar
+        </button>
+        <button type="button" onClick={handleUpload} disabled={saving || (!contrato && !comissoes)}
+          style={{ padding: '9px 24px', borderRadius: 10, border: 'none', background: '#2563EB', color: '#fff', fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: (saving || (!contrato && !comissoes)) ? 0.6 : 1 }}>
+          {saving ? 'A enviar...' : 'Enviar'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 const labelStyle: React.CSSProperties = { display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 5 }
 const inputStyle: React.CSSProperties = { width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 14, boxSizing: 'border-box', outline: 'none', color: '#0F172A' }
@@ -247,6 +334,7 @@ type ModalState =
   | { type: 'edit'; user: Usuario }
   | { type: 'password'; user: Usuario }
   | { type: 'delete'; user: Usuario }
+  | { type: 'documents'; user: Usuario }
 
 export default function ParceirosPage() {
   const { data: users = [], isLoading, mutate } = useSWR(
@@ -458,6 +546,13 @@ export default function ParceirosPage() {
                         <KeyRound size={15} />
                       </button>
                       <button
+                        onClick={() => setModal({ type: 'documents', user: u })}
+                        title="Contrato e comissoes"
+                        style={actionBtnStyle('#7C3AED', '#F5F3FF')}
+                      >
+                        <FileText size={15} />
+                      </button>
+                      <button
                         onClick={() => setModal({ type: 'delete', user: u })}
                         title="Apagar utilizador"
                         style={actionBtnStyle('#DC2626', '#FEF2F2')}
@@ -491,6 +586,12 @@ export default function ParceirosPage() {
       <Modal open={modal.type === 'password'} onClose={closeModal} title="Alterar Password">
         {modal.type === 'password' && (
           <ChangePasswordForm user={modal.user} onSave={handleChangePassword} onClose={closeModal} />
+        )}
+      </Modal>
+
+      <Modal open={modal.type === 'documents'} onClose={closeModal} title="Contrato e Comissoes">
+        {modal.type === 'documents' && (
+          <DocumentsForm user={modal.user} onClose={closeModal} onSaved={() => mutate()} />
         )}
       </Modal>
 
