@@ -1,12 +1,32 @@
 'use client'
-import { useState } from 'react'
-import { User, Phone, Mail, Lock, CheckCircle2, AlertCircle, Eye, EyeOff } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { User, Phone, Mail, Lock, CheckCircle2, AlertCircle, Eye, EyeOff, FileText, IdCard, MapPin, Download, Clock } from 'lucide-react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { usuarioService } from '@/lib/services'
 import { createClient } from '@/lib/supabase/client'
 
 export default function PerfilPage() {
   const { user, profile } = useAuth()
+
+  const [contratoUrl, setContratoUrl] = useState<string | null>(null)
+  const [comissoesUrl, setComissoesUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!profile) return
+    const sb = createClient()
+    const load = async () => {
+      if (profile.contrato_url) {
+        const { data } = await sb.storage.from('documentos-parceiros').createSignedUrl(profile.contrato_url, 3600)
+        setContratoUrl(data?.signedUrl ?? null)
+      }
+      if (profile.tabela_comissoes_url) {
+        const { data } = await sb.storage.from('documentos-parceiros').createSignedUrl(profile.tabela_comissoes_url, 3600)
+        setComissoesUrl(data?.signedUrl ?? null)
+      }
+    }
+    load()
+  }, [profile])
+
 
   // Profile form
   const [fullName, setFullName] = useState(profile?.full_name ?? '')
@@ -182,6 +202,56 @@ export default function PerfilPage() {
             </button>
           </div>
         </form>
+      </div>
+
+      {/* Identidade e morada (definidas no registo) */}
+      {profile?.numero_cc && (
+        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '24px', marginBottom: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <h2 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 7 }}>
+            <IdCard size={16} /> Identidade e Morada
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
+            <div><span style={{ color: '#64748B' }}>Cartao de Cidadao:</span> <strong style={{ color: '#0F172A' }}>{profile.numero_cc}</strong></div>
+            <div><span style={{ color: '#64748B' }}>Morada:</span> <strong style={{ color: '#0F172A' }}>{profile.morada}</strong></div>
+            <div><span style={{ color: '#64748B' }}>Localidade:</span> <strong style={{ color: '#0F172A' }}>{profile.codigo_postal} {profile.localidade}</strong></div>
+          </div>
+          <p style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 12, lineHeight: 1.5 }}>
+            Estes dados foram confirmados no registo. Para alterar, contacta a administracao.
+          </p>
+        </div>
+      )}
+
+      {/* Contrato e comissoes */}
+      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '24px', marginBottom: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+        <h2 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 7 }}>
+          <FileText size={16} /> Contrato e Comissoes
+        </h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: 10, background: '#F8FAFC' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Contrato de Parceria</span>
+            {contratoUrl ? (
+              <a href={contratoUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, fontWeight: 700, color: '#2563EB', textDecoration: 'none' }}>
+                <Download size={13} /> Descarregar
+              </a>
+            ) : (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#94A3B8' }}>
+                <Clock size={13} /> Aguarda envio
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: 10, background: '#F8FAFC' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Tabela de Comissoes</span>
+            {comissoesUrl ? (
+              <a href={comissoesUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, fontWeight: 700, color: '#2563EB', textDecoration: 'none' }}>
+                <Download size={13} /> Descarregar
+              </a>
+            ) : (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#94A3B8' }}>
+                <Clock size={13} /> Aguarda envio
+              </span>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Password form */}
