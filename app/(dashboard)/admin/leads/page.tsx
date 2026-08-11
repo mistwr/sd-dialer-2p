@@ -242,8 +242,8 @@ export default function LeadsAdminPage() {
       setDuplicatesRemoved(0)
       setImportCampanha('')
       if (fileRef.current) fileRef.current.value = ''
-    } catch (err) {
-      setImportError(err instanceof Error ? err.message : 'Erro na importacao')
+    } catch (err: any) {
+      setImportError(err?.message || err?.error_description || (err instanceof Error ? err.message : 'Erro na importacao'))
     } finally {
       setImporting(false)
     }
