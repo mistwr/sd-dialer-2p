@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
       .single()
 
     // All analyses in window for this company
-    const { data: analyses } = await supabase
+    let query = supabase
       .from('ai_analyses')
       .select(`
         score, urgency, objections, competitor, current_operator,
@@ -42,6 +42,13 @@ export async function GET(req: NextRequest) {
       .eq('company_id', me?.company_id)
       .eq('status', 'done')
       .gte('created_at', since)
+
+    // Partners only see their own data, never other partners'
+    if (me?.role === 'parceiro') {
+      query = query.eq('parceiro_id', user.id)
+    }
+
+    const { data: analyses } = await query
 
     if (!analyses) return NextResponse.json({ stats: null })
 
