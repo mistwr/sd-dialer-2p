@@ -12,7 +12,6 @@ import useSWR from 'swr'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { notificacaoService } from '@/lib/services'
 import { Spinner } from '@/components/ui/Spinner'
-import { OnboardingGate } from '@/components/common/OnboardingGate'
 
 interface NavItem {
   label: string
@@ -73,10 +72,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const role = profile?.role ?? 'parceiro'
   const visibleNav = NAV.filter(n => n.roles.includes(role))
-  const [onboardingDone, setOnboardingDone] = useState(true)
-  useEffect(() => {
-    if (profile) setOnboardingDone(profile.role !== 'parceiro' || profile.onboarding_completo)
-  }, [profile])
 
   const avatarInitials = profile?.full_name
     ? profile.full_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
@@ -84,9 +79,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: '#F8FAFC', overflow: 'hidden' }}>
-      {profile && !onboardingDone && (
-        <OnboardingGate userId={profile.id} onDone={() => setOnboardingDone(true)} />
-      )}
       {/* Overlay */}
       {sidebarOpen && (
         <div
