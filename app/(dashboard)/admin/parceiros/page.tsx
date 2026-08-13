@@ -69,6 +69,8 @@ function UserForm({
     company_id: initial?.company_id ?? defaultCompany,
     status: initial?.status ?? 'active',
     role: (initial?.role ?? 'parceiro') as string,
+    equipa: (initial as any)?.equipa ?? '',
+    meta_ligacoes_dia: (initial as any)?.meta_ligacoes_dia ?? 150,
     password: '',
   })
   const [saving, setSaving] = useState(false)
@@ -118,6 +120,24 @@ function UserForm({
           placeholder="9XXXXXXXX" style={inputStyle}
           onFocus={e => (e.target.style.borderColor = '#2563EB')} onBlur={e => (e.target.style.borderColor = '#E2E8F0')} />
       </div>
+
+      {/* Equipa + Meta diaria (relevante para quem faz chamadas) */}
+      {(form.role === 'parceiro' || form.role === 'admin' || form.role === 'supervisor') && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div>
+            <label style={labelStyle}>Equipa</label>
+            <input value={form.equipa} onChange={e => set('equipa', e.target.value)}
+              placeholder="ex: Equipa A" style={inputStyle}
+              onFocus={e => (e.target.style.borderColor = '#2563EB')} onBlur={e => (e.target.style.borderColor = '#E2E8F0')} />
+          </div>
+          <div>
+            <label style={labelStyle}>Meta de Ligacoes/Dia</label>
+            <input type="number" min={0} value={form.meta_ligacoes_dia} onChange={e => set('meta_ligacoes_dia', e.target.value as any)}
+              style={inputStyle}
+              onFocus={e => (e.target.style.borderColor = '#2563EB')} onBlur={e => (e.target.style.borderColor = '#E2E8F0')} />
+          </div>
+        </div>
+      )}
 
       {/* Password (create only) */}
       {!isEdit && (
@@ -401,6 +421,8 @@ export default function ParceirosPage() {
         company_id: data.company_id,
         status: data.status,
         role: data.role,
+        equipa: data.equipa || null,
+        meta_ligacoes_dia: data.meta_ligacoes_dia,
       }),
     })
     const json = await res.json()
