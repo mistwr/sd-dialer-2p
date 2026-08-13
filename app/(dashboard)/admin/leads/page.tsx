@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import useSWR from 'swr'
 import Link from 'next/link'
 import {
@@ -13,6 +13,8 @@ import { Modal } from '@/components/ui/Modal'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { createClient } from '@/lib/supabase/client'
+import { CustomFieldsRenderer, fetchCustomFieldDefs, type CustomFieldDef } from '@/components/common/CustomFields'
 import type { Lead } from '@/lib/types'
 import { LEAD_ORIGEM_LABELS, LEAD_ORIGEM_COLORS } from '@/lib/types'
 
@@ -22,10 +24,11 @@ const STATUS_OPTS = [
 ]
 
 // ---- Lead Form ----
-function LeadForm({ initial, campanhas, onSave, onClose }: {
+function LeadForm({ initial, campanhas, companyId, onSave, onClose }: {
   initial?: Partial<Lead>
   campanhas: any[]
-  onSave: (d: Partial<Lead>) => Promise<void>
+  companyId: string
+  onSave: (d: Partial<Lead>, customFields: Record<string, any>, pipelineId: string) => Promise<void>
   onClose: () => void
 }) {
   const [form, setForm] = useState({
@@ -33,20 +36,66 @@ function LeadForm({ initial, campanhas, onSave, onClose }: {
     localidade: '', operador: '', observacoes: '', status: 'novo', campanha_id: '',
     ...initial,
   })
+  const [pipelines, setPipelines] = useState<{ id: string; nome: string }[]>([])
+  const [pipelineId, setPipelineId] = useState<string>('')
+  const [customDefs, setCustomDefs] = useState<CustomFieldDef[]>([])
+  const [customValues, setCustomValues] = useState<Record<string, any>>((initial as any)?.custom_fields ?? {})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
+  useEffect(() => {
+    const sb = createClient()
+    sb.from('pipelines').select('id, nome').eq('company_id', companyId).then(({ data }) => {
+      setPipelines(data ?? [])
+      if (data && data.length > 0 && !pipelineId) setPipelineId(data[0].id)
+    })
+  }, [companyId])
+
+  useEffect(() => {
+    if (!pipelineId) return
+    fetchCustomFieldDefs(companyId, pipelineId).then(setCustomDefs).catch(() => setCustomDefs([]))
+  }, [companyId, pipelineId])
+
+  const checkDuplicate = async (): Promise<string | null> => {
+    const sb = createClient()
+    if (form.telefone) {
+      const { data } = await sb.from('leads').select('id, nome').eq('telefone', form.telefone).neq('id', (initial as any)?.id ?? '').limit(1)
+      if (data && data.length > 0) return `Ja existe uma lead com este telefone: ${data[0].nome}`
+    }
+    const nif = customValues['nif']
+    if (nif) {
+      const { data } = await sb.from('leads').select('id, nome, custom_fields').eq('company_id', companyId).neq('id', (initial as any)?.id ?? '')
+      const dup = (data ?? []).find((l: any) => l.custom_fields?.nif === nif)
+      if (dup) return `Ja existe uma lead/empresa com este NIF: ${dup.nome}`
+    }
+    return null
+  }
+
   return (
     <form onSubmit={async e => {
       e.preventDefault(); setSaving(true); setError(null)
-      try { await onSave(form as Partial<Lead>); onClose() }
+      try {
+        const dup = await checkDuplicate()
+        if (dup) { setError(dup); setSaving(false); return }
+        await onSave(form as Partial<Lead>, customValues, pipelineId)
+        onClose()
+      }
       catch (err) { setError(err instanceof Error ? err.message : 'Erro ao guardar') }
       finally { setSaving(false) }
     }} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {error && (
         <div style={{ background: '#FEE2E2', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#991B1B' }}>
           {error}
+        </div>
+      )}
+      {pipelines.length > 0 && (
+        <div>
+          <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Pipeline</label>
+          <select value={pipelineId} onChange={e => setPipelineId(e.target.value)}
+            style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 14, outline: 'none', background: '#fff' }}>
+            {pipelines.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+          </select>
         </div>
       )}
       {[
@@ -70,6 +119,20 @@ function LeadForm({ initial, campanhas, onSave, onClose }: {
           />
         </div>
       ))}
+
+      {customDefs.length > 0 && (
+        <>
+          <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 10, fontSize: 12, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+            Campos adicionais
+          </div>
+          <CustomFieldsRenderer
+            defs={customDefs}
+            values={customValues}
+            onChange={(k, v) => setCustomValues(cv => ({ ...cv, [k]: v }))}
+          />
+        </>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <div>
           <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Estado</label>
@@ -259,8 +322,14 @@ export default function LeadsAdminPage() {
     URL.revokeObjectURL(url)
   }
 
-  const handleSaveLead = async (data: Partial<Lead>) => {
+  const handleSaveLead = async (data: Partial<Lead>, customFields: Record<string, any>, pipelineId: string) => {
     if (!profile?.company_id) throw new Error('Sem empresa associada')
+    let pipelineEtapaId: string | null = null
+    if (pipelineId) {
+      const sb = createClient()
+      const { data: etapa } = await sb.from('pipeline_etapas').select('id').eq('pipeline_id', pipelineId).order('ordem').limit(1).single()
+      pipelineEtapaId = etapa?.id ?? null
+    }
     if (modal.editing) {
       await leadService.update(modal.editing.id, {
         nome: data.nome,
@@ -273,7 +342,8 @@ export default function LeadsAdminPage() {
         observacoes: data.observacoes || null,
         status: data.status,
         campanha_id: (data as any).campanha_id || null,
-      })
+        custom_fields: customFields,
+      } as any)
     } else {
       await leadService.bulkInsert([{
         nome: data.nome!,
@@ -288,7 +358,9 @@ export default function LeadsAdminPage() {
         campanha_id: (data as any).campanha_id || null,
         company_id: profile.company_id,
         imported_at: new Date().toISOString(),
-      }])
+        custom_fields: customFields,
+        pipeline_etapa_id: pipelineEtapaId,
+      } as any])
     }
     mutate()
   }
@@ -453,6 +525,7 @@ export default function LeadsAdminPage() {
         <LeadForm
           initial={modal.editing}
           campanhas={campanhas}
+          companyId={profile?.company_id ?? ''}
           onSave={handleSaveLead}
           onClose={() => setModal({ type: null })}
         />
