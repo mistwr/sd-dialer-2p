@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, Building2, Megaphone,
   PhoneCall, BarChart2, LogOut, Menu, X, Bell,
   ChevronRight, PhoneIncoming, History, UserCircle,
-  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle,
+  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag,
 } from 'lucide-react'
 import useSWR from 'swr'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -36,6 +36,7 @@ const NAV: NavItem[] = [
   { label: 'Minhas Leads', href: '/parceiro',             icon: PhoneIncoming,   roles: ['parceiro'] },
   { label: 'Porta → Lead', href: '/parceiro/porta',       icon: MapPin,          roles: ['parceiro'] },
   { label: 'Historico',    href: '/parceiro/historico',   icon: History,         roles: ['parceiro'] },
+  { label: 'Vendas',       href: '/parceiro/vendas',      icon: ShoppingBag,     roles: ['parceiro'] },
   { label: 'Chamadas IA',  href: '/parceiro/chamadas-ia', icon: AudioLines,      roles: ['parceiro'] },
   { label: 'IA Dashboard', href: '/parceiro/ia',          icon: Brain,           roles: ['parceiro'] },
   { label: 'Assist. IA',  href: '/parceiro/assistente-ia', icon: Brain,          roles: ['parceiro'] },
@@ -56,7 +57,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   )
   const unread = notifications.filter(n => !n.read).length
 
-  // Close bell on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (bellRef.current && !bellRef.current.contains(e.target as Node)) {
@@ -67,7 +67,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  // Close sidebar on route change
   useEffect(() => { setSidebarOpen(false); setBellOpen(false) }, [pathname])
 
   const role = profile?.role ?? 'parceiro'
@@ -79,7 +78,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: '#F8FAFC', overflow: 'hidden' }}>
-      {/* Overlay */}
       {sidebarOpen && (
         <div
           onClick={() => setSidebarOpen(false)}
@@ -88,7 +86,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         />
       )}
 
-      {/* Sidebar */}
       <aside style={{
         width: 240,
         background: '#0F172A',
@@ -103,7 +100,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       }}
         className="sidebar-fixed"
       >
-        {/* Logo */}
         <div style={{ padding: '20px 20px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
@@ -123,7 +119,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </button>
         </div>
 
-        {/* Nav */}
         <nav style={{ flex: 1, padding: '4px 12px', overflowY: 'auto' }}>
           {visibleNav.map(item => {
             const active = pathname === item.href || (item.href !== '/admin' && item.href !== '/parceiro' && pathname.startsWith(item.href))
@@ -149,7 +144,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           })}
         </nav>
 
-        {/* User */}
         <div style={{ padding: '12px 16px', borderTop: '1px solid #1E293B' }}>
           {loading ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
@@ -188,12 +182,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
 
-      {/* Sidebar always visible on desktop via margin */}
       <div className="sidebar-spacer" />
 
-      {/* Main */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-        {/* Top bar */}
         <header style={{
           height: 56, background: '#fff', borderBottom: '1px solid #E2E8F0',
           display: 'flex', alignItems: 'center', padding: '0 20px', gap: 12,
@@ -233,7 +224,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               )}
             </button>
 
-            {/* Notifications dropdown */}
             {bellOpen && (
               <div style={{
                 position: 'absolute', top: 'calc(100% + 8px)', right: 0,
@@ -293,7 +283,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        {/* Content */}
         <main style={{ flex: 1, overflowY: 'auto', padding: '24px 20px' }}>
           {children}
         </main>
@@ -311,4 +300,4 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       `}</style>
     </div>
   )
-}
+              }
