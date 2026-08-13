@@ -223,6 +223,8 @@ export default function LeadsAdminPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [campanhaFilter, setCampanhaFilter] = useState('')
   const [origemFilter, setOrigemFilter] = useState('')
+  const [fidelizacaoAno, setFidelizacaoAno] = useState('')
+  const [fidelizacaoMes, setFidelizacaoMes] = useState('')
   const [selected, setSelected] = useState<string[]>([])
   const [modal, setModal] = useState<{ type: 'lead' | 'import' | 'assign' | null; editing?: Lead }>({ type: null })
 
@@ -241,7 +243,10 @@ export default function LeadsAdminPage() {
     const matchStatus = !statusFilter || l.status === statusFilter
     const matchCampanha = !campanhaFilter || l.campanha_id === campanhaFilter
     const matchOrigem = !origemFilter || l.origem === origemFilter
-    return matchSearch && matchStatus && matchCampanha && matchOrigem
+    const dataFim = (l as any).custom_fields?.data_fim_fidelizacao as string | undefined
+    const matchFidAno = !fidelizacaoAno || (dataFim && dataFim.startsWith(fidelizacaoAno))
+    const matchFidMes = !fidelizacaoMes || (dataFim && dataFim.slice(5, 7) === fidelizacaoMes)
+    return matchSearch && matchStatus && matchCampanha && matchOrigem && matchFidAno && matchFidMes
   })
 
   const toggleSelect = (id: string) =>
@@ -434,6 +439,31 @@ export default function LeadsAdminPage() {
           <option value="">Origem: Todas</option>
           {Object.entries(LEAD_ORIGEM_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
+      </div>
+
+      {/* Filtro de Fidelizacao */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap', padding: '10px 14px', background: '#F0F9FF', borderRadius: 10, border: '1px solid #BAE6FD' }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#0369A1', textTransform: 'uppercase', letterSpacing: 0.3 }}>Fidelizacao:</span>
+        <select value={fidelizacaoAno} onChange={e => setFidelizacaoAno(e.target.value)}
+          style={{ padding: '7px 10px', borderRadius: 8, border: '1.5px solid #BAE6FD', fontSize: 13, outline: 'none', background: '#fff', color: fidelizacaoAno ? '#0F172A' : '#64748B' }}>
+          <option value="">Ano: Todos</option>
+          <option value="2027">2027</option>
+          <option value="2028">2028</option>
+          <option value="2029">2029</option>
+        </select>
+        <select value={fidelizacaoMes} onChange={e => setFidelizacaoMes(e.target.value)}
+          style={{ padding: '7px 10px', borderRadius: 8, border: '1.5px solid #BAE6FD', fontSize: 13, outline: 'none', background: '#fff', color: fidelizacaoMes ? '#0F172A' : '#64748B' }}>
+          <option value="">Mes: Todos</option>
+          {['01','02','03','04','05','06','07','08','09','10','11','12'].map((m, i) => (
+            <option key={m} value={m}>{['Janeiro','Fevereiro','Marco','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][i]}</option>
+          ))}
+        </select>
+        {(fidelizacaoAno || fidelizacaoMes) && (
+          <button onClick={() => { setFidelizacaoAno(''); setFidelizacaoMes('') }}
+            style={{ fontSize: 12, color: '#0369A1', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline' }}>
+            Limpar
+          </button>
+        )}
       </div>
 
       {/* Table */}
