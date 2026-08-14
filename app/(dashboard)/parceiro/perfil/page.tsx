@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { User, Phone, Mail, Lock, CheckCircle2, AlertCircle, Eye, EyeOff, FileText, IdCard, MapPin, Download, Clock } from 'lucide-react'
+import { User, Phone, Mail, Lock, CheckCircle2, AlertCircle, Eye, EyeOff, FileText, IdCard, MapPin, Download, Clock, Camera } from 'lucide-react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { usuarioService } from '@/lib/services'
 import { createClient } from '@/lib/supabase/client'
@@ -48,6 +48,31 @@ export default function PerfilPage() {
     .map(w => w[0])
     .slice(0, 2)
     .join('')
+
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const [avatarError, setAvatarError] = useState<string | null>(null)
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user?.id) return
+    setAvatarUploading(true)
+    setAvatarError(null)
+    try {
+      const sb = createClient()
+      const ext = file.name.split('.').pop()
+      const path = `${user.id}/avatar.${ext}`
+      const { error: upErr } = await sb.storage.from('avatars').upload(path, file, { upsert: true })
+      if (upErr) throw upErr
+      const { data } = sb.storage.from('avatars').getPublicUrl(path)
+      const { error: dbErr } = await sb.from('usuarios').update({ avatar_url: `${data.publicUrl}?t=${Date.now()}` }).eq('id', user.id)
+      if (dbErr) throw dbErr
+      window.location.reload()
+    } catch (err: any) {
+      setAvatarError(err?.message || 'Erro ao carregar imagem.')
+    } finally {
+      setAvatarUploading(false)
+    }
+  }
     .toUpperCase() || '?'
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -110,15 +135,26 @@ export default function PerfilPage() {
         display: 'flex', alignItems: 'center', gap: 20,
         boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
       }}>
-        <div style={{
+        <label style={{
           width: 64, height: 64, borderRadius: '50%',
-          background: 'linear-gradient(135deg, #2563EB, #1D4ED8)',
+          background: profile?.avatar_url ? `url(${profile.avatar_url}) center/cover` : 'linear-gradient(135deg, #2563EB, #1D4ED8)',
           color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 22, fontWeight: 800, flexShrink: 0,
+          fontSize: 22, fontWeight: 800, flexShrink: 0, position: 'relative', cursor: 'pointer',
           boxShadow: '0 4px 14px rgba(37,99,235,0.3)',
         }}>
-          {avatarInitials}
-        </div>
+          {!profile?.avatar_url && avatarInitials}
+          <div style={{
+            position: 'absolute', inset: 0, borderRadius: '50%',
+            background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            opacity: avatarUploading ? 1 : 0, transition: 'opacity 0.15s',
+          }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1' }}
+            onMouseLeave={e => { if (!avatarUploading) (e.currentTarget as HTMLElement).style.opacity = '0' }}
+          >
+            <Camera size={18} color="#fff" />
+          </div>
+          <input type="file" accept="image/*" hidden onChange={handleAvatarUpload} disabled={avatarUploading} />
+        </label>
         <div>
           <div style={{ fontSize: 17, fontWeight: 700, color: '#0F172A' }}>{profile?.full_name ?? '—'}</div>
           <div style={{ fontSize: 13, color: '#64748B', marginTop: 2 }}>{user?.email}</div>
@@ -132,6 +168,11 @@ export default function PerfilPage() {
           </div>
         </div>
       </div>
+      {avatarError && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: -12, marginBottom: 16, fontSize: 12.5, color: '#DC2626' }}>
+          <AlertCircle size={13} /> {avatarError}
+        </div>
+      )}
 
       {/* Profile form */}
       <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '24px', marginBottom: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
