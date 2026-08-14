@@ -9,6 +9,12 @@ export interface ImportedRow {
   localidade?: string
   operador?: string
   observacoes?: string
+  custom_fields?: Record<string, string>
+}
+
+export interface CustomFieldDefLite {
+  field_key: string
+  label: string
 }
 
 // Strip accents: "Nº Telefone" → "n telefone", "Endereço" → "endereco"
@@ -196,7 +202,26 @@ function buildFieldMap(
   return { fieldMap, mergeAddressCols }
 }
 
-export function parseFile(file: File): Promise<{ headers: string[]; rows: ImportedRow[]; duplicatesRemoved: number }> {
+// Tenta casar colunas do ficheiro com os campos personalizados configurados pela empresa
+// (ex: "Data Fim Fidelizacao", "NIF", "Tipificacao") — casa por nome normalizado ou por
+// aproximacao simples (contem/e contido).
+function buildCustomFieldMap(headers: string[], defs: CustomFieldDefLite[]): Record<string, string> {
+  const map: Record<string, string> = {} // header original -> field_key
+  for (const h of headers) {
+    const norm = normalizeHeader(h)
+    for (const def of defs) {
+      const defNorm = normalizeHeader(def.label)
+      const keyNorm = normalizeHeader(def.field_key.replace(/_/g, ' '))
+      if (norm === defNorm || norm === keyNorm || norm.includes(defNorm) || defNorm.includes(norm)) {
+        map[h] = def.field_key
+        break
+      }
+    }
+  }
+  return map
+}
+
+export function parseFile(file: File, customDefs: CustomFieldDefLite[] = []): Promise<{ headers: string[]; rows: ImportedRow[]; duplicatesRemoved: number }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -217,6 +242,7 @@ export function parseFile(file: File): Promise<{ headers: string[]; rows: Import
         let originalHeaders = Object.keys(rawRows[0])
         let workingRows = rawRows
         let { fieldMap, mergeAddressCols } = buildFieldMap(originalHeaders, rawRows)
+        let customFieldMap = buildCustomFieldMap(originalHeaders, customDefs)
 
         // If we couldn't find both nome+telefone, try skipping the first row
         // (some files have a title row before headers)
@@ -234,6 +260,7 @@ export function parseFile(file: File): Promise<{ headers: string[]; rows: Import
               workingRows = rawRows2
               fieldMap = result2.fieldMap
               mergeAddressCols = result2.mergeAddressCols
+              customFieldMap = buildCustomFieldMap(hdrs2, customDefs)
             }
           }
         }
@@ -257,6 +284,24 @@ export function parseFile(file: File): Promise<{ headers: string[]; rows: Import
               // Prepend existing morada or use merged as morada
               row.morada = row.morada ? `${row.morada}, ${merged}` : merged
             }
+          }
+
+          // Campos personalizados (ex: NIF, Data Fim Fidelizacao, Tipificacao)
+          if (Object.keys(customFieldMap).length > 0) {
+            const cf: Record<string, string> = {}
+            for (const [origHeader, fieldKey] of Object.entries(customFieldMap)) {
+              let val = String(r[origHeader] ?? '').trim()
+              if (val && /data/i.test(fieldKey)) {
+                const m = val.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/)
+                if (m) {
+                  const [, d, mo, y] = m
+                  const year = y.length === 2 ? `20${y}` : y
+                  val = `${year}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`
+                }
+              }
+              if (val) cf[fieldKey] = val
+            }
+            if (Object.keys(cf).length > 0) row.custom_fields = cf
           }
 
           return row as ImportedRow
