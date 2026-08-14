@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, Building2, Megaphone,
   PhoneCall, BarChart2, LogOut, Menu, X, Bell,
   ChevronRight, PhoneIncoming, History, UserCircle,
-  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag,
+  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag, MessageSquare,
 } from 'lucide-react'
 import useSWR from 'swr'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -38,6 +38,7 @@ const NAV: NavItem[] = [
   { label: 'Porta → Lead', href: '/parceiro/porta',       icon: MapPin,          roles: ['parceiro', 'admin', 'supervisor'] },
   { label: 'Historico',    href: '/parceiro/historico',   icon: History,         roles: ['parceiro', 'admin', 'supervisor'] },
   { label: 'Vendas',       href: '/parceiro/vendas',      icon: ShoppingBag,     roles: ['parceiro', 'admin', 'supervisor'] },
+  { label: 'SMS Massa',    href: '/parceiro/sms',         icon: MessageSquare,   roles: ['parceiro', 'admin', 'supervisor'] },
   { label: 'Chamadas IA',  href: '/parceiro/chamadas-ia', icon: AudioLines,      roles: ['parceiro', 'admin', 'supervisor'] },
   { label: 'IA Dashboard', href: '/parceiro/ia',          icon: Brain,           roles: ['parceiro'] },
   { label: 'Assist. IA',  href: '/parceiro/assistente-ia', icon: Brain,          roles: ['parceiro'] },
