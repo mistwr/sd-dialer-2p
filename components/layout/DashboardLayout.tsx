@@ -33,14 +33,23 @@ const NAV: NavItem[] = [
   { label: 'IA Dashboard', href: '/admin/ia',             icon: Brain,           roles: ['admin', 'supervisor'] },
   { label: 'Assist. IA',  href: '/admin/assistente-ia',  icon: Brain,           roles: ['admin', 'supervisor'] },
   { label: 'Supervisor',   href: '/supervisor',           icon: LayoutDashboard, roles: ['supervisor'] },
-  { label: 'Minhas Leads', href: '/parceiro',             icon: PhoneIncoming,   roles: ['parceiro'] },
-  { label: 'Porta → Lead', href: '/parceiro/porta',       icon: MapPin,          roles: ['parceiro'] },
-  { label: 'Historico',    href: '/parceiro/historico',   icon: History,         roles: ['parceiro'] },
-  { label: 'Vendas',       href: '/parceiro/vendas',      icon: ShoppingBag,     roles: ['parceiro'] },
-  { label: 'Chamadas IA',  href: '/parceiro/chamadas-ia', icon: AudioLines,      roles: ['parceiro'] },
+  { label: 'Minhas Leads', href: '/parceiro',             icon: PhoneIncoming,   roles: ['parceiro', 'admin', 'supervisor'] },
+  { label: 'Agenda',       href: '/parceiro/agenda',      icon: Calendar,        roles: ['parceiro', 'admin', 'supervisor'] },
+  { label: 'Porta → Lead', href: '/parceiro/porta',       icon: MapPin,          roles: ['parceiro', 'admin', 'supervisor'] },
+  { label: 'Historico',    href: '/parceiro/historico',   icon: History,         roles: ['parceiro', 'admin', 'supervisor'] },
+  { label: 'Vendas',       href: '/parceiro/vendas',      icon: ShoppingBag,     roles: ['parceiro', 'admin', 'supervisor'] },
+  { label: 'Chamadas IA',  href: '/parceiro/chamadas-ia', icon: AudioLines,      roles: ['parceiro', 'admin', 'supervisor'] },
   { label: 'IA Dashboard', href: '/parceiro/ia',          icon: Brain,           roles: ['parceiro'] },
   { label: 'Assist. IA',  href: '/parceiro/assistente-ia', icon: Brain,          roles: ['parceiro'] },
   { label: 'Meu Perfil',   href: '/parceiro/perfil',      icon: UserCircle,      roles: ['parceiro'] },
+]
+
+// Views que um utilizador com papel "admin" pode escolher ver — nao muda o papel real na base de dados,
+// so filtra que menu/paginas aparecem. Util para quem faz chamadas E gere a equipa (ex: Elisabete).
+const VIEW_OPTIONS = [
+  { value: 'admin', label: 'Admin' },
+  { value: 'supervisor', label: 'Supervisor' },
+  { value: 'parceiro', label: 'Parceiro (chamadas)' },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -70,7 +79,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => { setSidebarOpen(false); setBellOpen(false) }, [pathname])
 
   const role = profile?.role ?? 'parceiro'
-  const visibleNav = NAV.filter(n => n.roles.includes(role))
+  const canSwitchView = role === 'admin'
+  const [viewRole, setViewRole] = useState<string>(role)
+  useEffect(() => {
+    if (!profile?.id) return
+    if (!canSwitchView) { setViewRole(role); return }
+    const saved = localStorage.getItem(`view-role-${profile.id}`)
+    setViewRole(saved ?? 'admin')
+  }, [profile?.id, canSwitchView, role])
+
+  const changeView = (v: string) => {
+    setViewRole(v)
+    if (profile?.id) localStorage.setItem(`view-role-${profile.id}`, v)
+  }
+
+  const effectiveRole = canSwitchView ? viewRole : role
+  const visibleNav = NAV.filter(n => n.roles.includes(effectiveRole))
 
   const avatarInitials = profile?.full_name
     ? profile.full_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
@@ -118,6 +142,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <X size={18} />
           </button>
         </div>
+
+        {canSwitchView && (
+          <div style={{ padding: '0 16px 14px' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+              Ver como
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, background: '#1E293B', borderRadius: 10, padding: 3 }}>
+              {VIEW_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => changeView(opt.value)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '7px 10px', borderRadius: 7, border: 'none',
+                    fontSize: 12.5, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+                    background: viewRole === opt.value ? '#2563EB' : 'transparent',
+                    color: viewRole === opt.value ? '#fff' : '#94A3B8',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <nav style={{ flex: 1, padding: '4px 12px', overflowY: 'auto' }}>
           {visibleNav.map(item => {
