@@ -2,7 +2,7 @@
 import useSWR from 'swr'
 import { useState } from 'react'
 import Link from 'next/link'
-import { Calendar, Phone, Wrench, CheckCircle2, Clock, AlertCircle, User, ChevronRight } from 'lucide-react'
+import { Calendar, Phone, Wrench, CheckCircle2, Clock, AlertCircle, User, ChevronRight, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { PageSpinner } from '@/components/ui/Spinner'
@@ -52,7 +52,7 @@ export default function AgendaPage() {
   const [tab, setTab] = useState<'followups' | 'instalacoes'>('followups')
 
   const { data: followUps = [], isLoading: l1, mutate } = useSWR(user?.id ? ['agenda-fu', user.id] : null, () => fetchFollowUps(user!.id))
-  const { data: instalacoes = [], isLoading: l2 } = useSWR(user?.id ? ['agenda-inst', user.id] : null, () => fetchInstalacoes(user!.id))
+  const { data: instalacoes = [], isLoading: l2, mutate: mutateInst } = useSWR(user?.id ? ['agenda-inst', user.id] : null, () => fetchInstalacoes(user!.id))
 
   if (authLoading || l1 || l2) return <PageSpinner />
 
@@ -66,6 +66,26 @@ export default function AgendaPage() {
     const sb = createClient()
     await sb.from('follow_ups').update({ done: true }).eq('id', id)
     mutate()
+  }
+
+  const markInstalacaoDone = async (id: string) => {
+    const sb = createClient()
+    await sb.from('vendas').update({ instalacao_status: 'concluida' }).eq('id', id)
+    mutateInst()
+  }
+
+  const deleteFollowUp = async (id: string) => {
+    if (!confirm('Apagar este follow-up? Esta acao nao pode ser desfeita.')) return
+    const sb = createClient()
+    await sb.from('follow_ups').delete().eq('id', id)
+    mutate()
+  }
+
+  const clearInstalacao = async (id: string) => {
+    if (!confirm('Remover esta instalacao da agenda? A venda mantem-se, so deixa de aparecer aqui.')) return
+    const sb = createClient()
+    await sb.from('vendas').update({ data_instalacao: null }).eq('id', id)
+    mutateInst()
   }
 
   return (
@@ -137,6 +157,9 @@ export default function AgendaPage() {
                       <button onClick={() => markDone(fu.id)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 8, background: '#F0FDF4', color: '#16A34A', border: 'none', cursor: 'pointer', flexShrink: 0 }} title="Marcar como feito">
                         <CheckCircle2 size={14} />
                       </button>
+                      <button onClick={() => deleteFollowUp(fu.id)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 8, background: '#FEF2F2', color: '#DC2626', border: 'none', cursor: 'pointer', flexShrink: 0 }} title="Apagar follow-up">
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -160,24 +183,32 @@ export default function AgendaPage() {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {instGroups[g].map((v: any) => (
-                    v.lead_id ? (
-                      <Link key={v.id} href={`/parceiro/leads/${v.lead_id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', borderRadius: 12, border: '1px solid #E2E8F0', padding: '12px 14px', textDecoration: 'none' }}>
+                    <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', borderRadius: 12, border: '1px solid #E2E8F0', padding: '12px 14px' }}>
+                      {v.lead_id ? (
+                        <Link href={`/parceiro/leads/${v.lead_id}`} style={{ flex: 1, minWidth: 0, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{v.client_name}</div>
+                            <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                              Instalacao: {new Date(v.data_instalacao).toLocaleDateString('pt-PT')} &middot; {v.service_type || 'Servico'} {v.operator ? `· ${v.operator}` : ''}
+                            </div>
+                          </div>
+                          <ChevronRight size={15} color="#CBD5E1" style={{ flexShrink: 0 }} />
+                        </Link>
+                      ) : (
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{v.client_name}</div>
                           <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
                             Instalacao: {new Date(v.data_instalacao).toLocaleDateString('pt-PT')} &middot; {v.service_type || 'Servico'} {v.operator ? `· ${v.operator}` : ''}
                           </div>
                         </div>
-                        <ChevronRight size={15} color="#CBD5E1" style={{ flexShrink: 0 }} />
-                      </Link>
-                    ) : (
-                      <div key={v.id} style={{ background: '#fff', borderRadius: 12, border: '1px solid #E2E8F0', padding: '12px 14px' }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{v.client_name}</div>
-                        <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
-                          Instalacao: {new Date(v.data_instalacao).toLocaleDateString('pt-PT')} &middot; {v.service_type || 'Servico'} {v.operator ? `· ${v.operator}` : ''}
-                        </div>
-                      </div>
-                    )
+                      )}
+                      <button onClick={() => markInstalacaoDone(v.id)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 8, background: '#F0FDF4', color: '#16A34A', border: 'none', cursor: 'pointer', flexShrink: 0 }} title="Marcar instalacao como concluida">
+                        <CheckCircle2 size={14} />
+                      </button>
+                      <button onClick={() => clearInstalacao(v.id)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 8, background: '#FEF2F2', color: '#DC2626', border: 'none', cursor: 'pointer', flexShrink: 0 }} title="Remover da agenda">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
