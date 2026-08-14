@@ -232,6 +232,7 @@ export default function LeadsAdminPage() {
   const [importPreview, setImportPreview] = useState<any[] | null>(null)
   const [importPipeline, setImportPipeline] = useState('')
   const [importPipelines, setImportPipelines] = useState<{ id: string; nome: string }[]>([])
+  const [importEtapas, setImportEtapas] = useState<{ id: string; nome: string }[]>([])
   const [importHeaders, setImportHeaders] = useState<string[]>([])
   const [importError, setImportError] = useState<string | null>(null)
   const [importCampanha, setImportCampanha] = useState('')
@@ -264,6 +265,14 @@ export default function LeadsAdminPage() {
       if (data && data.length > 0 && !importPipeline) setImportPipeline(data[0].id)
     })
   }, [modal.type, profile?.company_id])
+
+  useEffect(() => {
+    if (!importPipeline) { setImportEtapas([]); return }
+    const sb = createClient()
+    sb.from('pipeline_etapas').select('id, nome').eq('pipeline_id', importPipeline).order('ordem').then(({ data }) => {
+      setImportEtapas(data ?? [])
+    })
+  }, [importPipeline])
 
   // Use the robust import-leads.ts parser
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -312,6 +321,20 @@ export default function LeadsAdminPage() {
         const { data: etapa } = await sb.from('pipeline_etapas').select('id').eq('pipeline_id', importPipeline).order('ordem').limit(1).single()
         pipelineEtapaId = etapa?.id ?? null
       }
+
+      const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+      const matchEtapaId = (customFields: Record<string, string> | undefined): string | null => {
+        if (!customFields || importEtapas.length === 0) return null
+        // Procura em qualquer campo personalizado (ex: Tipo CTT) um valor que bata certo
+        // com o nome de uma etapa do pipeline escolhido (ex: "Fidelizado")
+        for (const val of Object.values(customFields)) {
+          const valNorm = normalize(String(val))
+          const found = importEtapas.find(e => normalize(e.nome) === valNorm || normalize(e.nome).includes(valNorm) || valNorm.includes(normalize(e.nome)))
+          if (found) return found.id
+        }
+        return null
+      }
+
       const payload = importPreview.map(l => ({
         nome: l.nome,
         telefone: l.telefone,
@@ -326,7 +349,7 @@ export default function LeadsAdminPage() {
         status: 'novo' as const,
         imported_at: new Date().toISOString(),
         custom_fields: l.custom_fields || {},
-        pipeline_etapa_id: pipelineEtapaId,
+        pipeline_etapa_id: matchEtapaId(l.custom_fields) ?? pipelineEtapaId,
       }))
       await leadService.bulkInsert(payload)
       mutate()
@@ -622,7 +645,13 @@ export default function LeadsAdminPage() {
                 style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 13, outline: 'none', background: '#fff', color: '#374151' }}>
                 {importPipelines.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
               </select>
-              <p style={{ fontSize: 11, color: '#94A3B8', margin: '4px 0 0' }}>Define que campos extra (NIF, Data Fim Fidelizacao, etc.) o sistema vai procurar no ficheiro.</p>
+              <p style={{ fontSize: 11, color: '#94A3B8', margin: '4px 0 0', lineHeight: 1.5 }}>
+                Define que campos extra (NIF, Data Fim Fidelizacao, etc.) o sistema vai procurar no ficheiro.
+                {importEtapas.length > 0 && (
+                  <> Se uma coluna do ficheiro (ex: "Tipo CTT") tiver um valor igual ao nome de uma etapa deste pipeline
+                  ({importEtapas.map(e => e.nome).join(', ')}), a lead entra logo nessa coluna do quadro — nao precisas de mover a mao.</>
+                )}
+              </p>
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Campanha <span style={{ color: '#94A3B8', fontWeight: 400 }}>(opcional)</span></label>
