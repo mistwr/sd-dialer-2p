@@ -43,11 +43,13 @@ export default function SmsMassaPage() {
   const [step, setStep] = useState<'compor' | 'enviar'>('compor')
   const [progress, setProgress] = useState(0)
 
+  const selectableLeads = useMemo(() => leads.filter(l => l.telefone), [leads])
+  const allSelected = selectableLeads.length > 0 && selectableLeads.every(l => selected.has(l.id))
   const selectedLeads = useMemo(() => leads.filter(l => selected.has(l.id) && l.telefone), [leads, selected])
 
   const toggleAll = () => {
-    if (selected.size === selectedLeads.length && selectedLeads.length > 0) setSelected(new Set())
-    else setSelected(new Set(leads.filter(l => l.telefone).map(l => l.id)))
+    if (allSelected) setSelected(new Set())
+    else setSelected(new Set(selectableLeads.map(l => l.id)))
   }
   const toggle = (id: string) => {
     setSelected(prev => {
@@ -145,7 +147,7 @@ export default function SmsMassaPage() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Destinatários ({selected.size})</label>
               <button onClick={toggleAll} style={{ fontSize: 12.5, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
-                {selected.size > 0 ? 'Limpar seleção' : 'Selecionar todos'}
+                {allSelected ? 'Limpar seleção' : 'Selecionar todos'}
               </button>
             </div>
             {leads.length === 0 ? (
