@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ShoppingBag, Upload, CheckCircle2, AlertCircle, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -21,7 +21,7 @@ const fileBox = (has: boolean) => ({
   color: has ? '#166534' : '#64748B',
 })
 
-export default function NovaVendaPage() {
+function NovaVendaContent() {
   const { user, profile, loading: authLoading } = useAuth()
   const router = useRouter()
   const params = useSearchParams()
@@ -217,5 +217,13 @@ export default function NovaVendaPage() {
         </button>
       </form>
     </div>
+  )
+}
+
+export default function NovaVendaPage() {
+  return (
+    <Suspense fallback={<PageSpinner />}>
+      <NovaVendaContent />
+    </Suspense>
   )
 }
