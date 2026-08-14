@@ -422,6 +422,33 @@ export const chatService = {
     return data as Mensagem
   },
 
+  async sendMensagemComAnexo(conversaId: string, userId: string, conteudo: string, file: File): Promise<Mensagem> {
+    const sb = createClient()
+    const ext = file.name.split('.').pop()
+    const path = `${conversaId}/${Date.now()}.${ext}`
+    const { error: upErr } = await sb.storage.from('chat-anexos').upload(path, file)
+    if (upErr) throw upErr
+    const { data, error } = await sb.from('mensagens').insert({
+      conversa_id: conversaId, usuario_id: userId, conteudo, anexo_url: path, anexo_nome: file.name,
+    }).select('*, usuario:usuario_id(id, full_name, avatar_url)').single()
+    if (error) throw error
+    return data as Mensagem
+  },
+
+  async getAnexoUrl(path: string): Promise<string | null> {
+    const sb = createClient()
+    const { data } = await sb.storage.from('chat-anexos').createSignedUrl(path, 3600)
+    return data?.signedUrl ?? null
+  },
+
+  async deleteConversa(conversaId: string) {
+    const sb = createClient()
+    await sb.from('mensagens').delete().eq('conversa_id', conversaId)
+    await sb.from('conversa_participantes').delete().eq('conversa_id', conversaId)
+    const { error } = await sb.from('conversas').delete().eq('id', conversaId)
+    if (error) throw error
+  },
+
   async markAsRead(conversaId: string, userId: string) {
     const sb = createClient()
     const { error } = await sb.from('conversa_participantes')
