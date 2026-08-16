@@ -236,6 +236,7 @@ export default function LeadsAdminPage() {
   const [importHeaders, setImportHeaders] = useState<string[]>([])
   const [importError, setImportError] = useState<string | null>(null)
   const [importCampanha, setImportCampanha] = useState('')
+  const [importAtribuirA, setImportAtribuirA] = useState('auto')
   const [importing, setImporting] = useState(false)
   const [duplicatesRemoved, setDuplicatesRemoved] = useState(0)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -335,6 +336,22 @@ export default function LeadsAdminPage() {
         return null
       }
 
+      // Define assigned_to e skip_auto_assign consoante a escolha "Atribuir a"
+      let assignedTo: string | null = null
+      let skipAutoAssign = false
+      if (importAtribuirA === 'auto') {
+        // deixa o trigger distribuir automaticamente pela equipa (comportamento antigo)
+      } else if (importAtribuirA === 'mim') {
+        assignedTo = profile?.id ?? null
+        skipAutoAssign = true
+      } else if (importAtribuirA === 'ninguem') {
+        skipAutoAssign = true
+      } else {
+        // um vendedor especifico foi escolhido (importAtribuirA = id do parceiro)
+        assignedTo = importAtribuirA
+        skipAutoAssign = true
+      }
+
       const payload = importPreview.map(l => ({
         nome: l.nome,
         telefone: l.telefone,
@@ -350,6 +367,8 @@ export default function LeadsAdminPage() {
         imported_at: new Date().toISOString(),
         custom_fields: l.custom_fields || {},
         pipeline_etapa_id: matchEtapaId(l.custom_fields) ?? pipelineEtapaId,
+        assigned_to: assignedTo,
+        skip_auto_assign: skipAutoAssign,
       }))
       await leadService.bulkInsert(payload)
       mutate()
@@ -358,6 +377,7 @@ export default function LeadsAdminPage() {
       setImportHeaders([])
       setDuplicatesRemoved(0)
       setImportCampanha('')
+      setImportAtribuirA('auto')
       if (fileRef.current) fileRef.current.value = ''
     } catch (err: any) {
       setImportError(err?.message || err?.error_description || (err instanceof Error ? err.message : 'Erro na importacao'))
@@ -667,6 +687,19 @@ export default function LeadsAdminPage() {
                 <option value="">— Sem campanha —</option>
                 {campanhas.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Atribuir a</label>
+              <select value={importAtribuirA} onChange={e => setImportAtribuirA(e.target.value)}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 13, outline: 'none', background: '#fff', color: '#374151' }}>
+                <option value="auto">🔀 Distribuir automaticamente pela equipa</option>
+                <option value="mim">👤 A mim (fico com estes contactos)</option>
+                {parceiros.map(p => <option key={p.id} value={p.id}>👤 {p.full_name} (só dele/a)</option>)}
+                <option value="ninguem">📭 Não atribuir agora (fica por atribuir)</option>
+              </select>
+              <p style={{ fontSize: 11, color: '#94A3B8', margin: '4px 0 0' }}>
+                Escolhe "Não atribuir" para contactos que já estão a ser trabalhados por alguém e só estás a mudar de sítio/campanha.
+              </p>
             </div>
           </div>
 
