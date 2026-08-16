@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { Users, PhoneCall, TrendingUp, Building2, Clock, Trophy, Wifi, CheckCircle, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -33,6 +34,7 @@ export default function AdminDashboard() {
   const { profile, loading: authLoading } = useAuth()
   const [stats, setStats] = useState<DashStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const pathname = usePathname()
 
   useEffect(() => {
     if (authLoading || !profile) return
@@ -101,7 +103,9 @@ export default function AdminDashboard() {
       }
     }
     fetchStats()
-  }, [profile, authLoading])
+    window.addEventListener('focus', fetchStats)
+    return () => window.removeEventListener('focus', fetchStats)
+  }, [profile, authLoading, pathname])
 
   if (authLoading || loading) return <PageSpinner />
 
