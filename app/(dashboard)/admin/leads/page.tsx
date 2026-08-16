@@ -534,7 +534,7 @@ export default function LeadsAdminPage() {
                       checked={selected.length === filtered.length && filtered.length > 0}
                       onChange={toggleAll} style={{ cursor: 'pointer' }} />
                   </th>
-                  {['Nome', 'Telefone', 'Operador', 'Origem', 'Campanha', 'Parceiro', 'Estado', 'Acoes'].map(h => (
+                  {['Nome', 'Telefone', 'Operador', 'Origem', 'Campanha', 'Etapa', 'Parceiro', 'Estado', 'Acoes'].map(h => (
                     <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#64748B', letterSpacing: '0.05em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
                       {h}
                     </th>
@@ -568,6 +568,13 @@ export default function LeadsAdminPage() {
                       </span>
                     </td>
                     <td style={{ padding: '12px 16px', fontSize: 13, color: '#64748B' }}>{(l.campanha as any)?.name ?? '—'}</td>
+                    <td style={{ padding: '12px 16px' }}>
+                      {(l as any).etapa?.nome ? (
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#F5F3FF', color: '#7C3AED' }}>
+                          {(l as any).etapa.nome}
+                        </span>
+                      ) : <span style={{ fontSize: 12, color: '#CBD5E1' }}>—</span>}
+                    </td>
                     <td style={{ padding: '12px 16px', fontSize: 13, color: '#64748B' }}>{(l.parceiro as any)?.full_name ?? '—'}</td>
                     <td style={{ padding: '12px 16px' }}><Badge value={l.status} /></td>
                     <td style={{ padding: '12px 16px' }}>
