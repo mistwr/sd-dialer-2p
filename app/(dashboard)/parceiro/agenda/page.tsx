@@ -12,7 +12,7 @@ async function fetchFollowUps(userId: string) {
   const sb = createClient()
   const { data, error } = await sb
     .from('follow_ups')
-    .select('*, lead:lead_id(id,nome,telefone)')
+    .select('*, lead:lead_id(id,nome,telefone,campanha_id,campanhas(id,name))')
     .eq('parceiro_id', userId)
     .eq('done', false)
     .order('scheduled_at', { ascending: true })
@@ -50,14 +50,24 @@ const GROUP_LABEL: Record<string, { label: string; color: string; bg: string }> 
 export default function AgendaPage() {
   const { user, loading: authLoading } = useAuth()
   const [tab, setTab] = useState<'followups' | 'instalacoes'>('followups')
+  const [filterCampanha, setFilterCampanha] = useState('all')
 
   const { data: followUps = [], isLoading: l1, mutate } = useSWR(user?.id ? ['agenda-fu', user.id] : null, () => fetchFollowUps(user!.id))
   const { data: instalacoes = [], isLoading: l2, mutate: mutateInst } = useSWR(user?.id ? ['agenda-inst', user.id] : null, () => fetchInstalacoes(user!.id))
 
   if (authLoading || l1 || l2) return <PageSpinner />
 
+  const campanhasDisponiveis = Array.from(
+    new Map(
+      followUps.filter((fu: any) => fu.lead?.campanhas).map((fu: any) => [fu.lead.campanhas.id, fu.lead.campanhas.name])
+    ).entries()
+  )
+  const followUpsFiltrados = filterCampanha === 'all'
+    ? followUps
+    : followUps.filter((fu: any) => fu.lead?.campanha_id === filterCampanha)
+
   const groups = { atrasado: [] as any[], hoje: [] as any[], proximo: [] as any[] }
-  followUps.forEach(fu => groups[classify(fu.scheduled_at) as keyof typeof groups].push(fu))
+  followUpsFiltrados.forEach((fu: any) => groups[classify(fu.scheduled_at) as keyof typeof groups].push(fu))
 
   const instGroups = { atrasado: [] as any[], hoje: [] as any[], proximo: [] as any[] }
   instalacoes.forEach(v => instGroups[classify(v.data_instalacao) as keyof typeof instGroups].push(v))
@@ -97,9 +107,9 @@ export default function AgendaPage() {
         <p style={{ fontSize: 13, color: '#64748B', margin: '4px 0 0' }}>Os teus follow-ups e instalacoes a acompanhar</p>
       </div>
 
-      <div style={{ display: 'flex', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4, marginBottom: 20, width: 'fit-content' }}>
+      <div style={{ display: 'flex', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4, marginBottom: 16, width: 'fit-content' }}>
         {[
-          { key: 'followups' as const, label: `Follow-ups (${followUps.length})`, icon: <Phone size={14} /> },
+          { key: 'followups' as const, label: `Follow-ups (${followUpsFiltrados.length})`, icon: <Phone size={14} /> },
           { key: 'instalacoes' as const, label: `Instalacoes (${instalacoes.length})`, icon: <Wrench size={14} /> },
         ].map(t => (
           <button
@@ -119,8 +129,27 @@ export default function AgendaPage() {
         ))}
       </div>
 
+      {tab === 'followups' && campanhasDisponiveis.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <select
+            value={filterCampanha}
+            onChange={e => setFilterCampanha(e.target.value)}
+            style={{
+              width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px solid #C7D2FE',
+              background: '#EEF2FF', fontSize: 13, fontWeight: 700, color: '#3730A3',
+              cursor: 'pointer', outline: 'none', appearance: 'none',
+            }}
+          >
+            <option value="all">📋 Todos os follow-ups</option>
+            {campanhasDisponiveis.map(([id, name]) => (
+              <option key={id as string} value={id as string}>🎯 {name as string}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {tab === 'followups' && (
-        followUps.length === 0 ? (
+        followUpsFiltrados.length === 0 ? (
           <EmptyState icon={CheckCircle2} title="Sem follow-ups pendentes" description="Estas em dia! Novos follow-ups aparecem aqui assim que os agendares." />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
