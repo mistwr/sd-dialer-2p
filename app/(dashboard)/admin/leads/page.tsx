@@ -538,7 +538,7 @@ export default function LeadsAdminPage() {
       {/* Table */}
       {isLoading ? <PageSpinner /> : !filtered.length ? (
         <EmptyState icon={PhoneCall} title="Nenhuma lead encontrada" description="Importe ou adicione leads manualmente." action={
-          <button onClick={() => setModal({ type: 'import' })}
+          <button onClick={() => { setImportPreview(null); setImportError(null); setImportHeaders([]); setDuplicatesRemoved(0); setModal({ type: 'import' }) }}
             style={{ padding: '9px 18px', borderRadius: 10, background: '#16A34A', color: '#fff', border: 'none', fontWeight: 600, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
             <Upload size={14} /> Importar Leads
           </button>
@@ -640,7 +640,7 @@ export default function LeadsAdminPage() {
       {/* Import Modal */}
       <Modal
         open={modal.type === 'import'}
-        onClose={() => { setModal({ type: null }); setImportPreview(null); setImportHeaders([]); setImportError(null) }}
+        onClose={() => { setModal({ type: null }); setImportPreview(null); setImportHeaders([]); setImportError(null); setDuplicatesRemoved(0); if (fileRef.current) fileRef.current.value = '' }}
         title="Importar Leads"
         width={700}
       >
