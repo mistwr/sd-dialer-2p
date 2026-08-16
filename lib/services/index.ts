@@ -101,7 +101,7 @@ export const leadService = {
     const sb = createClient()
     let q = sb
       .from('leads')
-      .select('*, campanhas(id,name), parceiro:assigned_to(id,full_name,avatar_url)')
+      .select('*, campanhas(id,name), parceiro:assigned_to(id,full_name,avatar_url), etapa:pipeline_etapa_id(id,nome)')
       .order('created_at', { ascending: false })
     if (filters?.campanha_id) q = q.eq('campanha_id', filters.campanha_id)
     if (filters?.status)      q = q.eq('status', filters.status)
@@ -115,7 +115,7 @@ export const leadService = {
     const sb = createClient()
     const { data, error } = await sb
       .from('leads')
-      .select('*, campanhas(id,name), parceiro:assigned_to(id,full_name,avatar_url)')
+      .select('*, campanhas(id,name), parceiro:assigned_to(id,full_name,avatar_url), etapa:pipeline_etapa_id(id,nome)')
       .eq('id', id)
       .single()
     if (error) throw error
