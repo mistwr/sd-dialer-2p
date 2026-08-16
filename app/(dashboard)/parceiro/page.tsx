@@ -31,6 +31,7 @@ export default function ParceiroDashboardPage() {
   const { user, loading: authLoading } = useAuth()
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<LeadStatus | 'all'>('all')
+  const [filterCampanha, setFilterCampanha] = useState<string>('all')
 
   const { data: leads = [], isLoading } = useSWR(
     user ? ['parceiro-leads', user.id] : null,
@@ -59,8 +60,17 @@ export default function ParceiroDashboardPage() {
       l.telefone.includes(search) ||
       (l.localidade ?? '').toLowerCase().includes(search.toLowerCase())
     const matchStatus = filterStatus === 'all' || l.status === filterStatus
-    return matchSearch && matchStatus
+    const matchCampanha = filterCampanha === 'all' || l.campanha_id === filterCampanha || (filterCampanha === 'sem' && !l.campanha_id)
+    return matchSearch && matchStatus && matchCampanha
   })
+
+  // Lista de campanhas presentes nas leads deste parceiro, para o seletor
+  const campanhasDisponiveis = Array.from(
+    new Map(
+      leads.filter(l => (l as any).campanhas).map(l => [(l as any).campanhas.id, (l as any).campanhas.name])
+    ).entries()
+  )
+  const temLeadsSemCampanha = leads.some(l => !l.campanha_id)
 
   // Next lead: first priority status, then others
   const nextLead =
@@ -198,6 +208,30 @@ export default function ParceiroDashboardPage() {
                 )
               })}
             </div>
+          </div>
+        )}
+
+        {/* Campanha: em qual lista estou a ligar agora */}
+        {campanhasDisponiveis.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>
+              A ligar para
+            </label>
+            <select
+              value={filterCampanha}
+              onChange={e => setFilterCampanha(e.target.value)}
+              style={{
+                width: '100%', padding: '11px 14px', borderRadius: 10, border: '1.5px solid #C7D2FE',
+                background: '#EEF2FF', fontSize: 14, fontWeight: 700, color: '#3730A3',
+                cursor: 'pointer', outline: 'none', appearance: 'none',
+              }}
+            >
+              <option value="all">📋 Todas as minhas leads</option>
+              {campanhasDisponiveis.map(([id, name]) => (
+                <option key={id} value={id}>🎯 {name}</option>
+              ))}
+              {temLeadsSemCampanha && <option value="sem">📥 Sem campanha</option>}
+            </select>
           </div>
         )}
 
