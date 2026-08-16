@@ -73,7 +73,6 @@ export default function PerfilPage() {
       setAvatarUploading(false)
     }
   }
-    .toUpperCase() || '?'
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault()
