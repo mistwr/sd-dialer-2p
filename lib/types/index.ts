@@ -82,6 +82,7 @@ export interface Lead {
   id: string
   company_id: string
   campanha_id: string | null
+  skip_auto_assign?: boolean
   assigned_to: string | null
   nome: string
   telefone: string
