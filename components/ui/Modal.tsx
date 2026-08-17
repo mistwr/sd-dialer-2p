@@ -1,5 +1,6 @@
 'use client'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
 interface ModalProps {
@@ -11,6 +12,9 @@ interface ModalProps {
 }
 
 export function Modal({ open, onClose, title, children, width = 520 }: ModalProps) {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
   useEffect(() => {
     if (!open) return
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -18,9 +22,9 @@ export function Modal({ open, onClose, title, children, width = 520 }: ModalProp
     return () => document.removeEventListener('keydown', handler)
   }, [open, onClose])
 
-  if (!open) return null
+  if (!open || !mounted) return null
 
-  return (
+  const modal = (
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 9999,
@@ -60,4 +64,8 @@ export function Modal({ open, onClose, title, children, width = 520 }: ModalProp
       </div>
     </div>
   )
+
+  // Renderiza diretamente no <body>, fora de qualquer container com "transform"
+  // (ex: animacoes de entrada da pagina) que quebraria o position:fixed do modal.
+  return createPortal(modal, document.body)
 }
