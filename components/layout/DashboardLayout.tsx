@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, Building2, Megaphone,
   PhoneCall, BarChart2, LogOut, Menu, X, Bell,
   ChevronRight, PhoneIncoming, History, UserCircle,
-  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag, MessageSquare,
+  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag, MessageSquare, Users2,
 } from 'lucide-react'
 import useSWR from 'swr'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -24,6 +24,7 @@ const NAV: NavItem[] = [
   { label: 'Dashboard',    href: '/admin',               icon: LayoutDashboard, roles: ['admin', 'supervisor'] },
   { label: 'Chat',         href: '/chat',                 icon: MessageCircle,   roles: ['admin', 'supervisor', 'parceiro'] },
   { label: 'Empresas',     href: '/admin/empresas',       icon: Building2,       roles: ['admin'] },
+  { label: 'Utilizadores', href: '/admin/utilizadores',   icon: Users2,          roles: ['admin'] },
   { label: 'Parceiros',    href: '/admin/parceiros',      icon: Users,           roles: ['admin', 'supervisor'] },
   { label: 'Campanhas',    href: '/admin/campanhas',      icon: Megaphone,       roles: ['admin', 'supervisor'] },
   { label: 'Leads',        href: '/admin/leads',          icon: PhoneCall,       roles: ['admin', 'supervisor'] },
