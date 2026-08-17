@@ -1,16 +1,18 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import useSWR from 'swr'
 import Link from 'next/link'
 import {
   PhoneCall, Search, ChevronRight, Clock, User,
   CheckCircle2, PhoneOff, PhoneMissed, AlertCircle,
-  Calendar, Wifi, HelpCircle, Filter, Bell,
+  Calendar, Wifi, HelpCircle, Filter, Bell, Plus, X,
 } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { leadService, followUpService } from '@/lib/services'
+import { createClient } from '@/lib/supabase/client'
+import { CustomFieldsRenderer, fetchCustomFieldDefs, type CustomFieldDef } from '@/components/common/CustomFields'
 import type { Lead, LeadStatus, FollowUp } from '@/lib/types'
 
 const STATUS_META: Record<LeadStatus, { label: string; color: string; bg: string; Icon: React.ElementType }> = {
@@ -27,13 +29,143 @@ const STATUS_META: Record<LeadStatus, { label: string; color: string; bg: string
 
 const PRIORITY_STATUSES: LeadStatus[] = ['novo', 'ligar_depois', 'contactado']
 
+// ── Modal: adicionar contacto manualmente, sem passar por importacao ─────────
+function NovaLeadModal({ companyId, userId, onClose, onCreated }: {
+  companyId: string; userId: string; onClose: () => void; onCreated: () => void
+}) {
+  const [nome, setNome] = useState('')
+  const [telefone, setTelefone] = useState('')
+  const [email, setEmail] = useState('')
+  const [morada, setMorada] = useState('')
+  const [observacoes, setObservacoes] = useState('')
+  const [pipelines, setPipelines] = useState<{ id: string; nome: string }[]>([])
+  const [pipelineId, setPipelineId] = useState('')
+  const [customDefs, setCustomDefs] = useState<CustomFieldDef[]>([])
+  const [customValues, setCustomValues] = useState<Record<string, any>>({})
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const sb = createClient()
+    sb.from('pipelines').select('id, nome').eq('company_id', companyId).then(({ data }) => {
+      setPipelines(data ?? [])
+      if (data && data.length > 0) setPipelineId(data[0].id)
+    })
+  }, [companyId])
+
+  useEffect(() => {
+    if (!pipelineId) return
+    fetchCustomFieldDefs(companyId, pipelineId).then(setCustomDefs).catch(() => setCustomDefs([]))
+  }, [companyId, pipelineId])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    if (!nome.trim() || !telefone.trim()) { setError('Preenche pelo menos o nome e o telefone.'); return }
+    setSaving(true)
+    try {
+      const sb = createClient()
+      // Deteta duplicados por telefone antes de gravar
+      const { data: dup } = await sb.from('leads').select('id, nome').eq('telefone', telefone.trim()).limit(1)
+      if (dup && dup.length > 0) { setError(`Ja existe uma lead com este telefone: ${dup[0].nome}`); setSaving(false); return }
+
+      let pipelineEtapaId: string | null = null
+      if (pipelineId) {
+        const { data: etapa } = await sb.from('pipeline_etapas').select('id').eq('pipeline_id', pipelineId).order('ordem').limit(1).single()
+        pipelineEtapaId = etapa?.id ?? null
+      }
+
+      const { error: err } = await sb.from('leads').insert({
+        nome: nome.trim(), telefone: telefone.trim(), email: email.trim() || null,
+        morada: morada.trim() || null, observacoes: observacoes.trim() || null,
+        company_id: companyId, status: 'novo', imported_at: new Date().toISOString(),
+        custom_fields: customValues, pipeline_etapa_id: pipelineEtapaId,
+        assigned_to: userId, skip_auto_assign: true,
+      })
+      if (err) throw err
+      onCreated()
+      onClose()
+    } catch (err: any) {
+      setError(err?.message || 'Erro ao guardar.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const fieldStyle = { width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 14, boxSizing: 'border-box' as const, outline: 'none' }
+  const labelStyle = { display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 5 }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 420, maxHeight: '88vh', overflowY: 'auto', padding: 22 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', margin: 0 }}>Nova Lead</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} color="#64748B" /></button>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {error && <div style={{ background: '#FEE2E2', color: '#991B1B', borderRadius: 8, padding: '10px 14px', fontSize: 13 }}>{error}</div>}
+
+          {pipelines.length > 0 && (
+            <div>
+              <label style={labelStyle}>Pipeline</label>
+              <select value={pipelineId} onChange={e => setPipelineId(e.target.value)} style={{ ...fieldStyle, background: '#fff' }}>
+                {pipelines.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label style={labelStyle}>Nome *</label>
+            <input required value={nome} onChange={e => setNome(e.target.value)} style={fieldStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>Telefone *</label>
+            <input required value={telefone} onChange={e => setTelefone(e.target.value)} style={fieldStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>Email</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} style={fieldStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>Morada</label>
+            <input value={morada} onChange={e => setMorada(e.target.value)} style={fieldStyle} />
+          </div>
+
+          {customDefs.length > 0 && (
+            <>
+              <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 8, fontSize: 11.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase' }}>
+                Campos adicionais
+              </div>
+              <CustomFieldsRenderer defs={customDefs} values={customValues} onChange={(k, v) => setCustomValues(cv => ({ ...cv, [k]: v }))} />
+            </>
+          )}
+
+          <div>
+            <label style={labelStyle}>Notas</label>
+            <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} rows={3} style={{ ...fieldStyle, resize: 'vertical' }} />
+          </div>
+
+          <button type="submit" disabled={saving} style={{
+            marginTop: 6, padding: '12px', borderRadius: 10, border: 'none', background: '#2563EB',
+            color: '#fff', fontWeight: 700, fontSize: 14, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1,
+          }}>
+            {saving ? 'A guardar...' : 'Guardar Lead'}
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export default function ParceiroDashboardPage() {
-  const { user, loading: authLoading } = useAuth()
+  const { user, profile, loading: authLoading } = useAuth()
   const [search, setSearch] = useState('')
+  const [showNovaLead, setShowNovaLead] = useState(false)
   const [filterStatus, setFilterStatus] = useState<LeadStatus | 'all'>('all')
   const [filterCampanha, setFilterCampanha] = useState<string>('all')
 
-  const { data: leads = [], isLoading } = useSWR(
+  const { data: leads = [], isLoading, mutate: mutateLeads } = useSWR(
     user ? ['parceiro-leads', user.id] : null,
     () => leadService.getAssigned(user!.id),
     { revalidateOnFocus: true }
@@ -99,14 +231,26 @@ export default function ParceiroDashboardPage() {
   ]
 
   return (
+    <>
     <div style={{ maxWidth: 720, margin: '0 auto' }} className="anim-fade-in">
 
         {/* Header */}
-        <div style={{ marginBottom: 24 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', margin: 0 }}>Minhas Leads</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748B' }}>
-            {leads.length} leads atribuidas
-          </p>
+        <div style={{ marginBottom: 24, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+          <div>
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', margin: 0 }}>Minhas Leads</h1>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748B' }}>
+              {leads.length} leads atribuidas
+            </p>
+          </div>
+          <button
+            onClick={() => setShowNovaLead(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 10,
+              background: '#2563EB', color: '#fff', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer', flexShrink: 0,
+            }}
+          >
+            <Plus size={15} /> Nova Lead
+          </button>
         </div>
 
         {/* Next Lead CTA */}
@@ -362,5 +506,15 @@ export default function ParceiroDashboardPage() {
           </div>
         )}
       </div>
+
+      {showNovaLead && user && profile?.company_id && (
+        <NovaLeadModal
+          companyId={profile.company_id}
+          userId={user.id}
+          onClose={() => setShowNovaLead(false)}
+          onCreated={() => mutateLeads()}
+        />
+      )}
+    </>
   )
 }
