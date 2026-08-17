@@ -188,7 +188,7 @@ function AssignModal({ leads, parceiros, onAssign, onClose }: {
       </p>
       <select value={userId} onChange={e => setUserId(e.target.value)}
         style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 14, outline: 'none', background: '#fff' }}>
-        {parceiros.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+        {parceiros.map(p => <option key={p.id} value={p.id}>{p.full_name} ({p.email})</option>)}
       </select>
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
         <button onClick={onClose}
@@ -694,7 +694,7 @@ export default function LeadsAdminPage() {
                 style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 13, outline: 'none', background: '#fff', color: '#374151' }}>
                 <option value="auto">🔀 Distribuir automaticamente pela equipa</option>
                 <option value="mim">👤 A mim (fico com estes contactos)</option>
-                {parceiros.map(p => <option key={p.id} value={p.id}>👤 {p.full_name} (só dele/a)</option>)}
+                {parceiros.map(p => <option key={p.id} value={p.id}>👤 {p.full_name} — {p.email}</option>)}
                 <option value="ninguem">📭 Não atribuir agora (fica por atribuir)</option>
               </select>
               <p style={{ fontSize: 11, color: '#94A3B8', margin: '4px 0 0' }}>
