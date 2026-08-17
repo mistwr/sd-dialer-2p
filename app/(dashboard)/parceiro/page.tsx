@@ -53,7 +53,16 @@ export default function ParceiroDashboardPage() {
     )
   }
 
-  const filtered = leads.filter(l => {
+  const today = new Date().toISOString().slice(0, 10)
+  const isAgendadaFutura = (l: Lead) => {
+    const dpc = (l as any).custom_fields?.data_proximo_ctt as string | undefined
+    return !!dpc && dpc.slice(0, 10) > today
+  }
+
+  const leadsProntas = leads.filter(l => !isAgendadaFutura(l))
+  const leadsAgendadas = leads.filter(isAgendadaFutura)
+
+  const filtered = leadsProntas.filter(l => {
     const matchSearch =
       !search ||
       l.nome.toLowerCase().includes(search.toLowerCase()) ||
@@ -67,16 +76,16 @@ export default function ParceiroDashboardPage() {
   // Lista de campanhas presentes nas leads deste parceiro, para o seletor
   const campanhasDisponiveis = Array.from(
     new Map(
-      leads.filter(l => (l as any).campanhas).map(l => [(l as any).campanhas.id, (l as any).campanhas.name])
+      leadsProntas.filter(l => (l as any).campanhas).map(l => [(l as any).campanhas.id, (l as any).campanhas.name])
     ).entries()
   )
-  const temLeadsSemCampanha = leads.some(l => !l.campanha_id)
+  const temLeadsSemCampanha = leadsProntas.some(l => !l.campanha_id)
 
   // Next lead: first priority status, then others
   const nextLead =
     filtered.find(l => PRIORITY_STATUSES.includes(l.status)) ?? filtered[0] ?? null
 
-  const counts = leads.reduce((acc, l) => {
+  const counts = leadsProntas.reduce((acc, l) => {
     acc[l.status] = (acc[l.status] ?? 0) + 1
     return acc
   }, {} as Record<string, number>)
@@ -232,6 +241,18 @@ export default function ParceiroDashboardPage() {
               ))}
               {temLeadsSemCampanha && <option value="sem">📥 Sem campanha</option>}
             </select>
+          </div>
+        )}
+
+        {leadsAgendadas.length > 0 && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14,
+            padding: '10px 14px', borderRadius: 10, background: '#FFFBEB', border: '1px solid #FDE68A',
+          }}>
+            <Calendar size={14} color="#D97706" />
+            <span style={{ fontSize: 12.5, color: '#92400E' }}>
+              <strong>{leadsAgendadas.length}</strong> lead{leadsAgendadas.length !== 1 ? 's' : ''} agendada{leadsAgendadas.length !== 1 ? 's' : ''} para o futuro — não aparecem aqui ainda, vão surgir automaticamente na data marcada.
+            </span>
           </div>
         )}
 
