@@ -1,16 +1,19 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { use } from 'react'
+import { useRouter } from 'next/navigation'
 import useSWR from 'swr'
 import {
   Phone, MessageCircle, MapPin, ChevronLeft, Clock,
   User, MapPinned, Hash, Wifi, FileText, CheckCircle2,
   PhoneOff, PhoneMissed, AlertCircle, Calendar,
-  HelpCircle, Plus, History, X, Sparkles, Brain,
+  HelpCircle, Plus, History, X, Sparkles, Brain, Trash2, Pencil,
 } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { leadService, callHistoryService, followUpService } from '@/lib/services'
+import { createClient } from '@/lib/supabase/client'
+import { CustomFieldsRenderer, fetchCustomFieldDefs, type CustomFieldDef } from '@/components/common/CustomFields'
 import type { Lead, CallResult, CallHistory } from '@/lib/types'
 import Link from 'next/link'
 import CallRecorder from '@/components/ai/CallRecorder'
@@ -37,6 +40,15 @@ function formatDuration(seconds: number): string {
 export default function LeadCallPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const { user, profile } = useAuth()
+  const router = useRouter()
+
+  const [showEdit, setShowEdit] = useState(false)
+  const [editObs, setEditObs] = useState('')
+  const [editCustom, setEditCustom] = useState<Record<string, any>>({})
+  const [editDefs, setEditDefs] = useState<CustomFieldDef[]>([])
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   const { data: lead, mutate: mutateLead } = useSWR(
     ['lead', id],
@@ -268,6 +280,49 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
     }
   }
 
+  const openEdit = async () => {
+    if (!lead || !profile?.company_id) return
+    setEditObs(lead.observacoes ?? '')
+    setEditCustom((lead as any).custom_fields ?? {})
+    try {
+      const defs = await fetchCustomFieldDefs(profile.company_id, (lead as any).pipeline_etapa_id ?? null)
+      setEditDefs(defs)
+    } catch {
+      setEditDefs([])
+    }
+    setShowEdit(true)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!lead) return
+    setSavingEdit(true)
+    try {
+      const sb = createClient()
+      const { error } = await sb.from('leads').update({
+        observacoes: editObs.trim() || null,
+        custom_fields: editCustom,
+      }).eq('id', lead.id)
+      if (error) throw error
+      setShowEdit(false)
+      mutateLead()
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  const handleDeleteLead = async () => {
+    if (!lead) return
+    setDeleting(true)
+    try {
+      const sb = createClient()
+      const { error } = await sb.from('leads').delete().eq('id', lead.id)
+      if (error) throw error
+      router.push('/parceiro')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   if (!lead) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300 }}>
@@ -315,16 +370,38 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
               </div>
             </div>
 
-            <button
-              onClick={() => setShowFollowUp(true)}
-              style={{
-                marginTop: 12, display: 'flex', alignItems: 'center', gap: 6,
-                padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)',
-                background: 'rgba(255,255,255,0.06)', color: '#E2E8F0', fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
-              }}
-            >
-              📅 Agendar Follow-up
-            </button>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setShowFollowUp(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)',
+                  background: 'rgba(255,255,255,0.06)', color: '#E2E8F0', fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                📅 Agendar Follow-up
+              </button>
+              <button
+                onClick={openEdit}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)',
+                  background: 'rgba(255,255,255,0.06)', color: '#E2E8F0', fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                <Pencil size={13} /> Editar
+              </button>
+              <button
+                onClick={() => setConfirmDelete(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)',
+                  background: 'rgba(239,68,68,0.1)', color: '#FCA5A5', fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                <Trash2 size={13} /> Eliminar
+              </button>
+            </div>
 
             {/* Active call timer */}
             {timerActive && (
@@ -1053,6 +1130,63 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
                 }}
               >
                 {savingFollowUp ? <Spinner size={16} color="#fff" /> : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit modal: custom fields + observacoes */}
+      {showEdit && (
+        <div onClick={() => !savingEdit && setShowEdit(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 420, maxHeight: '85vh', overflowY: 'auto', padding: 22 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', margin: 0 }}>Editar Lead</h3>
+              <button onClick={() => setShowEdit(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} color="#64748B" /></button>
+            </div>
+
+            {editDefs.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 14 }}>
+                <CustomFieldsRenderer
+                  defs={editDefs}
+                  values={editCustom}
+                  onChange={(k, v) => setEditCustom(cv => ({ ...cv, [k]: v }))}
+                />
+              </div>
+            )}
+
+            <div style={{ marginBottom: 18 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Notas / Observações</label>
+              <textarea
+                value={editObs}
+                onChange={e => setEditObs(e.target.value)}
+                rows={4}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 14, boxSizing: 'border-box', outline: 'none', resize: 'vertical' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowEdit(false)} disabled={savingEdit} style={{ padding: '10px 18px', borderRadius: 10, border: '1.5px solid #E2E8F0', background: '#fff', fontSize: 13.5, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
+                Cancelar
+              </button>
+              <button onClick={handleSaveEdit} disabled={savingEdit} style={{ padding: '10px 20px', borderRadius: 10, border: 'none', background: '#2563EB', color: '#fff', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', opacity: savingEdit ? 0.7 : 1 }}>
+                {savingEdit ? 'A guardar...' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation */}
+      {confirmDelete && (
+        <div onClick={() => !deleting && setConfirmDelete(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 340, padding: 22 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 6 }}>Eliminar esta lead?</div>
+            <div style={{ fontSize: 13, color: '#64748B', marginBottom: 18 }}>Esta ação não pode ser desfeita. O histórico de chamadas associado também será removido.</div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => setConfirmDelete(false)} disabled={deleting} style={{ padding: '9px 18px', borderRadius: 10, border: '1.5px solid #E2E8F0', background: '#fff', fontSize: 13.5, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>Cancelar</button>
+              <button onClick={handleDeleteLead} disabled={deleting} style={{ padding: '9px 18px', borderRadius: 10, border: 'none', background: '#DC2626', color: '#fff', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', opacity: deleting ? 0.7 : 1 }}>
+                {deleting ? 'A eliminar...' : 'Eliminar'}
               </button>
             </div>
           </div>
