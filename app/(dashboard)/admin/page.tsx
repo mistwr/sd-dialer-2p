@@ -43,8 +43,28 @@ export default function AdminDashboard() {
       try {
         const sb = createClient()
         const companyId = profile.company_id!
+        const isSuperAdmin = !!(profile as any).is_super_admin
         const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
         const weekStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+
+        // Super-admin ve a plataforma toda (todas as empresas); admin normal so a sua
+        let qParceiros = sb.from('usuarios').select('*', { count: 'exact', head: true }).eq('role', 'parceiro')
+        let qLeads = sb.from('leads').select('*', { count: 'exact', head: true })
+        let qChamadasHoje = sb.from('call_history').select('*', { count: 'exact', head: true }).gte('called_at', todayStart.toISOString())
+        let qNegativos = sb.from('call_history').select('*', { count: 'exact', head: true }).eq('ai_sentiment', 'negativo').gte('called_at', weekStart.toISOString())
+        let qCallData = sb.from('call_history').select('result, duration_sec, parceiro_id')
+        let qRankData = sb.from('call_history').select('parceiro_id, result, usuarios!parceiro_id(id,full_name,avatar_url)')
+        let qOnline = sb.from('usuarios').select('id').eq('role', 'parceiro').gte('last_seen_at', new Date(Date.now() - 15 * 60 * 1000).toISOString())
+
+        if (!isSuperAdmin) {
+          qParceiros = qParceiros.eq('company_id', companyId)
+          qLeads = qLeads.eq('company_id', companyId)
+          qChamadasHoje = qChamadasHoje.eq('company_id', companyId)
+          qNegativos = qNegativos.eq('company_id', companyId)
+          qCallData = qCallData.eq('company_id', companyId)
+          qRankData = qRankData.eq('company_id', companyId)
+          qOnline = qOnline.eq('company_id', companyId)
+        }
 
         const [
           { count: totalEmpresas },
@@ -57,13 +77,7 @@ export default function AdminDashboard() {
           { data: onlineData },
         ] = await Promise.all([
           sb.from('companies').select('*', { count: 'exact', head: true }),
-          sb.from('usuarios').select('*', { count: 'exact', head: true }).eq('company_id', companyId).eq('role', 'parceiro'),
-          sb.from('leads').select('*', { count: 'exact', head: true }).eq('company_id', companyId),
-          sb.from('call_history').select('*', { count: 'exact', head: true }).eq('company_id', companyId).gte('called_at', todayStart.toISOString()),
-          sb.from('call_history').select('*', { count: 'exact', head: true }).eq('company_id', companyId).eq('ai_sentiment', 'negativo').gte('called_at', weekStart.toISOString()),
-          sb.from('call_history').select('result, duration_sec, parceiro_id').eq('company_id', companyId),
-          sb.from('call_history').select('parceiro_id, result, usuarios!parceiro_id(id,full_name,avatar_url)').eq('company_id', companyId),
-          sb.from('usuarios').select('id').eq('company_id', companyId).eq('role', 'parceiro').gte('last_seen_at', new Date(Date.now() - 15 * 60 * 1000).toISOString()),
+          qParceiros, qLeads, qChamadasHoje, qNegativos, qCallData, qRankData, qOnline,
         ])
 
         const vendasTotal = callData?.filter(c => c.result === 'venda').length ?? 0
@@ -112,9 +126,16 @@ export default function AdminDashboard() {
   return (
     <div className="anim-fade-in" style={{ maxWidth: 1200 }}>
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '-0.5px' }}>
-          Dashboard
-        </h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '-0.5px' }}>
+            Dashboard
+          </h1>
+          {(profile as any)?.is_super_admin && (
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#7C3AED', background: '#F5F3FF', padding: '3px 10px', borderRadius: 999, border: '1px solid #DDD6FE' }}>
+              🔓 Todas as empresas
+            </span>
+          )}
+        </div>
         <p style={{ color: '#64748B', fontSize: 14, margin: '4px 0 0' }}>
           Visao geral da plataforma
         </p>
