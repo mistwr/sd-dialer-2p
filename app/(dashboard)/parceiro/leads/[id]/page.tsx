@@ -315,6 +315,17 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
               </div>
             </div>
 
+            <button
+              onClick={() => setShowFollowUp(true)}
+              style={{
+                marginTop: 12, display: 'flex', alignItems: 'center', gap: 6,
+                padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)',
+                background: 'rgba(255,255,255,0.06)', color: '#E2E8F0', fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              📅 Agendar Follow-up
+            </button>
+
             {/* Active call timer */}
             {timerActive && (
               <div style={{
