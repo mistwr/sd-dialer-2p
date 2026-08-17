@@ -232,7 +232,7 @@ export function parseFile(file: File, customDefs: CustomFieldDefLite[] = []): Pr
 
         // Try header=1 first (uses first row as headers)
         // raw:false converts numbers to strings (important for phone numbers)
-        const rawRows: Record<string, any>[] = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false })
+        const rawRows: Record<string, any>[] = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false, cellDates: true })
 
         if (!rawRows.length) {
           resolve({ headers: [], rows: [], duplicatesRemoved: 0 })
@@ -290,13 +290,23 @@ export function parseFile(file: File, customDefs: CustomFieldDefLite[] = []): Pr
           if (Object.keys(customFieldMap).length > 0) {
             const cf: Record<string, string> = {}
             for (const [origHeader, fieldKey] of Object.entries(customFieldMap)) {
-              let val = String(r[origHeader] ?? '').trim()
+              const rawVal = r[origHeader]
+              let val = String(rawVal ?? '').trim()
               if (val && /data/i.test(fieldKey)) {
-                const m = val.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/)
-                if (m) {
-                  const [, d, mo, y] = m
-                  const year = y.length === 2 ? `20${y}` : y
-                  val = `${year}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`
+                if (rawVal instanceof Date && !isNaN(rawVal.getTime())) {
+                  // Data reconhecida nativamente pelo Excel: usa os componentes diretos,
+                  // sem depender de formato de texto (evita confusao dia/mes vs mes/dia)
+                  const y = rawVal.getFullYear()
+                  const mo = String(rawVal.getMonth() + 1).padStart(2, '0')
+                  const d = String(rawVal.getDate()).padStart(2, '0')
+                  val = `${y}-${mo}-${d}`
+                } else {
+                  const m = val.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/)
+                  if (m) {
+                    const [, d, mo, y] = m
+                    const year = y.length === 2 ? `20${y}` : y
+                    val = `${year}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`
+                  }
                 }
               }
               if (val) cf[fieldKey] = val
