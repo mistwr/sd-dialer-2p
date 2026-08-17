@@ -571,7 +571,21 @@ export default function LeadsAdminPage() {
                       <input type="checkbox" checked={selected.includes(l.id)} onChange={() => toggleSelect(l.id)} style={{ cursor: 'pointer' }} />
                     </td>
                     <td style={{ padding: '12px 16px' }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>{l.nome}</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {l.nome}
+                        {(() => {
+                          const dpc = (l as any).custom_fields?.data_proximo_ctt as string | undefined
+                          const today = new Date().toISOString().slice(0, 10)
+                          if (dpc && dpc.slice(0, 10) > today) {
+                            return (
+                              <span style={{ fontSize: 10, fontWeight: 700, color: '#D97706', background: '#FFFBEB', padding: '1px 7px', borderRadius: 999, whiteSpace: 'nowrap' }}>
+                                📅 {dpc.slice(8, 10)}/{dpc.slice(5, 7)}
+                              </span>
+                            )
+                          }
+                          return null
+                        })()}
+                      </div>
                       {l.email && <div style={{ fontSize: 12, color: '#94A3B8' }}>{l.email}</div>}
                       {l.localidade && <div style={{ fontSize: 12, color: '#94A3B8' }}>{l.localidade}</div>}
                     </td>
