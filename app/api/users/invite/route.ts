@@ -77,6 +77,7 @@ export async function POST(request: NextRequest) {
     company_id,
     role,
     status: 'active',
+    created_by: callerData.user.id,
   })
 
   if (profileError) {
