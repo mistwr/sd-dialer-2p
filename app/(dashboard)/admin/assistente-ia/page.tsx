@@ -1,5 +1,6 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import useSWR from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -59,7 +60,10 @@ async function fetchObjecoes(companyId: string) {
 /* Inline form component                                               */
 /* ─────────────────────────────────────────────────────────────────── */
 function ModalBackdrop({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  return (
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+  if (!mounted) return null
+  return createPortal(
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 200,
@@ -69,7 +73,8 @@ function ModalBackdrop({ children, onClose }: { children: React.ReactNode; onClo
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
       {children}
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -385,6 +390,11 @@ export default function AssistenteIAManagement() {
                 {saving ? 'A guardar...' : 'Guardar'}
               </button>
             </div>
+            {(!rTitulo.trim() || !rConteudo.trim()) && !saving && (
+              <p style={{ margin: '10px 0 0', fontSize: 12, color: '#DC2626', textAlign: 'center' }}>
+                Falta preencher: {[!rTitulo.trim() && 'Titulo', !rConteudo.trim() && 'Conteudo do guiao'].filter(Boolean).join(' e ')}
+              </p>
+            )}
           </div>
         </ModalBackdrop>
       )}
@@ -436,6 +446,11 @@ export default function AssistenteIAManagement() {
                 {saving ? 'A guardar...' : 'Guardar'}
               </button>
             </div>
+            {(!oObjecao.trim() || !oResposta.trim()) && !saving && (
+              <p style={{ margin: '10px 0 0', fontSize: 12, color: '#DC2626', textAlign: 'center' }}>
+                Falta preencher: {[!oObjecao.trim() && 'Objecao', !oResposta.trim() && 'Resposta sugerida'].filter(Boolean).join(' e ')}
+              </p>
+            )}
           </div>
         </ModalBackdrop>
       )}
