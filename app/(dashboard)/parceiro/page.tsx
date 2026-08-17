@@ -191,10 +191,9 @@ export default function ParceiroDashboardPage() {
     return !!dpc && dpc.slice(0, 10) > today
   }
 
-  const leadsProntas = leads.filter(l => !isAgendadaFutura(l))
   const leadsAgendadas = leads.filter(isAgendadaFutura)
 
-  const filtered = leadsProntas.filter(l => {
+  const filtered = leads.filter(l => {
     const matchSearch =
       !search ||
       l.nome.toLowerCase().includes(search.toLowerCase()) ||
@@ -208,16 +207,16 @@ export default function ParceiroDashboardPage() {
   // Lista de campanhas presentes nas leads deste parceiro, para o seletor
   const campanhasDisponiveis = Array.from(
     new Map(
-      leadsProntas.filter(l => (l as any).campanhas).map(l => [(l as any).campanhas.id, (l as any).campanhas.name])
+      leads.filter(l => (l as any).campanhas).map(l => [(l as any).campanhas.id, (l as any).campanhas.name])
     ).entries()
   )
-  const temLeadsSemCampanha = leadsProntas.some(l => !l.campanha_id)
+  const temLeadsSemCampanha = leads.some(l => !l.campanha_id)
 
   // Next lead: first priority status, then others
   const nextLead =
     filtered.find(l => PRIORITY_STATUSES.includes(l.status)) ?? filtered[0] ?? null
 
-  const counts = leadsProntas.reduce((acc, l) => {
+  const counts = leads.reduce((acc, l) => {
     acc[l.status] = (acc[l.status] ?? 0) + 1
     return acc
   }, {} as Record<string, number>)
@@ -395,7 +394,7 @@ export default function ParceiroDashboardPage() {
           }}>
             <Calendar size={14} color="#D97706" />
             <span style={{ fontSize: 12.5, color: '#92400E' }}>
-              <strong>{leadsAgendadas.length}</strong> lead{leadsAgendadas.length !== 1 ? 's' : ''} agendada{leadsAgendadas.length !== 1 ? 's' : ''} para o futuro — não aparecem aqui ainda, vão surgir automaticamente na data marcada.
+              <strong>{leadsAgendadas.length}</strong> lead{leadsAgendadas.length !== 1 ? 's' : ''} agendada{leadsAgendadas.length !== 1 ? 's' : ''} para uma data futura — continuam visíveis na lista abaixo, marcadas com 📅.
             </span>
           </div>
         )}
@@ -480,6 +479,11 @@ export default function ParceiroDashboardPage() {
                         {lead.origem === 'porta' && (
                           <span style={{ fontSize: 10, fontWeight: 700, color: '#EA580C', background: '#FFF7ED', padding: '1px 7px', borderRadius: 999, flexShrink: 0 }}>
                             🚪 Porta
+                          </span>
+                        )}
+                        {isAgendadaFutura(lead) && (
+                          <span style={{ fontSize: 10, fontWeight: 700, color: '#D97706', background: '#FFFBEB', padding: '1px 7px', borderRadius: 999, flexShrink: 0 }}>
+                            📅 {((lead as any).custom_fields?.data_proximo_ctt as string)?.slice(8, 10)}/{((lead as any).custom_fields?.data_proximo_ctt as string)?.slice(5, 7)}
                           </span>
                         )}
                       </div>
