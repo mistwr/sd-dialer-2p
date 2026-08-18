@@ -20,7 +20,8 @@ import { LEAD_ORIGEM_LABELS, LEAD_ORIGEM_COLORS } from '@/lib/types'
 
 const STATUS_OPTS = [
   'novo', 'contactado', 'vendido', 'nao_interessado',
-  'nao_atende', 'numero_errado', 'ligar_depois', 'sem_cobertura', 'outro',
+  'nao_atende', 'numero_errado', 'ligar_depois', 'sem_cobertura',
+  'desligado', 'numero_nao_atribuido', 'pertence_outra_pessoa', 'outro',
 ]
 
 // ---- Lead Form ----
@@ -225,6 +226,7 @@ export default function LeadsAdminPage() {
   const [origemFilter, setOrigemFilter] = useState('')
   const [fidelizacaoAno, setFidelizacaoAno] = useState('')
   const [fidelizacaoMes, setFidelizacaoMes] = useState('')
+  const [duplicatesOnly, setDuplicatesOnly] = useState(false)
   const [selected, setSelected] = useState<string[]>([])
   const [modal, setModal] = useState<{ type: 'lead' | 'import' | 'assign' | null; editing?: Lead }>({ type: null })
 
@@ -241,6 +243,17 @@ export default function LeadsAdminPage() {
   const [duplicatesRemoved, setDuplicatesRemoved] = useState(0)
   const fileRef = useRef<HTMLInputElement>(null)
 
+  // Telefones que aparecem em mais do que uma lead — para o filtro "Só duplicados"
+  const duplicatePhones = new Set(
+    Object.entries(
+      leads.reduce((acc: Record<string, number>, l) => {
+        const t = l.telefone?.trim()
+        if (t) acc[t] = (acc[t] ?? 0) + 1
+        return acc
+      }, {})
+    ).filter(([, count]) => count > 1).map(([phone]) => phone)
+  )
+
   const filtered = leads.filter(l => {
     const q = search.toLowerCase()
     const matchSearch = !q || l.nome.toLowerCase().includes(q) || l.telefone.includes(q)
@@ -250,7 +263,8 @@ export default function LeadsAdminPage() {
     const dataFim = (l as any).custom_fields?.data_fim_fidelizacao as string | undefined
     const matchFidAno = !fidelizacaoAno || (dataFim && dataFim.startsWith(fidelizacaoAno))
     const matchFidMes = !fidelizacaoMes || (dataFim && dataFim.slice(5, 7) === fidelizacaoMes)
-    return matchSearch && matchStatus && matchCampanha && matchOrigem && matchFidAno && matchFidMes
+    const matchDuplicates = !duplicatesOnly || duplicatePhones.has(l.telefone?.trim())
+    return matchSearch && matchStatus && matchCampanha && matchOrigem && matchFidAno && matchFidMes && matchDuplicates
   })
 
   const toggleSelect = (id: string) =>
@@ -498,6 +512,16 @@ export default function LeadsAdminPage() {
           <option value="">Estado: Todos</option>
           {STATUS_OPTS.map(o => <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>)}
         </select>
+        <button onClick={() => setDuplicatesOnly(d => !d)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 10,
+            border: duplicatesOnly ? '1.5px solid #F59E0B' : '1.5px solid #E2E8F0',
+            background: duplicatesOnly ? '#FFFBEB' : '#fff',
+            color: duplicatesOnly ? '#B45309' : '#64748B',
+            fontWeight: 600, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap',
+          }}>
+          Só duplicados {duplicatePhones.size > 0 && `(${duplicatePhones.size})`}
+        </button>
         <select value={campanhaFilter} onChange={e => setCampanhaFilter(e.target.value)}
           style={{ padding: '9px 12px', borderRadius: 10, border: '1.5px solid #E2E8F0', fontSize: 13, outline: 'none', background: '#fff', color: campanhaFilter ? '#0F172A' : '#94A3B8' }}>
           <option value="">Campanha: Todas</option>
