@@ -27,6 +27,9 @@ export type CallResult =
   | 'numero_errado'
   | 'ligar_depois'
   | 'sem_cobertura'
+  | 'desligado'
+  | 'numero_nao_atribuido'
+  | 'pertence_outra_pessoa'
   | 'outro'
 export type CampaignStatus = 'draft' | 'active' | 'paused' | 'completed' | 'archived'
 export type NotificationType = 'nova_lead' | 'follow_up' | 'objetivo' | 'sistema'
@@ -169,6 +172,9 @@ export const CALL_RESULT_LABELS: Record<CallResult, string> = {
   numero_errado: 'Numero Errado',
   ligar_depois: 'Ligar Depois',
   sem_cobertura: 'Sem Cobertura',
+  desligado: 'Desligado',
+  numero_nao_atribuido: 'Nº Não Atribuído',
+  pertence_outra_pessoa: 'Pertence a Outra Pessoa',
   outro: 'Outro',
 }
 
