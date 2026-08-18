@@ -196,16 +196,32 @@ export default function ParceiroDashboardPage() {
 
   const leadsAgendadas = leads.filter(isAgendadaFutura)
 
-  const filtered = leads.filter(l => {
-    const matchSearch =
-      !search ||
-      l.nome.toLowerCase().includes(search.toLowerCase()) ||
-      l.telefone.includes(search) ||
-      (l.localidade ?? '').toLowerCase().includes(search.toLowerCase())
-    const matchStatus = filterStatus === 'all' || l.status === filterStatus
-    const matchCampanha = filterCampanha === 'all' || l.campanha_id === filterCampanha || (filterCampanha === 'sem' && !l.campanha_id)
-    return matchSearch && matchStatus && matchCampanha
-  })
+  // Data de agendamento de uma lead, se tiver (custom_fields.data_proximo_ctt)
+  const scheduledDate = (l: Lead) => (l as any).custom_fields?.data_proximo_ctt as string | undefined
+
+  const filtered = leads
+    .filter(l => {
+      const matchSearch =
+        !search ||
+        l.nome.toLowerCase().includes(search.toLowerCase()) ||
+        l.telefone.includes(search) ||
+        (l.localidade ?? '').toLowerCase().includes(search.toLowerCase())
+      const matchStatus = filterStatus === 'all' || l.status === filterStatus
+      const matchCampanha = filterCampanha === 'all' || l.campanha_id === filterCampanha || (filterCampanha === 'sem' && !l.campanha_id)
+      return matchSearch && matchStatus && matchCampanha
+    })
+    // Leads agendadas para o futuro (ex: 2027) vão para o fim da fila — nao bloqueiam
+    // quem tem de ligar hoje. Entre as agendadas no passado/hoje, as mais atrasadas
+    // vem primeiro (mais urgentes). O resto mantem a ordem original (prioridade/antiguidade).
+    .sort((a, b) => {
+      const da = scheduledDate(a)
+      const db = scheduledDate(b)
+      const aFuture = !!da && da > today
+      const bFuture = !!db && db > today
+      if (aFuture !== bFuture) return aFuture ? 1 : -1
+      if (aFuture && bFuture) return da! < db! ? -1 : da! > db! ? 1 : 0
+      return 0
+    })
 
   // Lista de campanhas presentes nas leads deste parceiro, para o seletor
   const campanhasDisponiveis = Array.from(
@@ -215,9 +231,9 @@ export default function ParceiroDashboardPage() {
   )
   const temLeadsSemCampanha = leads.some(l => !l.campanha_id)
 
-  // Next lead: first priority status, then others
+  // Next lead: first priority status among those not scheduled for the future, then others
   const nextLead =
-    filtered.find(l => PRIORITY_STATUSES.includes(l.status)) ?? filtered[0] ?? null
+    filtered.find(l => PRIORITY_STATUSES.includes(l.status) && !(scheduledDate(l) && scheduledDate(l)! > today)) ?? filtered[0] ?? null
 
   const counts = leads.reduce((acc, l) => {
     acc[l.status] = (acc[l.status] ?? 0) + 1
