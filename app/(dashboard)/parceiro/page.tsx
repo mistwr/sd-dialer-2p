@@ -24,6 +24,9 @@ const STATUS_META: Record<LeadStatus, { label: string; color: string; bg: string
   numero_errado:   { label: 'Num. Errado',    color: '#7C3AED', bg: '#F5F3FF', Icon: AlertCircle },
   ligar_depois:    { label: 'Ligar Depois',   color: '#0891B2', bg: '#ECFEFF', Icon: Calendar },
   sem_cobertura:   { label: 'Sem Cobertura',  color: '#EA580C', bg: '#FFF7ED', Icon: Wifi },
+  desligado:              { label: 'Desligado',              color: '#991B1B', bg: '#FEF2F2', Icon: PhoneOff },
+  numero_nao_atribuido:   { label: 'Nº Não Atribuído',        color: '#991B1B', bg: '#FEF2F2', Icon: AlertCircle },
+  pertence_outra_pessoa:  { label: 'Pertence a Outra Pessoa', color: '#991B1B', bg: '#FEF2F2', Icon: AlertCircle },
   outro:           { label: 'Outro',          color: '#6B7280', bg: '#F9FAFB', Icon: HelpCircle },
 }
 
