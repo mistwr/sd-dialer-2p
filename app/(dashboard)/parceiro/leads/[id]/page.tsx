@@ -28,6 +28,9 @@ const RESULTS: { key: CallResult; label: string; color: string; bg: string; Icon
   { key: 'numero_errado',  label: 'Numero Errado',    color: '#7C3AED', bg: '#F5F3FF', Icon: AlertCircle },
   { key: 'ligar_depois',   label: 'Ligar Depois',     color: '#0891B2', bg: '#ECFEFF', Icon: Calendar },
   { key: 'sem_cobertura',  label: 'Sem Cobertura',    color: '#EA580C', bg: '#FFF7ED', Icon: Wifi },
+  { key: 'desligado',              label: 'Desligado',              color: '#991B1B', bg: '#FEF2F2', Icon: PhoneOff },
+  { key: 'numero_nao_atribuido',   label: 'Nº Não Atribuído',        color: '#991B1B', bg: '#FEF2F2', Icon: AlertCircle },
+  { key: 'pertence_outra_pessoa',  label: 'Pertence a Outra Pessoa', color: '#991B1B', bg: '#FEF2F2', Icon: AlertCircle },
   { key: 'outro',          label: 'Outro',            color: '#6B7280', bg: '#F9FAFB', Icon: HelpCircle },
 ]
 
@@ -237,6 +240,9 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
         numero_errado:  'numero_errado',
         ligar_depois:   'ligar_depois',
         sem_cobertura:  'sem_cobertura',
+        desligado:              'desligado',
+        numero_nao_atribuido:   'numero_nao_atribuido',
+        pertence_outra_pessoa:  'pertence_outra_pessoa',
         outro:          'contactado',
       }
       await leadService.update(lead.id, { status: statusMap[selectedResult] })
