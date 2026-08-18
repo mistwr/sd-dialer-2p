@@ -15,6 +15,9 @@ export type LeadStatus =
   | 'numero_errado'
   | 'ligar_depois'
   | 'sem_cobertura'
+  | 'desligado'
+  | 'numero_nao_atribuido'
+  | 'pertence_outra_pessoa'
   | 'outro'
 export type LeadOrigem = 'importacao' | 'manual' | 'porta' | 'website' | 'facebook' | 'outro'
 export type CallResult =
@@ -153,6 +156,9 @@ export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
   numero_errado: 'Numero Errado',
   ligar_depois: 'Ligar Depois',
   sem_cobertura: 'Sem Cobertura',
+  desligado: 'Desligado',
+  numero_nao_atribuido: 'Nº Não Atribuído',
+  pertence_outra_pessoa: 'Pertence a Outra Pessoa',
   outro: 'Outro',
 }
 
@@ -199,6 +205,9 @@ export const STATUS_COLORS: Record<LeadStatus, string> = {
   numero_errado: '#7C3AED',
   ligar_depois: '#0891B2',
   sem_cobertura: '#EA580C',
+  desligado: '#991B1B',
+  numero_nao_atribuido: '#991B1B',
+  pertence_outra_pessoa: '#991B1B',
   outro: '#6B7280',
 }
 
