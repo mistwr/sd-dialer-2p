@@ -238,6 +238,7 @@ export default function LeadsAdminPage() {
   const [selected, setSelected] = useState<string[]>([])
   const [modal, setModal] = useState<{ type: 'lead' | 'import' | 'assign' | null; editing?: Lead }>({ type: null })
   const [exporting, setExporting] = useState(false)
+  const [deletingDuplicates, setDeletingDuplicates] = useState(false)
 
   const { data: campanhas = [] } = useSWR('campanhas', () => campanhaService.getAll())
   const { data: parceiros = [] } = useSWR('parceiros-list', async () => {
@@ -707,6 +708,40 @@ export default function LeadsAdminPage() {
           }}>
           Só duplicados {duplicateGroupsCount > 0 && `(${duplicateGroupsCount})`}
         </button>
+        {duplicatesOnly && duplicateGroupsCount > 0 && (
+          <button
+            disabled={deletingDuplicates}
+            onClick={async () => {
+              const empresaAlvo = empresaFiltro || profile?.company_id
+              if (!empresaAlvo) return
+              if (!confirm(
+                `Isto vai apagar as leads a mais em ${duplicateGroupsCount} grupo(s) de telefones duplicados, ` +
+                `mantendo em cada grupo a lead ja atribuida/com atividade (ou a mais recente). ` +
+                `Esta ação não pode ser desfeita. Continuar?`
+              )) return
+              setDeletingDuplicates(true)
+              try {
+                const sb = createClient()
+                const { data, error } = await sb.rpc('delete_duplicate_leads', { p_company_id: empresaAlvo })
+                if (error) throw error
+                alert(`${data} lead(s) duplicada(s) apagada(s).`)
+                setDuplicatesOnly(false)
+                mutate()
+              } catch (err: any) {
+                alert(`Erro ao apagar duplicados: ${err?.message || 'erro desconhecido'}`)
+              } finally {
+                setDeletingDuplicates(false)
+              }
+            }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 10,
+              border: '1.5px solid #FECACA', background: '#FEF2F2', color: '#991B1B',
+              fontWeight: 700, fontSize: 13, cursor: deletingDuplicates ? 'not-allowed' : 'pointer',
+              whiteSpace: 'nowrap', opacity: deletingDuplicates ? 0.6 : 1,
+            }}>
+            <Trash2 size={14} /> {deletingDuplicates ? 'A apagar...' : 'Eliminar duplicados'}
+          </button>
+        )}
         <button onClick={() => setEmpresarialAlerta(d => !d)}
           style={{
             display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 10,
