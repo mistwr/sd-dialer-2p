@@ -25,11 +25,13 @@ const STATUS_OPTS = [
 ]
 
 // ---- Lead Form ----
-function LeadForm({ initial, campanhas, companyId, onSave, onClose }: {
+function LeadForm({ initial, campanhas, companyId, currentUserId, parceiros, onSave, onClose }: {
   initial?: Partial<Lead>
   campanhas: any[]
   companyId: string
-  onSave: (d: Partial<Lead>, customFields: Record<string, any>, pipelineId: string) => Promise<void>
+  currentUserId?: string
+  parceiros: any[]
+  onSave: (d: Partial<Lead>, customFields: Record<string, any>, pipelineId: string, assignedTo: string) => Promise<void>
   onClose: () => void
 }) {
   const [form, setForm] = useState({
@@ -37,6 +39,7 @@ function LeadForm({ initial, campanhas, companyId, onSave, onClose }: {
     localidade: '', operador: '', observacoes: '', status: 'novo', campanha_id: '',
     ...initial,
   })
+  const [assignedTo, setAssignedTo] = useState<string>((initial as any)?.assigned_to ?? '')
   const [pipelines, setPipelines] = useState<{ id: string; nome: string }[]>([])
   const [pipelineId, setPipelineId] = useState<string>('')
   const [customDefs, setCustomDefs] = useState<CustomFieldDef[]>([])
@@ -79,7 +82,7 @@ function LeadForm({ initial, campanhas, companyId, onSave, onClose }: {
       try {
         const dup = await checkDuplicate()
         if (dup) { setError(dup); setSaving(false); return }
-        await onSave(form as Partial<Lead>, customValues, pipelineId)
+        await onSave(form as Partial<Lead>, customValues, pipelineId, assignedTo)
         onClose()
       }
       catch (err) { setError(err instanceof Error ? err.message : 'Erro ao guardar') }
@@ -150,6 +153,15 @@ function LeadForm({ initial, campanhas, companyId, onSave, onClose }: {
             {campanhas.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
+      </div>
+      <div>
+        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Atribuir a</label>
+        <select value={assignedTo} onChange={e => setAssignedTo(e.target.value)}
+          style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 14, outline: 'none', background: '#fff' }}>
+          <option value="">— Não atribuído —</option>
+          {currentUserId && <option value={currentUserId}>👤 A mim</option>}
+          {parceiros.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+        </select>
       </div>
       <div>
         <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Observacoes</label>
@@ -569,7 +581,7 @@ export default function LeadsAdminPage() {
     }
   }
 
-  const handleSaveLead = async (data: Partial<Lead>, customFields: Record<string, any>, pipelineId: string) => {
+  const handleSaveLead = async (data: Partial<Lead>, customFields: Record<string, any>, pipelineId: string, assignedTo: string) => {
     if (!profile?.company_id) throw new Error('Sem empresa associada')
     let pipelineEtapaId: string | null = null
     if (pipelineId) {
@@ -590,6 +602,7 @@ export default function LeadsAdminPage() {
         status: data.status,
         campanha_id: (data as any).campanha_id || null,
         custom_fields: customFields,
+        assigned_to: assignedTo || null,
       } as any)
     } else {
       await leadService.bulkInsert([{
@@ -607,6 +620,10 @@ export default function LeadsAdminPage() {
         imported_at: new Date().toISOString(),
         custom_fields: customFields,
         pipeline_etapa_id: pipelineEtapaId,
+        assigned_to: assignedTo || null,
+        // Escolheu explicitamente a quem atribuir (ou "nao atribuido") — nao
+        // deixa o robo de distribuicao automatica sobrepor essa escolha.
+        skip_auto_assign: !!assignedTo,
       } as any])
     }
     mutate()
@@ -893,6 +910,8 @@ export default function LeadsAdminPage() {
           initial={modal.editing}
           campanhas={campanhas}
           companyId={profile?.company_id ?? ''}
+          currentUserId={profile?.id}
+          parceiros={parceiros}
           onSave={handleSaveLead}
           onClose={() => setModal({ type: null })}
         />
