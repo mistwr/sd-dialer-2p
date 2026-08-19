@@ -107,8 +107,8 @@ export default function DistribuicaoPage() {
       }
       setResult({ assigned })
       mutate(); mutateCounts()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao distribuir')
+    } catch (err: any) {
+      setError(err?.message || err?.error_description || (err instanceof Error ? err.message : 'Erro ao distribuir'))
     } finally {
       setDistributing(false)
     }
