@@ -69,6 +69,7 @@ export interface Usuario {
   contrato_url: string | null
   tabela_comissoes_url: string | null
   onboarding_completo: boolean
+  is_super_admin?: boolean
 }
 
 export interface Campanha {
