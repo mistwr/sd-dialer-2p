@@ -205,30 +205,100 @@ function AssignModal({ leads, parceiros, onAssign, onClose }: {
   )
 }
 
+const PAGE_SIZE = 100
+
 // ---- Main Page ----
 export default function LeadsAdminPage() {
   const { profile } = useAuth()
 
-  const { data: leads = [], isLoading, mutate } = useSWR(
-    'leads-admin-v2',
-    () => leadService.getAll(),
-    { revalidateOnMount: true, dedupingInterval: 0 }
-  )
-  const { data: campanhas = [] } = useSWR('campanhas', () => campanhaService.getAll())
-  const { data: parceiros = [] } = useSWR('parceiros-list', async () => {
-    const all = await usuarioService.getAll()
-    return all.filter(u => u.role === 'parceiro' && u.status === 'active')
-  })
-
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [campanhaFilter, setCampanhaFilter] = useState('')
   const [origemFilter, setOrigemFilter] = useState('')
   const [fidelizacaoAno, setFidelizacaoAno] = useState('')
   const [fidelizacaoMes, setFidelizacaoMes] = useState('')
   const [duplicatesOnly, setDuplicatesOnly] = useState(false)
+  const [page, setPage] = useState(0)
   const [selected, setSelected] = useState<string[]>([])
   const [modal, setModal] = useState<{ type: 'lead' | 'import' | 'assign' | null; editing?: Lead }>({ type: null })
+  const [exporting, setExporting] = useState(false)
+
+  const { data: campanhas = [] } = useSWR('campanhas', () => campanhaService.getAll())
+  const { data: parceiros = [] } = useSWR('parceiros-list', async () => {
+    const all = await usuarioService.getAll()
+    return all.filter(u => u.role === 'parceiro' && u.status === 'active')
+  })
+
+  // Pesquisa em texto: espera 350ms depois de parar de escrever antes de ir
+  // a base de dados — evita um pedido por cada letra numa tabela grande.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 350)
+    return () => clearTimeout(t)
+  }, [search])
+
+  // Sempre que um filtro muda, volta a pagina 1
+  useEffect(() => { setPage(0) }, [debouncedSearch, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly])
+
+  // Telefones duplicados (calculado na base de dados, nao no telemovel — necessario
+  // porque com dezenas de milhares de leads nao da para carregar tudo so para comparar)
+  const { data: duplicateInfo } = useSWR(
+    duplicatesOnly && profile?.company_id ? ['dup-phones', profile.company_id] : null,
+    async () => {
+      const sb = createClient()
+      const { data, error } = await sb.rpc('get_duplicate_phones', { p_company_id: profile!.company_id })
+      if (error) throw error
+      return (data ?? []) as { telefone: string; total: number }[]
+    }
+  )
+  const duplicatePhonesList = (duplicateInfo ?? []).map(d => d.telefone).slice(0, 500)
+  const duplicateGroupsCount = duplicateInfo?.length ?? 0
+
+  function buildQuery(sb: ReturnType<typeof createClient>, { count }: { count: boolean }) {
+    let q = sb.from('leads').select(
+      '*, campanhas(id,name), parceiro:assigned_to(id,full_name,avatar_url), etapa:pipeline_etapa_id(id,nome)',
+      count ? { count: 'exact' } : undefined
+    )
+    if (profile?.company_id) q = q.eq('company_id', profile.company_id)
+    if (debouncedSearch) {
+      const s = debouncedSearch.replace(/[,()]/g, '')
+      q = q.or(`nome.ilike.%${s}%,telefone.ilike.%${s}%`)
+    }
+    if (statusFilter) q = q.eq('status', statusFilter)
+    if (campanhaFilter) q = q.eq('campanha_id', campanhaFilter)
+    if (origemFilter) q = q.eq('origem', origemFilter)
+    if (fidelizacaoAno && fidelizacaoMes) q = q.ilike('custom_fields->>data_fim_fidelizacao', `${fidelizacaoAno}-${fidelizacaoMes}-%`)
+    else if (fidelizacaoAno) q = q.ilike('custom_fields->>data_fim_fidelizacao', `${fidelizacaoAno}-%`)
+    else if (fidelizacaoMes) q = q.ilike('custom_fields->>data_fim_fidelizacao', `%-${fidelizacaoMes}-%`)
+    if (duplicatesOnly) q = q.in('telefone', duplicatePhonesList.length ? duplicatePhonesList : ['__none__'])
+    return q
+  }
+
+  const { data: pageResult, isLoading, mutate } = useSWR(
+    profile?.company_id && (!duplicatesOnly || duplicateInfo)
+      ? ['leads-page', profile.company_id, debouncedSearch, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly, page, duplicatePhonesList.join(',')]
+      : null,
+    async () => {
+      const sb = createClient()
+      const { data, error, count } = await buildQuery(sb, { count: true })
+        .order('created_at', { ascending: false })
+        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
+      if (error) throw error
+      return { rows: (data ?? []) as Lead[], total: count ?? 0 }
+    },
+    { keepPreviousData: true }
+  )
+
+  const leads = pageResult?.rows ?? []
+  const totalCount = pageResult?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const filtered = leads // mantem o nome usado no resto do ficheiro (render, export)
+
+  const toggleSelect = (id: string) =>
+    setSelected(sel => sel.includes(id) ? sel.filter(x => x !== id) : [...sel, id])
+  const toggleAll = () =>
+    setSelected(selected.length === leads.length ? [] : leads.map(l => l.id))
+
 
   // Import state
   const [importPreview, setImportPreview] = useState<any[] | null>(null)
@@ -243,34 +313,6 @@ export default function LeadsAdminPage() {
   const [duplicatesRemoved, setDuplicatesRemoved] = useState(0)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // Telefones que aparecem em mais do que uma lead — para o filtro "Só duplicados"
-  const duplicatePhones = new Set(
-    Object.entries(
-      leads.reduce((acc: Record<string, number>, l) => {
-        const t = l.telefone?.trim()
-        if (t) acc[t] = (acc[t] ?? 0) + 1
-        return acc
-      }, {})
-    ).filter(([, count]) => count > 1).map(([phone]) => phone)
-  )
-
-  const filtered = leads.filter(l => {
-    const q = search.toLowerCase()
-    const matchSearch = !q || l.nome.toLowerCase().includes(q) || l.telefone.includes(q)
-    const matchStatus = !statusFilter || l.status === statusFilter
-    const matchCampanha = !campanhaFilter || l.campanha_id === campanhaFilter
-    const matchOrigem = !origemFilter || l.origem === origemFilter
-    const dataFim = (l as any).custom_fields?.data_fim_fidelizacao as string | undefined
-    const matchFidAno = !fidelizacaoAno || (dataFim && dataFim.startsWith(fidelizacaoAno))
-    const matchFidMes = !fidelizacaoMes || (dataFim && dataFim.slice(5, 7) === fidelizacaoMes)
-    const matchDuplicates = !duplicatesOnly || duplicatePhones.has(l.telefone?.trim())
-    return matchSearch && matchStatus && matchCampanha && matchOrigem && matchFidAno && matchFidMes && matchDuplicates
-  })
-
-  const toggleSelect = (id: string) =>
-    setSelected(sel => sel.includes(id) ? sel.filter(x => x !== id) : [...sel, id])
-  const toggleAll = () =>
-    setSelected(selected.length === filtered.length ? [] : filtered.map(l => l.id))
 
   useEffect(() => {
     if (modal.type !== 'import' || !profile?.company_id) return
@@ -418,14 +460,34 @@ export default function LeadsAdminPage() {
     }
   }
 
-  const exportCSV = () => {
-    const cols = ['nome', 'telefone', 'email', 'status', 'operador', 'morada', 'localidade']
-    const header = cols.join(',')
-    const rows = filtered.map(l => cols.map(c => `"${(l as any)[c] ?? ''}"`).join(','))
-    const blob = new Blob([header + '\n' + rows.join('\n')], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = url; a.download = 'leads.csv'; a.click()
-    URL.revokeObjectURL(url)
+  const exportCSV = async () => {
+    setExporting(true)
+    try {
+      const sb = createClient()
+      const cols = ['nome', 'telefone', 'email', 'status', 'operador', 'morada', 'localidade']
+      const header = cols.join(',')
+      let all: Lead[] = []
+      let from = 0
+      const BATCH = 1000
+      while (true) {
+        const { data, error } = await buildQuery(sb, { count: false })
+          .order('created_at', { ascending: false })
+          .range(from, from + BATCH - 1)
+        if (error) throw error
+        const page = (data ?? []) as Lead[]
+        all = all.concat(page)
+        if (page.length < BATCH) break
+        from += BATCH
+        if (from > 100000) break // salvaguarda para nao correr indefinidamente
+      }
+      const rows = all.map(l => cols.map(c => `"${(l as any)[c] ?? ''}"`).join(','))
+      const blob = new Blob([header + '\n' + rows.join('\n')], { type: 'text/csv' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a'); a.href = url; a.download = 'leads.csv'; a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExporting(false)
+    }
   }
 
   const handleSaveLead = async (data: Partial<Lead>, customFields: Record<string, any>, pipelineId: string) => {
@@ -478,9 +540,9 @@ export default function LeadsAdminPage() {
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: 0 }}>Leads</h1>
           <p style={{ color: '#64748B', fontSize: 14, margin: '3px 0 0' }}>
-            {leads.length} total &middot; {filtered.length} filtrados
+            {totalCount.toLocaleString('pt-PT')} lead{totalCount !== 1 ? 's' : ''} &middot; página {page + 1} de {totalPages}
             {selected.length > 0 && (
-              <span style={{ color: '#2563EB', fontWeight: 600 }}> &middot; {selected.length} selecionados</span>
+              <span style={{ color: '#2563EB', fontWeight: 600 }}> &middot; {selected.length} selecionados nesta página</span>
             )}
           </p>
         </div>
@@ -501,9 +563,9 @@ export default function LeadsAdminPage() {
               </button>
             </>
           )}
-          <button onClick={exportCSV}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 10, background: '#F8FAFC', color: '#64748B', border: '1.5px solid #E2E8F0', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
-            <Download size={15} /> Exportar
+          <button onClick={exportCSV} disabled={exporting}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 10, background: '#F8FAFC', color: '#64748B', border: '1.5px solid #E2E8F0', fontWeight: 600, fontSize: 13, cursor: exporting ? 'not-allowed' : 'pointer', opacity: exporting ? 0.6 : 1 }}>
+            <Download size={15} /> {exporting ? 'A exportar...' : 'Exportar'}
           </button>
           <button onClick={() => { setImportPreview(null); setImportError(null); setModal({ type: 'import' }) }}
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 10, background: '#F0FDF4', color: '#16A34A', border: '1.5px solid #BBF7D0', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
@@ -538,7 +600,7 @@ export default function LeadsAdminPage() {
             color: duplicatesOnly ? '#B45309' : '#64748B',
             fontWeight: 600, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap',
           }}>
-          Só duplicados {duplicatePhones.size > 0 && `(${duplicatePhones.size})`}
+          Só duplicados {duplicateGroupsCount > 0 && `(${duplicateGroupsCount})`}
         </button>
         <select value={campanhaFilter} onChange={e => setCampanhaFilter(e.target.value)}
           style={{ padding: '9px 12px', borderRadius: 10, border: '1.5px solid #E2E8F0', fontSize: 13, outline: 'none', background: '#fff', color: campanhaFilter ? '#0F172A' : '#94A3B8' }}>
@@ -679,6 +741,37 @@ export default function LeadsAdminPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalCount > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 20 }}>
+          <button
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={page === 0}
+            style={{
+              padding: '8px 16px', borderRadius: 8, border: '1.5px solid #E2E8F0', background: '#fff',
+              fontSize: 13, fontWeight: 600, color: page === 0 ? '#CBD5E1' : '#374151',
+              cursor: page === 0 ? 'not-allowed' : 'pointer',
+            }}
+          >
+            ← Anterior
+          </button>
+          <span style={{ fontSize: 13, color: '#64748B' }}>
+            Página <strong style={{ color: '#0F172A' }}>{page + 1}</strong> de {totalPages}
+          </span>
+          <button
+            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+            style={{
+              padding: '8px 16px', borderRadius: 8, border: '1.5px solid #E2E8F0', background: '#fff',
+              fontSize: 13, fontWeight: 600, color: page >= totalPages - 1 ? '#CBD5E1' : '#374151',
+              cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer',
+            }}
+          >
+            Seguinte →
+          </button>
         </div>
       )}
 
