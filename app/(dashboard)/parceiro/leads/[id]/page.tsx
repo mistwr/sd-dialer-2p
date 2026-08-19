@@ -16,7 +16,6 @@ import { leadService, callHistoryService, followUpService } from '@/lib/services
 import { createClient } from '@/lib/supabase/client'
 import { CustomFieldsRenderer, fetchCustomFieldDefs, type CustomFieldDef } from '@/components/common/CustomFields'
 import type { Lead, CallResult, CallHistory } from '@/lib/types'
-import Link from 'next/link'
 import CallRecorder from '@/components/ai/CallRecorder'
 import AssistenteIA from '@/components/ai/AssistenteIA'
 import VendaIAChat from '@/components/ai/VendaIAChat'
@@ -310,6 +309,25 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
         custom_fields: editCustom,
       }).eq('id', lead.id)
       if (error) throw error
+
+      // "Retomar Chamada" com uma data marcada em "Data Proximo CTT" cria
+      // automaticamente um follow-up na Agenda, sem precisar de abrir o
+      // modal de Agendar Follow-up a parte.
+      const tipificacao = String(editCustom['tipificacao'] ?? '').trim().toLowerCase()
+      const dataProximoCtt = editCustom['data_proximo_ctt']
+      if (tipificacao === 'retomar chamada' && dataProximoCtt && user && profile?.company_id) {
+        try {
+          await followUpService.create({
+            lead_id: lead.id,
+            parceiro_id: user.id,
+            company_id: profile.company_id,
+            // Sem hora especifica no campo de data, agenda-se para as 09:00 por defeito
+            scheduled_at: new Date(`${dataProximoCtt}T09:00:00`).toISOString(),
+            notes: 'Retomar chamada (criado automaticamente a partir da Tipificacao)',
+          })
+        } catch { /* nao bloqueia o guardar da lead se a agenda falhar */ }
+      }
+
       setShowEdit(false)
       mutateLead()
     } finally {
