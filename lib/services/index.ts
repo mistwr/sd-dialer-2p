@@ -170,11 +170,15 @@ export const leadService = {
   },
   async assign(leadIds: string[], userId: string) {
     const sb = createClient()
-    const { error } = await sb
-      .from('leads')
-      .update({ assigned_to: userId })
-      .in('id', leadIds)
-    if (error) throw error
+    const CHUNK = 200
+    for (let i = 0; i < leadIds.length; i += CHUNK) {
+      const chunk = leadIds.slice(i, i + CHUNK)
+      const { error } = await sb
+        .from('leads')
+        .update({ assigned_to: userId })
+        .in('id', chunk)
+      if (error) throw error
+    }
   },
   async delete(id: string) {
     const sb = createClient()
