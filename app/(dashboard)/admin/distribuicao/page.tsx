@@ -19,10 +19,26 @@ export default function DistribuicaoPage() {
 
   const { data: campanhas = [] } = useSWR('campanhas-dist', () => campanhaService.getAll().catch(() => []))
 
-  const { data: allUnassigned = [], isLoading: loadingLeads, mutate } = useSWR(
-    'unassigned-leads',
-    () => leadService.getAll({ assigned_to: 'null' }).catch(() => [])
+  const { data: parceiros = [], isLoading: loadingParceiros } = useSWR(
+    profile?.company_id ? ['parceiros', profile.company_id] : null,
+    () => usuarioService.getByCompany(profile!.company_id!).then(u => u.filter(x => x.role === 'parceiro' && x.status === 'active'))
   )
+
+  // So o numero de leads por atribuir (nao a lista toda — com dezenas de milhares
+  // de leads, carregar tudo so para saber "quantas ha" trava a pagina).
+  const { data: unassignedCount = 0, isLoading: loadingLeads, mutate } = useSWR(
+    profile?.company_id ? ['unassigned-count', profile.company_id, campanhaFiltro] : null,
+    async () => {
+      const sb = createClient()
+      let q = sb.from('leads').select('id', { count: 'exact', head: true })
+        .eq('company_id', profile!.company_id!)
+        .is('assigned_to', null)
+      if (campanhaFiltro) q = q.eq('campanha_id', campanhaFiltro)
+      const { count } = await q
+      return count ?? 0
+    }
+  )
+
   const { data: parceiroCounts = {}, mutate: mutateCounts } = useSWR(
     parceiros.length > 0 ? ['parceiro-counts', parceiros.map(p => p.id).join(',')] : null,
     async () => {
@@ -38,10 +54,6 @@ export default function DistribuicaoPage() {
       return results
     }
   )
-  const { data: parceiros = [], isLoading: loadingParceiros } = useSWR(
-    profile?.company_id ? ['parceiros', profile.company_id] : null,
-    () => usuarioService.getByCompany(profile!.company_id!).then(u => u.filter(x => x.role === 'parceiro' && x.status === 'active'))
-  )
 
   // Selecionar todos os parceiros por omissao assim que chegam
   useEffect(() => {
@@ -49,8 +61,6 @@ export default function DistribuicaoPage() {
       setParceirosSelecionados(new Set(parceiros.map(p => p.id)))
     }
   }, [parceiros])
-
-  const unassigned = allUnassigned.filter(l => !campanhaFiltro || l.campanha_id === campanhaFiltro)
 
   const parceirosAtivos = parceiros.filter(p => parceirosSelecionados.has(p.id))
 
@@ -63,16 +73,36 @@ export default function DistribuicaoPage() {
   }
 
   const handleAutoDistribute = async () => {
-    if (!parceirosAtivos.length || !unassigned.length) return
+    if (!parceirosAtivos.length || !unassignedCount) return
     setDistributing(true); setError(null); setResult(null)
     try {
+      // So agora, ao distribuir de facto, vai buscar os IDs das leads por
+      // atribuir — em blocos, e so os IDs (nao a lead toda), para nao pesar.
+      const sb = createClient()
+      const ids: string[] = []
+      let from = 0
+      const BATCH = 1000
+      while (true) {
+        let q = sb.from('leads').select('id')
+          .eq('company_id', profile!.company_id!)
+          .is('assigned_to', null)
+          .range(from, from + BATCH - 1)
+        if (campanhaFiltro) q = q.eq('campanha_id', campanhaFiltro)
+        const { data, error: err } = await q
+        if (err) throw err
+        const page = data ?? []
+        ids.push(...page.map(r => r.id))
+        if (page.length < BATCH) break
+        from += BATCH
+      }
+
       // Round-robin distribution
       let assigned = 0
-      const batchSize = Math.ceil(unassigned.length / parceirosAtivos.length)
+      const batchSize = Math.ceil(ids.length / parceirosAtivos.length)
       for (let i = 0; i < parceirosAtivos.length; i++) {
-        const batch = unassigned.slice(i * batchSize, (i + 1) * batchSize)
+        const batch = ids.slice(i * batchSize, (i + 1) * batchSize)
         if (!batch.length) break
-        await leadService.assign(batch.map(l => l.id), parceirosAtivos[i].id)
+        await leadService.assign(batch, parceirosAtivos[i].id)
         assigned += batch.length
       }
       setResult({ assigned })
@@ -129,9 +159,9 @@ export default function DistribuicaoPage() {
           {/* Stats */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 16, marginBottom: 28 }}>
             {[
-              { label: 'Leads por Atribuir', value: unassigned.length, color: '#D97706', bg: '#FFFBEB' },
+              { label: 'Leads por Atribuir', value: unassignedCount, color: '#D97706', bg: '#FFFBEB' },
               { label: 'Parceiros Selecionados', value: parceirosAtivos.length, color: '#2563EB', bg: '#EFF6FF' },
-              { label: 'Por Parceiro', value: parceirosAtivos.length ? Math.ceil(unassigned.length / parceirosAtivos.length) : 0, color: '#16A34A', bg: '#F0FDF4' },
+              { label: 'Por Parceiro', value: parceirosAtivos.length ? Math.ceil(unassignedCount / parceirosAtivos.length) : 0, color: '#16A34A', bg: '#F0FDF4' },
             ].map(s => (
               <div key={s.label} style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                 <div style={{ fontSize: 30, fontWeight: 800, color: s.color, marginBottom: 4 }}>{s.value}</div>
@@ -160,17 +190,17 @@ export default function DistribuicaoPage() {
             )}
             <button
               onClick={handleAutoDistribute}
-              disabled={distributing || !unassigned.length || !parceirosAtivos.length}
+              disabled={distributing || !unassignedCount || !parceirosAtivos.length}
               style={{
                 display: 'flex', alignItems: 'center', gap: 9,
                 padding: '12px 24px', borderRadius: 10, border: 'none',
-                background: (!unassigned.length || !parceirosAtivos.length) ? '#94A3B8' : '#2563EB',
-                color: '#fff', fontWeight: 700, fontSize: 15, cursor: (!unassigned.length || !parceirosAtivos.length) ? 'not-allowed' : 'pointer',
+                background: (!unassignedCount || !parceirosAtivos.length) ? '#94A3B8' : '#2563EB',
+                color: '#fff', fontWeight: 700, fontSize: 15, cursor: (!unassignedCount || !parceirosAtivos.length) ? 'not-allowed' : 'pointer',
                 transition: 'background 0.15s',
               }}
             >
               <Shuffle size={18} />
-              {distributing ? 'A distribuir...' : `Distribuir ${unassigned.length} Leads`}
+              {distributing ? 'A distribuir...' : `Distribuir ${unassignedCount} Leads`}
             </button>
             {!parceirosAtivos.length && (
               <p style={{ margin: '12px 0 0', fontSize: 13, color: '#94A3B8' }}>Seleciona pelo menos um parceiro acima.</p>
