@@ -256,7 +256,7 @@ export default function LeadsAdminPage() {
 
   function buildQuery(sb: ReturnType<typeof createClient>, { count }: { count: boolean }) {
     let q = sb.from('leads').select(
-      '*, campanhas(id,name), parceiro:assigned_to(id,full_name,avatar_url), etapa:pipeline_etapa_id(id,nome)',
+      '*, campanhas!left(id,name), parceiro:assigned_to!left(id,full_name,avatar_url), etapa:pipeline_etapa_id!left(id,nome)',
       count ? { count: 'exact' } : undefined
     )
     // Nao filtra explicitamente por company_id aqui — a RLS da tabela leads
@@ -276,7 +276,7 @@ export default function LeadsAdminPage() {
     return q
   }
 
-  const { data: pageResult, isLoading, mutate } = useSWR(
+  const { data: pageResult, isLoading, error: pageError, mutate } = useSWR(
     profile && (!duplicatesOnly || duplicateInfo)
       ? ['leads-page', profile.id, debouncedSearch, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly, page, duplicatePhonesList.join(',')]
       : null,
@@ -642,7 +642,11 @@ export default function LeadsAdminPage() {
       </div>
 
       {/* Table */}
-      {isLoading ? <PageSpinner /> : !filtered.length ? (
+      {pageError ? (
+        <div style={{ background: '#FEF2F2', border: '1.5px solid #FECACA', borderRadius: 12, padding: '16px 20px', color: '#991B1B', fontSize: 13.5 }}>
+          <strong>Erro ao carregar leads:</strong> {pageError.message || String(pageError)}
+        </div>
+      ) : isLoading ? <PageSpinner /> : !filtered.length ? (
         <EmptyState icon={PhoneCall} title="Nenhuma lead encontrada" description="Importe ou adicione leads manualmente." action={
           <button onClick={() => { setImportPreview(null); setImportError(null); setImportHeaders([]); setDuplicatesRemoved(0); setModal({ type: 'import' }) }}
             style={{ padding: '9px 18px', borderRadius: 10, background: '#16A34A', color: '#fff', border: 'none', fontWeight: 600, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
