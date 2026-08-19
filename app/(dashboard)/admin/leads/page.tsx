@@ -6,7 +6,7 @@ import {
   PhoneCall, Plus, Search, Upload, UserCheck,
   Trash2, Download, Pencil, Phone,
 } from 'lucide-react'
-import { leadService, campanhaService, usuarioService } from '@/lib/services'
+import { leadService, campanhaService, usuarioService, followUpService } from '@/lib/services'
 import { parseFile } from '@/lib/utils/import-leads'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
@@ -377,14 +377,32 @@ export default function LeadsAdminPage() {
         observacoes: l.observacoes || null,
         company_id: profile.company_id ?? undefined,
         campanha_id: importCampanha || null,
-        status: 'novo' as const,
+        status: (l.status as any) ?? ('novo' as const),
         imported_at: new Date().toISOString(),
         custom_fields: l.custom_fields || {},
         pipeline_etapa_id: matchEtapaId(l.custom_fields) ?? pipelineEtapaId,
         assigned_to: assignedTo,
         skip_auto_assign: skipAutoAssign,
       }))
-      await leadService.bulkInsert(payload)
+      const inserted = await leadService.bulkInsert(payload)
+
+      // "Retomar Chamada" com Data Proximo CTT preenchida cria follow-up na
+      // Agenda automaticamente para cada lead importada nessas condicoes —
+      // mesma logica que ja existe ao editar uma lead a mao.
+      const followUpsToCreate = inserted.filter(l => {
+        const tip = String((l as any).custom_fields?.tipificacao ?? '').trim().toLowerCase()
+        return tip === 'retomar chamada' && (l as any).custom_fields?.data_proximo_ctt && l.assigned_to
+      })
+      if (followUpsToCreate.length > 0 && profile?.company_id) {
+        await Promise.allSettled(followUpsToCreate.map(l => followUpService.create({
+          lead_id: l.id,
+          parceiro_id: l.assigned_to!,
+          company_id: profile.company_id!,
+          scheduled_at: new Date(`${(l as any).custom_fields.data_proximo_ctt}T09:00:00`).toISOString(),
+          notes: 'Retomar chamada (criado automaticamente na importacao)',
+        })))
+      }
+
       mutate()
       setModal({ type: null })
       setImportPreview(null)
