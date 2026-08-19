@@ -219,6 +219,7 @@ export default function LeadsAdminPage() {
   const [fidelizacaoAno, setFidelizacaoAno] = useState('')
   const [fidelizacaoMes, setFidelizacaoMes] = useState('')
   const [duplicatesOnly, setDuplicatesOnly] = useState(false)
+  const [empresarialAlerta, setEmpresarialAlerta] = useState(false)
   const [page, setPage] = useState(0)
   const [selected, setSelected] = useState<string[]>([])
   const [modal, setModal] = useState<{ type: 'lead' | 'import' | 'assign' | null; editing?: Lead }>({ type: null })
@@ -255,6 +256,17 @@ export default function LeadsAdminPage() {
   const duplicateGroupsCount = duplicateInfo?.length ?? 0
 
   function buildQuery(sb: ReturnType<typeof createClient>, { count }: { count: boolean }) {
+    if (empresarialAlerta) {
+      // Vista dedicada: leads MEO Empresas / MEO Energia Empresas cuja
+      // fidelizacao termina nos proximos 6 meses — sem embeds (a view nao os expoe).
+      let q = sb.from('leads_fidelizacao_empresarial').select('*', count ? { count: 'exact' } : undefined)
+      if (debouncedSearch) {
+        const s = debouncedSearch.replace(/[,()]/g, '')
+        q = q.or(`nome.ilike.%${s}%,telefone.ilike.%${s}%`)
+      }
+      if (statusFilter) q = q.eq('status', statusFilter)
+      return q
+    }
     let q = sb.from('leads').select(
       '*, campanhas!left(id,name), parceiro:assigned_to!left(id,full_name,avatar_url), etapa:pipeline_etapa_id!left(id,nome)',
       count ? { count: 'exact' } : undefined
@@ -278,13 +290,17 @@ export default function LeadsAdminPage() {
 
   const { data: pageResult, isLoading, error: pageError, mutate } = useSWR(
     profile && (!duplicatesOnly || duplicateInfo)
-      ? ['leads-page', profile.id, debouncedSearch, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly, page, duplicatePhonesList.join(',')]
+      ? ['leads-page', profile.id, debouncedSearch, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly, empresarialAlerta, page, duplicatePhonesList.join(',')]
       : null,
     async () => {
       const sb = createClient()
-      const { data, error, count } = await buildQuery(sb, { count: true })
-        .order('created_at', { ascending: false })
-        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
+      let q = buildQuery(sb, { count: true })
+      // Ordem cronologica: nas leads normais, mais recentes primeiro; no aviso
+      // de fidelizacao, a terminar mais cedo primeiro (o mais urgente a topo).
+      q = empresarialAlerta
+        ? q.order('custom_fields->>data_fim_fidelizacao', { ascending: true })
+        : q.order('created_at', { ascending: false })
+      const { data, error, count } = await q.range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
       if (error) throw error
       return { rows: (data ?? []) as Lead[], total: count ?? 0 }
     },
@@ -603,6 +619,16 @@ export default function LeadsAdminPage() {
             fontWeight: 600, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap',
           }}>
           Só duplicados {duplicateGroupsCount > 0 && `(${duplicateGroupsCount})`}
+        </button>
+        <button onClick={() => setEmpresarialAlerta(d => !d)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 10,
+            border: empresarialAlerta ? '1.5px solid #16A34A' : '1.5px solid #E2E8F0',
+            background: empresarialAlerta ? '#F0FDF4' : '#fff',
+            color: empresarialAlerta ? '#166534' : '#64748B',
+            fontWeight: 600, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap',
+          }}>
+          📅 Fidelização a terminar (≤6 meses, Empresas)
         </button>
         <select value={campanhaFilter} onChange={e => setCampanhaFilter(e.target.value)}
           style={{ padding: '9px 12px', borderRadius: 10, border: '1.5px solid #E2E8F0', fontSize: 13, outline: 'none', background: '#fff', color: campanhaFilter ? '#0F172A' : '#94A3B8' }}>
