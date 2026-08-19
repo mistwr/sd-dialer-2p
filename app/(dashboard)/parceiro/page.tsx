@@ -1,13 +1,14 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import useSWR from 'swr'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import {
   PhoneCall, Search, ChevronRight, Clock, User,
   CheckCircle2, PhoneOff, PhoneMissed, AlertCircle,
   Calendar, Wifi, HelpCircle, Filter, Bell, Plus, X,
 } from 'lucide-react'
-import { Spinner } from '@/components/ui/Spinner'
+import { Spinner, PageSpinner } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { leadService, followUpService } from '@/lib/services'
@@ -83,7 +84,7 @@ function NovaLeadModal({ companyId, userId, onClose, onCreated }: {
         morada: morada.trim() || null, observacoes: observacoes.trim() || null,
         company_id: companyId, status: 'novo', imported_at: new Date().toISOString(),
         custom_fields: customValues, pipeline_etapa_id: pipelineEtapaId,
-        assigned_to: userId, skip_auto_assign: true,
+        assigned_to: userId, skip_auto_assign: true, priority: 1,
       })
       if (err) throw err
       onCreated()
@@ -161,12 +162,13 @@ function NovaLeadModal({ companyId, userId, onClose, onCreated }: {
   )
 }
 
-export default function ParceiroDashboardPage() {
+function ParceiroDashboardInner() {
   const { user, profile, loading: authLoading } = useAuth()
+  const searchParams = useSearchParams()
   const [search, setSearch] = useState('')
   const [showNovaLead, setShowNovaLead] = useState(false)
   const [filterStatus, setFilterStatus] = useState<LeadStatus | 'all'>('all')
-  const [filterCampanha, setFilterCampanha] = useState<string>('all')
+  const [filterCampanha, setFilterCampanha] = useState<string>(searchParams.get('campanha') ?? 'all')
 
   const { data: leads = [], isLoading, mutate: mutateLeads } = useSWR(
     user ? ['parceiro-leads', user.id] : null,
@@ -539,5 +541,13 @@ export default function ParceiroDashboardPage() {
         />
       )}
     </>
+  )
+}
+
+export default function ParceiroDashboardPage() {
+  return (
+    <Suspense fallback={<PageSpinner />}>
+      <ParceiroDashboardInner />
+    </Suspense>
   )
 }
