@@ -20,8 +20,13 @@ export default function DistribuicaoPage() {
   const { data: campanhas = [] } = useSWR('campanhas-dist', () => campanhaService.getAll().catch(() => []))
 
   const { data: parceiros = [], isLoading: loadingParceiros } = useSWR(
-    profile?.company_id ? ['parceiros', profile.company_id] : null,
-    () => usuarioService.getByCompany(profile!.company_id!).then(u => u.filter(x => x.role === 'parceiro' && x.status === 'active'))
+    profile?.company_id ? ['parceiros', profile.company_id, profile.is_super_admin] : null,
+    () => (
+      profile?.is_super_admin
+        // Super-admin: ve parceiros de TODAS as empresas, nao so a sua
+        ? usuarioService.getAll().then(u => u.filter(x => x.role === 'parceiro' && x.status === 'active'))
+        : usuarioService.getByCompany(profile!.company_id!).then(u => u.filter(x => x.role === 'parceiro' && x.status === 'active'))
+    )
   )
 
   // So o numero de leads por atribuir (nao a lista toda — com dezenas de milhares
