@@ -523,25 +523,47 @@ export default function LeadsAdminPage() {
       const sb = createClient()
       const cols = ['nome', 'telefone', 'email', 'status', 'operador', 'morada', 'localidade']
       const header = cols.join(',')
-      let all: Lead[] = []
+      let all: Record<string, unknown>[] = []
       let from = 0
-      const BATCH = 1000
+      const BATCH = 5000
       while (true) {
-        const { data, error } = await buildQuery(sb, { count: false })
-          .order('created_at', { ascending: false })
-          .range(from, from + BATCH - 1)
+        // Select so as colunas necessarias para o CSV (sem juntar campanhas/
+        // parceiro/etapa) — muito mais leve, o que importa a serio numa
+        // exportacao de dezenas de milhares de linhas.
+        let q = sb.from(
+          empresarialAlerta ? 'leads_fidelizacao_empresarial'
+          : residencialFollowup ? 'leads_followup_residencial'
+          : 'leads'
+        ).select(cols.join(','))
+        if (!empresarialAlerta && !residencialFollowup) {
+          if (empresaFiltro) q = q.eq('company_id', empresaFiltro)
+          if (statusFilter) q = q.eq('status', statusFilter)
+          if (campanhaFilter) q = q.eq('campanha_id', campanhaFilter)
+          if (origemFilter) q = q.eq('origem', origemFilter)
+          if (duplicatesOnly) q = q.in('telefone', duplicatePhonesList.length ? duplicatePhonesList : ['__none__'])
+        } else {
+          if (empresaFiltro) q = q.eq('company_id', empresaFiltro)
+          if (statusFilter) q = q.eq('status', statusFilter)
+        }
+        if (debouncedSearch) {
+          const s = debouncedSearch.replace(/[,()]/g, '')
+          q = q.or(`nome.ilike.%${s}%,telefone.ilike.%${s}%`)
+        }
+        const { data, error } = await q.range(from, from + BATCH - 1)
         if (error) throw error
-        const page = (data ?? []) as Lead[]
+        const page = (data ?? []) as unknown as Record<string, unknown>[]
         all = all.concat(page)
         if (page.length < BATCH) break
         from += BATCH
-        if (from > 100000) break // salvaguarda para nao correr indefinidamente
+        if (from > 200000) break // salvaguarda para nao correr indefinidamente
       }
-      const rows = all.map(l => cols.map(c => `"${(l as any)[c] ?? ''}"`).join(','))
+      const rows = all.map(l => cols.map(c => `"${String(l[c] ?? '').replace(/"/g, '""')}"`).join(','))
       const blob = new Blob([header + '\n' + rows.join('\n')], { type: 'text/csv' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a'); a.href = url; a.download = 'leads.csv'; a.click()
       URL.revokeObjectURL(url)
+    } catch (err: any) {
+      alert(`Erro ao exportar: ${err?.message || err?.error_description || 'erro desconhecido'}`)
     } finally {
       setExporting(false)
     }
