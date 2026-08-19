@@ -289,7 +289,7 @@ export default function LeadsAdminPage() {
       if (empresaFiltro) q = q.eq('company_id', empresaFiltro)
       if (debouncedSearch) {
         const s = debouncedSearch.replace(/[,()]/g, '')
-        q = q.or(`nome.ilike.%${s}%,telefone.ilike.%${s}%`)
+        q = q.or(`nome.ilike.%${s}%,telefone.ilike.%${s}%,custom_fields->>nif.ilike.%${s}%`)
       }
       if (statusFilter) q = q.eq('status', statusFilter)
       return q
@@ -300,7 +300,7 @@ export default function LeadsAdminPage() {
       if (empresaFiltro) q = q.eq('company_id', empresaFiltro)
       if (debouncedSearch) {
         const s = debouncedSearch.replace(/[,()]/g, '')
-        q = q.or(`nome.ilike.%${s}%,telefone.ilike.%${s}%`)
+        q = q.or(`nome.ilike.%${s}%,telefone.ilike.%${s}%,custom_fields->>nif.ilike.%${s}%`)
       }
       if (statusFilter) q = q.eq('status', statusFilter)
       return q
@@ -315,7 +315,7 @@ export default function LeadsAdminPage() {
     if (empresaFiltro) q = q.eq('company_id', empresaFiltro)
     if (debouncedSearch) {
       const s = debouncedSearch.replace(/[,()]/g, '')
-      q = q.or(`nome.ilike.%${s}%,telefone.ilike.%${s}%`)
+      q = q.or(`nome.ilike.%${s}%,telefone.ilike.%${s}%,custom_fields->>nif.ilike.%${s}%`)
     }
     if (statusFilter) q = q.eq('status', statusFilter)
     if (campanhaFilter) q = q.eq('campanha_id', campanhaFilter)
@@ -560,7 +560,7 @@ export default function LeadsAdminPage() {
         }
         if (debouncedSearch) {
           const s = debouncedSearch.replace(/[,()]/g, '')
-          q = q.or(`nome.ilike.%${s}%,telefone.ilike.%${s}%`)
+          q = q.or(`nome.ilike.%${s}%,telefone.ilike.%${s}%,custom_fields->>nif.ilike.%${s}%`)
         }
         const { data, error } = await q.range(from, from + BATCH - 1)
         if (error) throw error
@@ -688,7 +688,7 @@ export default function LeadsAdminPage() {
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
           <Search size={15} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
-          <input placeholder="Pesquisar nome ou telefone..." value={search} onChange={e => setSearch(e.target.value)}
+          <input placeholder="Pesquisar nome, telefone ou NIF..." value={search} onChange={e => setSearch(e.target.value)}
             style={{ width: '100%', padding: '9px 12px 9px 33px', borderRadius: 10, border: '1.5px solid #E2E8F0', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
             onFocus={e => e.target.style.borderColor = '#2563EB'}
             onBlur={e => e.target.style.borderColor = '#E2E8F0'} />
