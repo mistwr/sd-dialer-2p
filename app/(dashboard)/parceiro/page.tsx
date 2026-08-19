@@ -207,7 +207,8 @@ function ParceiroDashboardInner() {
         !search ||
         l.nome.toLowerCase().includes(search.toLowerCase()) ||
         l.telefone.includes(search) ||
-        (l.localidade ?? '').toLowerCase().includes(search.toLowerCase())
+        (l.localidade ?? '').toLowerCase().includes(search.toLowerCase()) ||
+        String((l as any).custom_fields?.nif ?? '').toLowerCase().includes(search.toLowerCase())
       const matchStatus = filterStatus === 'all' || l.status === filterStatus
       const matchCampanha = filterCampanha === 'all' || l.campanha_id === filterCampanha || (filterCampanha === 'sem' && !l.campanha_id)
       return matchSearch && matchStatus && matchCampanha
@@ -425,7 +426,7 @@ function ParceiroDashboardInner() {
           <div style={{ flex: '1 1 200px', position: 'relative' }}>
             <Search size={15} color="#94A3B8" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
             <input
-              placeholder="Pesquisar nome, telefone, localidade..."
+              placeholder="Pesquisar nome, telefone, NIF, localidade..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               style={{
