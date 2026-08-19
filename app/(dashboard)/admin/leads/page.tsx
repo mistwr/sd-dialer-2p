@@ -259,7 +259,9 @@ export default function LeadsAdminPage() {
       '*, campanhas(id,name), parceiro:assigned_to(id,full_name,avatar_url), etapa:pipeline_etapa_id(id,nome)',
       count ? { count: 'exact' } : undefined
     )
-    if (profile?.company_id) q = q.eq('company_id', profile.company_id)
+    // Nao filtra explicitamente por company_id aqui — a RLS da tabela leads
+    // ja trata disso (admin/supervisor veem a sua empresa, super-admin ve tudo).
+    // Um filtro extra aqui so pode reduzir o que aparece, nunca ajudar.
     if (debouncedSearch) {
       const s = debouncedSearch.replace(/[,()]/g, '')
       q = q.or(`nome.ilike.%${s}%,telefone.ilike.%${s}%`)
@@ -275,8 +277,8 @@ export default function LeadsAdminPage() {
   }
 
   const { data: pageResult, isLoading, mutate } = useSWR(
-    profile?.company_id && (!duplicatesOnly || duplicateInfo)
-      ? ['leads-page', profile.company_id, debouncedSearch, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly, page, duplicatePhonesList.join(',')]
+    profile && (!duplicatesOnly || duplicateInfo)
+      ? ['leads-page', profile.id, debouncedSearch, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly, page, duplicatePhonesList.join(',')]
       : null,
     async () => {
       const sb = createClient()
