@@ -99,17 +99,31 @@ export const campanhaService = {
 export const leadService = {
   async getAll(filters?: { campanha_id?: string; status?: string; assigned_to?: string; origem?: string }) {
     const sb = createClient()
-    let q = sb
-      .from('leads')
-      .select('*, campanhas(id,name), parceiro:assigned_to(id,full_name,avatar_url), etapa:pipeline_etapa_id(id,nome)')
-      .order('created_at', { ascending: false })
-    if (filters?.campanha_id) q = q.eq('campanha_id', filters.campanha_id)
-    if (filters?.status)      q = q.eq('status', filters.status)
-    if (filters?.assigned_to) q = q.eq('assigned_to', filters.assigned_to)
-    if (filters?.origem)      q = q.eq('origem', filters.origem)
-    const { data, error } = await q
-    if (error) throw error
-    return (data ?? []) as Lead[]
+    const PAGE = 1000
+    let all: Lead[] = []
+    let from = 0
+    // Supabase/PostgREST caps a single select at ~1000 rows by default.
+    // Loop with .range() until a page comes back short, so this always
+    // returns every matching row instead of silently truncating at 1000.
+    while (true) {
+      let q = sb
+        .from('leads')
+        .select('*, campanhas(id,name), parceiro:assigned_to(id,full_name,avatar_url), etapa:pipeline_etapa_id(id,nome)')
+        .order('created_at', { ascending: false })
+        .range(from, from + PAGE - 1)
+      if (filters?.campanha_id) q = q.eq('campanha_id', filters.campanha_id)
+      if (filters?.status)      q = q.eq('status', filters.status)
+      if (filters?.assigned_to === 'null') q = q.is('assigned_to', null)
+      else if (filters?.assigned_to) q = q.eq('assigned_to', filters.assigned_to)
+      if (filters?.origem)      q = q.eq('origem', filters.origem)
+      const { data, error } = await q
+      if (error) throw error
+      const page = (data ?? []) as Lead[]
+      all = all.concat(page)
+      if (page.length < PAGE) break
+      from += PAGE
+    }
+    return all
   },
   async getById(id: string) {
     const sb = createClient()
@@ -123,14 +137,24 @@ export const leadService = {
   },
   async getAssigned(userId: string) {
     const sb = createClient()
-    const { data, error } = await sb
-      .from('leads')
-      .select('*, campanhas(id,name)')
-      .eq('assigned_to', userId)
-      .order('priority', { ascending: false })
-      .order('created_at', { ascending: true })
-    if (error) throw error
-    return (data ?? []) as Lead[]
+    const PAGE = 1000
+    let all: Lead[] = []
+    let from = 0
+    while (true) {
+      const { data, error } = await sb
+        .from('leads')
+        .select('*, campanhas(id,name)')
+        .eq('assigned_to', userId)
+        .order('priority', { ascending: false })
+        .order('created_at', { ascending: true })
+        .range(from, from + PAGE - 1)
+      if (error) throw error
+      const page = (data ?? []) as Lead[]
+      all = all.concat(page)
+      if (page.length < PAGE) break
+      from += PAGE
+    }
+    return all
   },
   async update(id: string, payload: Partial<Lead>) {
     const sb = createClient()
