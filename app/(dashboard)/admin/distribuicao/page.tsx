@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import useSWR from 'swr'
 import { Users, PhoneCall, Shuffle, CheckCircle2, AlertCircle, UserCheck } from 'lucide-react'
 import { leadService, usuarioService, campanhaService } from '@/lib/services'
+import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -22,9 +23,20 @@ export default function DistribuicaoPage() {
     'unassigned-leads',
     () => leadService.getAll({ assigned_to: 'null' }).catch(() => [])
   )
-  const { data: allLeads = [], mutate: mutateAll } = useSWR(
-    'all-leads-dist',
-    () => leadService.getAll().catch(() => [])
+  const { data: parceiroCounts = {}, mutate: mutateCounts } = useSWR(
+    parceiros.length > 0 ? ['parceiro-counts', parceiros.map(p => p.id).join(',')] : null,
+    async () => {
+      const sb = createClient()
+      const results: Record<string, { leads: number; vendidas: number }> = {}
+      await Promise.all(parceiros.map(async (p) => {
+        const [{ count: leadsCount }, { count: vendidasCount }] = await Promise.all([
+          sb.from('leads').select('id', { count: 'exact', head: true }).eq('assigned_to', p.id),
+          sb.from('leads').select('id', { count: 'exact', head: true }).eq('assigned_to', p.id).eq('status', 'vendido'),
+        ])
+        results[p.id] = { leads: leadsCount ?? 0, vendidas: vendidasCount ?? 0 }
+      }))
+      return results
+    }
   )
   const { data: parceiros = [], isLoading: loadingParceiros } = useSWR(
     profile?.company_id ? ['parceiros', profile.company_id] : null,
@@ -64,7 +76,7 @@ export default function DistribuicaoPage() {
         assigned += batch.length
       }
       setResult({ assigned })
-      mutate(); mutateAll()
+      mutate(); mutateCounts()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao distribuir')
     } finally {
@@ -173,8 +185,7 @@ export default function DistribuicaoPage() {
                 <span style={{ fontSize: 12, color: '#64748B' }}>{parceiros.length} parceiro{parceiros.length !== 1 ? 's' : ''}</span>
               </div>
               {parceiros.map((p, i) => {
-                const pLeads = allLeads.filter(l => l.assigned_to === p.id)
-                const pSold  = pLeads.filter(l => l.status === 'vendido').length
+                const pCounts = parceiroCounts[p.id] ?? { leads: 0, vendidas: 0 }
                 return (
                   <div key={p.id} style={{
                     display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px',
@@ -189,12 +200,12 @@ export default function DistribuicaoPage() {
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: '#2563EB' }}>{pLeads.length}</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: '#2563EB' }}>{pCounts.leads}</div>
                         <div style={{ fontSize: 10, color: '#94A3B8' }}>leads</div>
                       </div>
                       <div style={{ width: 1, height: 28, background: '#E2E8F0' }} />
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: '#16A34A' }}>{pSold}</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: '#16A34A' }}>{pCounts.vendidas}</div>
                         <div style={{ fontSize: 10, color: '#94A3B8' }}>vendas</div>
                       </div>
                       <div style={{ width: 1, height: 28, background: '#E2E8F0' }} />
