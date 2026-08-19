@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { use } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import useSWR from 'swr'
 import {
   Phone, MessageCircle, MapPin, ChevronLeft, Clock,
@@ -377,6 +378,19 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
             </div>
 
             <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+              {(lead as any).campanhas && (
+                <Link
+                  href={`/parceiro?campanha=${(lead as any).campanhas.id}`}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)',
+                    background: 'rgba(255,255,255,0.06)', color: '#E2E8F0', fontSize: 12.5, fontWeight: 600,
+                    textDecoration: 'none',
+                  }}
+                >
+                  🎯 {(lead as any).campanhas.name}
+                </Link>
+              )}
               <button
                 onClick={() => setShowFollowUp(true)}
                 style={{
