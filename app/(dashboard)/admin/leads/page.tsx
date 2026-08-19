@@ -221,6 +221,7 @@ export default function LeadsAdminPage() {
   const [duplicatesOnly, setDuplicatesOnly] = useState(false)
   const [empresarialAlerta, setEmpresarialAlerta] = useState(false)
   const [residencialFollowup, setResidencialFollowup] = useState(false)
+  const [empresaFiltro, setEmpresaFiltro] = useState('') // vazio = todas as empresas (so super-admin)
   const [page, setPage] = useState(0)
   const [selected, setSelected] = useState<string[]>([])
   const [modal, setModal] = useState<{ type: 'lead' | 'import' | 'assign' | null; editing?: Lead }>({ type: null })
@@ -231,6 +232,17 @@ export default function LeadsAdminPage() {
     const all = await usuarioService.getAll()
     return all.filter(u => u.role === 'parceiro' && u.status === 'active')
   })
+  const { data: empresas = [] } = useSWR(
+    profile?.is_super_admin ? 'empresas-leads' : null,
+    async () => {
+      const sb = createClient()
+      const { data } = await sb.from('companies').select('id, name').order('name')
+      return data ?? []
+    }
+  )
+  // Para os avisos especiais (duplicados/fidelizacao/follow-up), que precisam de UMA
+  // empresa concreta: usa a escolhida, ou a propria empresa do utilizador por defeito.
+  const empresaParaVistas = empresaFiltro || profile?.company_id || ''
 
   // Pesquisa em texto: espera 350ms depois de parar de escrever antes de ir
   // a base de dados — evita um pedido por cada letra numa tabela grande.
@@ -240,15 +252,15 @@ export default function LeadsAdminPage() {
   }, [search])
 
   // Sempre que um filtro muda, volta a pagina 1
-  useEffect(() => { setPage(0) }, [debouncedSearch, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly, empresarialAlerta, residencialFollowup])
+  useEffect(() => { setPage(0) }, [debouncedSearch, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly, empresarialAlerta, residencialFollowup, empresaFiltro])
 
   // Telefones duplicados (calculado na base de dados, nao no telemovel — necessario
   // porque com dezenas de milhares de leads nao da para carregar tudo so para comparar)
   const { data: duplicateInfo } = useSWR(
-    duplicatesOnly && profile?.company_id ? ['dup-phones', profile.company_id] : null,
+    duplicatesOnly && empresaParaVistas ? ['dup-phones', empresaParaVistas] : null,
     async () => {
       const sb = createClient()
-      const { data, error } = await sb.rpc('get_duplicate_phones', { p_company_id: profile!.company_id })
+      const { data, error } = await sb.rpc('get_duplicate_phones', { p_company_id: empresaParaVistas })
       if (error) throw error
       return (data ?? []) as { telefone: string; total: number }[]
     }
@@ -261,6 +273,7 @@ export default function LeadsAdminPage() {
       // Vista dedicada: leads MEO Empresas / MEO Energia Empresas cuja
       // fidelizacao termina nos proximos 6 meses — sem embeds (a view nao os expoe).
       let q = sb.from('leads_fidelizacao_empresarial').select('*', count ? { count: 'exact' } : undefined)
+      if (empresaFiltro) q = q.eq('company_id', empresaFiltro)
       if (debouncedSearch) {
         const s = debouncedSearch.replace(/[,()]/g, '')
         q = q.or(`nome.ilike.%${s}%,telefone.ilike.%${s}%`)
@@ -271,6 +284,7 @@ export default function LeadsAdminPage() {
     if (residencialFollowup) {
       // Residencial sem fidelizacao: follow-up devido 4 meses depois de criada a lead.
       let q = sb.from('leads_followup_residencial').select('*', count ? { count: 'exact' } : undefined)
+      if (empresaFiltro) q = q.eq('company_id', empresaFiltro)
       if (debouncedSearch) {
         const s = debouncedSearch.replace(/[,()]/g, '')
         q = q.or(`nome.ilike.%${s}%,telefone.ilike.%${s}%`)
@@ -282,9 +296,10 @@ export default function LeadsAdminPage() {
       '*, campanhas!left(id,name), parceiro:assigned_to!left(id,full_name,avatar_url), etapa:pipeline_etapa_id!left(id,nome)',
       count ? { count: 'exact' } : undefined
     )
-    // Nao filtra explicitamente por company_id aqui — a RLS da tabela leads
-    // ja trata disso (admin/supervisor veem a sua empresa, super-admin ve tudo).
-    // Um filtro extra aqui so pode reduzir o que aparece, nunca ajudar.
+    // Sem filtro de empresa aqui por defeito — a RLS ja trata disso (admin/supervisor
+    // veem a sua empresa, super-admin ve tudo). So filtra explicitamente se o
+    // super-admin tiver escolhido uma empresa especifica no seletor.
+    if (empresaFiltro) q = q.eq('company_id', empresaFiltro)
     if (debouncedSearch) {
       const s = debouncedSearch.replace(/[,()]/g, '')
       q = q.or(`nome.ilike.%${s}%,telefone.ilike.%${s}%`)
@@ -311,7 +326,7 @@ export default function LeadsAdminPage() {
 
   const { data: pageResult, isLoading, error: pageError, mutate } = useSWR(
     profile && (!duplicatesOnly || duplicateInfo)
-      ? ['leads-page', profile.id, debouncedSearch, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly, empresarialAlerta, residencialFollowup, page, duplicatePhonesList.join(',')]
+      ? ['leads-page', profile.id, debouncedSearch, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly, empresarialAlerta, residencialFollowup, empresaFiltro, page, duplicatePhonesList.join(',')]
       : null,
     async () => {
       const sb = createClient()
@@ -621,6 +636,15 @@ export default function LeadsAdminPage() {
       </div>
 
       {/* Filters */}
+      {profile?.is_super_admin && (
+        <div style={{ marginBottom: 12 }}>
+          <select value={empresaFiltro} onChange={e => setEmpresaFiltro(e.target.value)}
+            style={{ padding: '9px 12px', borderRadius: 10, border: '1.5px solid #C7D2FE', background: '#EEF2FF', fontSize: 13, fontWeight: 700, color: '#3730A3', outline: 'none' }}>
+            <option value="">🌐 Todas as empresas</option>
+            {empresas.map((e: any) => <option key={e.id} value={e.id}>{e.name}</option>)}
+          </select>
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
           <Search size={15} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
