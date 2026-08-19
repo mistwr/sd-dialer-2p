@@ -220,6 +220,7 @@ export default function LeadsAdminPage() {
   const [fidelizacaoMes, setFidelizacaoMes] = useState('')
   const [duplicatesOnly, setDuplicatesOnly] = useState(false)
   const [empresarialAlerta, setEmpresarialAlerta] = useState(false)
+  const [residencialFollowup, setResidencialFollowup] = useState(false)
   const [page, setPage] = useState(0)
   const [selected, setSelected] = useState<string[]>([])
   const [modal, setModal] = useState<{ type: 'lead' | 'import' | 'assign' | null; editing?: Lead }>({ type: null })
@@ -239,7 +240,7 @@ export default function LeadsAdminPage() {
   }, [search])
 
   // Sempre que um filtro muda, volta a pagina 1
-  useEffect(() => { setPage(0) }, [debouncedSearch, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly])
+  useEffect(() => { setPage(0) }, [debouncedSearch, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly, empresarialAlerta, residencialFollowup])
 
   // Telefones duplicados (calculado na base de dados, nao no telemovel — necessario
   // porque com dezenas de milhares de leads nao da para carregar tudo so para comparar)
@@ -267,6 +268,16 @@ export default function LeadsAdminPage() {
       if (statusFilter) q = q.eq('status', statusFilter)
       return q
     }
+    if (residencialFollowup) {
+      // Residencial sem fidelizacao: follow-up devido 4 meses depois de criada a lead.
+      let q = sb.from('leads_followup_residencial').select('*', count ? { count: 'exact' } : undefined)
+      if (debouncedSearch) {
+        const s = debouncedSearch.replace(/[,()]/g, '')
+        q = q.or(`nome.ilike.%${s}%,telefone.ilike.%${s}%`)
+      }
+      if (statusFilter) q = q.eq('status', statusFilter)
+      return q
+    }
     let q = sb.from('leads').select(
       '*, campanhas!left(id,name), parceiro:assigned_to!left(id,full_name,avatar_url), etapa:pipeline_etapa_id!left(id,nome)',
       count ? { count: 'exact' } : undefined
@@ -281,24 +292,37 @@ export default function LeadsAdminPage() {
     if (statusFilter) q = q.eq('status', statusFilter)
     if (campanhaFilter) q = q.eq('campanha_id', campanhaFilter)
     if (origemFilter) q = q.eq('origem', origemFilter)
-    if (fidelizacaoAno && fidelizacaoMes) q = q.ilike('custom_fields->>data_fim_fidelizacao', `${fidelizacaoAno}-${fidelizacaoMes}-%`)
-    else if (fidelizacaoAno) q = q.ilike('custom_fields->>data_fim_fidelizacao', `${fidelizacaoAno}-%`)
-    else if (fidelizacaoMes) q = q.ilike('custom_fields->>data_fim_fidelizacao', `%-${fidelizacaoMes}-%`)
+    // Comparacoes por intervalo de texto (>=/<) em vez de ILIKE com % — o texto
+    // esta em formato ISO (YYYY-MM-DD), que ordena corretamente como texto, e isto
+    // permite usar o indice novo (ILIKE com % nao consegue). O caso "so mes, sem
+    // ano" fica sem indice (teria de comparar todos os anos), mas e um filtro raro.
+    if (fidelizacaoAno && fidelizacaoMes) {
+      q = q.gte('custom_fields->>data_fim_fidelizacao', `${fidelizacaoAno}-${fidelizacaoMes}-01`)
+           .lt('custom_fields->>data_fim_fidelizacao', `${fidelizacaoAno}-${fidelizacaoMes}-32`)
+    } else if (fidelizacaoAno) {
+      q = q.gte('custom_fields->>data_fim_fidelizacao', `${fidelizacaoAno}-01-01`)
+           .lt('custom_fields->>data_fim_fidelizacao', `${Number(fidelizacaoAno) + 1}-01-01`)
+    } else if (fidelizacaoMes) {
+      q = q.ilike('custom_fields->>data_fim_fidelizacao', `%-${fidelizacaoMes}-%`)
+    }
     if (duplicatesOnly) q = q.in('telefone', duplicatePhonesList.length ? duplicatePhonesList : ['__none__'])
     return q
   }
 
   const { data: pageResult, isLoading, error: pageError, mutate } = useSWR(
     profile && (!duplicatesOnly || duplicateInfo)
-      ? ['leads-page', profile.id, debouncedSearch, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly, empresarialAlerta, page, duplicatePhonesList.join(',')]
+      ? ['leads-page', profile.id, debouncedSearch, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly, empresarialAlerta, residencialFollowup, page, duplicatePhonesList.join(',')]
       : null,
     async () => {
       const sb = createClient()
       let q = buildQuery(sb, { count: true })
       // Ordem cronologica: nas leads normais, mais recentes primeiro; no aviso
-      // de fidelizacao, a terminar mais cedo primeiro (o mais urgente a topo).
+      // de fidelizacao, a terminar mais cedo primeiro; no follow-up residencial,
+      // as mais atrasadas (criadas ha mais tempo) primeiro.
       q = empresarialAlerta
         ? q.order('custom_fields->>data_fim_fidelizacao', { ascending: true })
+        : residencialFollowup
+        ? q.order('created_at', { ascending: true })
         : q.order('created_at', { ascending: false })
       const { data, error, count } = await q.range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
       if (error) throw error
@@ -629,6 +653,16 @@ export default function LeadsAdminPage() {
             fontWeight: 600, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap',
           }}>
           📅 Fidelização a terminar (≤6 meses, Empresas)
+        </button>
+        <button onClick={() => setResidencialFollowup(d => !d)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 10,
+            border: residencialFollowup ? '1.5px solid #0891B2' : '1.5px solid #E2E8F0',
+            background: residencialFollowup ? '#ECFEFF' : '#fff',
+            color: residencialFollowup ? '#0E7490' : '#64748B',
+            fontWeight: 600, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap',
+          }}>
+          📞 Follow-up Residencial (4 meses)
         </button>
         <select value={campanhaFilter} onChange={e => setCampanhaFilter(e.target.value)}
           style={{ padding: '9px 12px', borderRadius: 10, border: '1.5px solid #E2E8F0', fontSize: 13, outline: 'none', background: '#fff', color: campanhaFilter ? '#0F172A' : '#94A3B8' }}>
