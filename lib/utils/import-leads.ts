@@ -303,8 +303,13 @@ export function parseFile(file: File, customDefs: CustomFieldDefLite[] = []): Pr
                 } else {
                   const m = val.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/)
                   if (m) {
-                    const [, d, mo, y] = m
+                    let [, d, mo, y] = m
                     const year = y.length === 2 ? `20${y}` : y
+                    // Se o "mes" nao existe (>12), o ficheiro estava afinal em formato
+                    // texto MM/DD (americano) em vez de DD/MM (portugues) — troca.
+                    if (parseInt(mo, 10) > 12 && parseInt(d, 10) <= 12) {
+                      ;[d, mo] = [mo, d]
+                    }
                     val = `${year}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`
                   }
                 }
