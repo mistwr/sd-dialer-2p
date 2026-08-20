@@ -498,12 +498,12 @@ export default function LeadsAdminPage() {
       }))
       const inserted = await leadService.bulkInsert(payload)
 
-      // "Retomar Chamada" com Data Proximo CTT preenchida cria follow-up na
-      // Agenda automaticamente para cada lead importada nessas condicoes —
+      // Qualquer lead importada com "Data Proximo CTT" preenchida cria automaticamente
+      // um follow-up na Agenda (independentemente da tipificacao/tipo CTT usado) —
       // mesma logica que ja existe ao editar uma lead a mao.
       const followUpsToCreate = inserted.filter(l => {
-        const tip = String((l as any).custom_fields?.tipificacao ?? '').trim().toLowerCase()
-        return tip === 'retomar chamada' && (l as any).custom_fields?.data_proximo_ctt && l.assigned_to
+        const dpc = (l as any).custom_fields?.data_proximo_ctt
+        return !!dpc && /^\d{4}-\d{2}-\d{2}$/.test(dpc) && l.assigned_to
       })
       if (followUpsToCreate.length > 0 && profile?.company_id) {
         await Promise.allSettled(followUpsToCreate.map(l => followUpService.create({
@@ -511,7 +511,7 @@ export default function LeadsAdminPage() {
           parceiro_id: l.assigned_to!,
           company_id: profile.company_id!,
           scheduled_at: new Date(`${(l as any).custom_fields.data_proximo_ctt}T09:00:00`).toISOString(),
-          notes: 'Retomar chamada (criado automaticamente na importacao)',
+          notes: 'Criado automaticamente na importacao',
         })))
       }
 
