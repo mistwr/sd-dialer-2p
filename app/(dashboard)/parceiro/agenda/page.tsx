@@ -12,7 +12,7 @@ async function fetchFollowUps(userId: string) {
   const sb = createClient()
   const { data, error } = await sb
     .from('follow_ups')
-    .select('*, lead:lead_id(id,nome,telefone,campanha_id,campanhas(id,name))')
+    .select('*, lead:lead_id(id,nome,telefone,campanha_id,campanhas(id,name),custom_fields,observacoes)')
     .eq('parceiro_id', userId)
     .eq('done', false)
     .order('scheduled_at', { ascending: true })
@@ -183,6 +183,25 @@ export default function AgendaPage() {
                             {new Date(fu.scheduled_at).toLocaleString('pt-PT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                             {fu.notes && <> &middot; {fu.notes}</>}
                           </div>
+                          {(() => {
+                            const cf = fu.lead?.custom_fields as Record<string, string> | undefined
+                            const parts: string[] = []
+                            if (cf?.tipo_ctt) parts.push(cf.tipo_ctt)
+                            if (cf?.nome_empresa) parts.push(cf.nome_empresa)
+                            if (cf?.nif) parts.push(`NIF ${cf.nif}`)
+                            if (cf?.tipificacao) parts.push(cf.tipificacao)
+                            if (cf?.pacote || cf?.pacote_atual) parts.push(cf.pacote ?? cf.pacote_atual)
+                            if (cf?.data_fim_fidelizacao) parts.push(`Fideliza ate ${cf.data_fim_fidelizacao.slice(8,10)}/${cf.data_fim_fidelizacao.slice(5,7)}/${cf.data_fim_fidelizacao.slice(0,4)}`)
+                            if (fu.lead?.observacoes) parts.push(fu.lead.observacoes)
+                            if (parts.length === 0) return null
+                            return (
+                              <div style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 3, display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                                {parts.map((p, i) => (
+                                  <span key={i} style={{ background: '#F8FAFC', border: '1px solid #F1F5F9', borderRadius: 999, padding: '1px 8px' }}>{p}</span>
+                                ))}
+                              </div>
+                            )
+                          })()}
                         </div>
                         <ChevronRight size={15} color="#CBD5E1" style={{ flexShrink: 0 }} />
                       </Link>
