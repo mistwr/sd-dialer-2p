@@ -30,7 +30,7 @@ const NAV: NavItem[] = [
   { label: 'Leads',        href: '/admin/leads',          icon: PhoneCall,       roles: ['admin', 'supervisor'] },
   { label: 'Distribuicao', href: '/admin/distribuicao',   icon: Shuffle,         roles: ['admin', 'supervisor'] },
   { label: 'Relatorios',   href: '/admin/relatorios',     icon: BarChart2,       roles: ['admin', 'supervisor'] },
-  { label: 'Relat. Porta', href: '/admin/relatorio-porta', icon: MapPin,         roles: ['admin', 'supervisor'] },
+  { label: 'Relatório',    href: '/admin/relatorio-porta', icon: MapPin,         roles: ['admin', 'supervisor'] },
   { label: 'IA Dashboard', href: '/admin/ia',             icon: Brain,           roles: ['admin', 'supervisor'] },
   { label: 'Assist. IA',  href: '/admin/assistente-ia',  icon: Brain,           roles: ['admin', 'supervisor'] },
   { label: 'Supervisor',   href: '/supervisor',           icon: LayoutDashboard, roles: ['supervisor'] },
