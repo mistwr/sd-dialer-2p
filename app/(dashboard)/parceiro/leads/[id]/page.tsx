@@ -40,6 +40,22 @@ function formatDuration(seconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
+const CUSTOM_FIELD_LABELS: Record<string, string> = {
+  tipo_ctt: 'Tipo CTT',
+  viabilidade: 'Viabilidade',
+  nif: 'NIF',
+  info_fiscal: 'Info Fiscal',
+  pacote_atual: 'Pacote Atual',
+  data_proximo_ctt: 'Data Proximo CTT',
+  nome_empresa: 'Nome da Empresa',
+  tipificacao: 'Tipificacao',
+  data_fim_fidelizacao: 'Data Fim Fidelizacao',
+  pacote: 'Pacote',
+  cpe: 'CPE (Eletricidade)',
+  cui: 'CUI (Gas)',
+  potencia: 'Potencia Contratada',
+}
+
 export default function LeadCallPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const { user, profile } = useAuth()
@@ -833,6 +849,11 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
               { Icon: Hash,      label: 'Cod. Postal',   value: lead.codigo_postal },
               { Icon: MapPin,    label: 'Localidade',    value: lead.localidade },
               { Icon: Wifi,      label: 'Operador',      value: lead.operador },
+              ...Object.entries((lead as any).custom_fields ?? {}).map(([key, val]) => ({
+                Icon: Hash,
+                label: CUSTOM_FIELD_LABELS[key] ?? key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+                value: String(val ?? ''),
+              })),
               { Icon: FileText,  label: 'Observacoes',   value: lead.observacoes },
             ]
               .filter(f => f.value)
