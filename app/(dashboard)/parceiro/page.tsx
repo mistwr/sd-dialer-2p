@@ -33,6 +33,10 @@ const STATUS_META: Record<LeadStatus, { label: string; color: string; bg: string
 
 const PRIORITY_STATUSES: LeadStatus[] = ['novo', 'ligar_depois', 'contactado']
 
+// Estados que ja nao valem a pena aparecer misturados na fila principal de chamadas —
+// ficam acessiveis num separador proprio, nunca escondidos por completo.
+const DEAD_STATUSES: LeadStatus[] = ['desligado', 'nao_interessado', 'numero_errado', 'sem_cobertura', 'numero_nao_atribuido', 'pertence_outra_pessoa']
+
 // ── Modal: adicionar contacto manualmente, sem passar por importacao ─────────
 function NovaLeadModal({ companyId, userId, onClose, onCreated }: {
   companyId: string; userId: string; onClose: () => void; onCreated: () => void
@@ -169,6 +173,7 @@ function ParceiroDashboardInner() {
   const [showNovaLead, setShowNovaLead] = useState(false)
   const [filterStatus, setFilterStatus] = useState<LeadStatus | 'all'>('all')
   const [filterCampanha, setFilterCampanha] = useState<string>(searchParams.get('campanha') ?? 'all')
+  const [viewMode, setViewMode] = useState<'ativas' | 'mortas' | 'todas'>('ativas')
 
   const { data: leads = [], isLoading, mutate: mutateLeads } = useSWR(
     user ? ['parceiro-leads', user.id] : null,
@@ -197,6 +202,7 @@ function ParceiroDashboardInner() {
   }
 
   const leadsAgendadas = leads.filter(isAgendadaFutura)
+  const leadsMortas = leads.filter(l => DEAD_STATUSES.includes(l.status))
 
   // Data de agendamento de uma lead, se tiver (custom_fields.data_proximo_ctt)
   const scheduledDate = (l: Lead) => (l as any).custom_fields?.data_proximo_ctt as string | undefined
@@ -211,7 +217,9 @@ function ParceiroDashboardInner() {
         String((l as any).custom_fields?.nif ?? '').toLowerCase().includes(search.toLowerCase())
       const matchStatus = filterStatus === 'all' || l.status === filterStatus
       const matchCampanha = filterCampanha === 'all' || l.campanha_id === filterCampanha || (filterCampanha === 'sem' && !l.campanha_id)
-      return matchSearch && matchStatus && matchCampanha
+      const isDead = DEAD_STATUSES.includes(l.status)
+      const matchView = viewMode === 'todas' || (viewMode === 'mortas' ? isDead : !isDead)
+      return matchSearch && matchStatus && matchCampanha && matchView
     })
     // Leads agendadas para o futuro (ex: 2027) vão para o fim da fila — nao bloqueiam
     // quem tem de ligar hoje. Entre as agendadas no passado/hoje, as mais atrasadas
@@ -385,6 +393,29 @@ function ParceiroDashboardInner() {
           </div>
         )}
 
+        {/* Ativas / Nao Aproveitaveis / Todas */}
+        <div style={{ display: 'flex', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4, marginBottom: 14, width: 'fit-content' }}>
+          {[
+            { key: 'ativas' as const, label: `Ativas (${leads.length - leadsMortas.length})` },
+            { key: 'mortas' as const, label: `Nao Aproveitaveis (${leadsMortas.length})` },
+            { key: 'todas' as const, label: `Todas (${leads.length})` },
+          ].map(t => (
+            <button
+              key={t.key}
+              onClick={() => setViewMode(t.key)}
+              style={{
+                padding: '7px 13px', borderRadius: 7, border: 'none',
+                fontSize: 12.5, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
+                background: viewMode === t.key ? '#fff' : 'transparent',
+                color: viewMode === t.key ? '#0F172A' : '#64748B',
+                boxShadow: viewMode === t.key ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
         {/* Campanha: em qual lista estou a ligar agora */}
         {campanhasDisponiveis.length > 0 && (
           <div style={{ marginBottom: 14 }}>
@@ -463,7 +494,15 @@ function ParceiroDashboardInner() {
           <EmptyState
             icon={PhoneCall}
             title="Nenhuma lead encontrada"
-            description={search || filterStatus !== 'all' ? 'Tente ajustar os filtros' : 'Ainda nao tens leads atribuidas'}
+            description={
+              search || filterStatus !== 'all'
+                ? 'Tente ajustar os filtros'
+                : viewMode === 'ativas'
+                  ? leadsMortas.length > 0
+                    ? 'Sem leads ativas de momento — vê o separador "Nao Aproveitaveis" se precisares de as consultar'
+                    : 'Ainda nao tens leads atribuidas'
+                  : 'Nenhuma lead nesta categoria'
+            }
           />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
