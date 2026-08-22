@@ -444,14 +444,35 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
             {/* Active call timer */}
             {timerActive && (
               <div style={{
-                marginTop: 14, display: 'flex', alignItems: 'center', gap: 8,
-                background: 'rgba(37,99,235,0.3)', borderRadius: 8, padding: '8px 12px', width: 'fit-content',
+                marginTop: 14, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
               }}>
-                <div className="anim-pulse" style={{ width: 8, height: 8, borderRadius: '50%', background: '#22C55E' }} />
-                <span style={{ color: '#fff', fontFamily: 'monospace', fontSize: 16, fontWeight: 700 }}>
-                  {formatDuration(elapsed)}
-                </span>
-                <span style={{ color: '#94A3B8', fontSize: 12 }}>Em chamada</span>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  background: 'rgba(37,99,235,0.3)', borderRadius: 8, padding: '8px 12px', width: 'fit-content',
+                }}>
+                  <div className="anim-pulse" style={{ width: 8, height: 8, borderRadius: '50%', background: '#22C55E' }} />
+                  <span style={{ color: '#fff', fontFamily: 'monospace', fontSize: 16, fontWeight: 700 }}>
+                    {formatDuration(elapsed)}
+                  </span>
+                  <span style={{ color: '#94A3B8', fontSize: 12 }}>Em chamada</span>
+                </div>
+                <button
+                  onClick={() => {
+                    stopTimer()
+                    callInitiated.current = false
+                    setResultForced(true)
+                    setShowResult(true)
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    background: 'rgba(220,38,38,0.15)', border: '1px solid rgba(220,38,38,0.4)',
+                    color: '#FCA5A5', borderRadius: 8, padding: '8px 14px',
+                    fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+                  }}
+                  title="Para o cronometro e pede o resultado da chamada (nao desliga a chamada real no telemovel)"
+                >
+                  <PhoneOff size={13} /> Terminei a chamada
+                </button>
               </div>
             )}
           </div>
@@ -459,12 +480,13 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
           {/* ---- CALL BUTTON (main CTA) ---- */}
           <div style={{ padding: '20px 20px 8px' }}>
             <button
-              onClick={handleCall}
+              onClick={timerActive ? undefined : handleCall}
+              disabled={timerActive}
               style={{
                 width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
                 background: timerActive ? '#15803D' : '#16A34A',
                 color: '#fff', border: 'none', borderRadius: 14,
-                padding: '18px 0', fontSize: 17, fontWeight: 700, cursor: 'pointer',
+                padding: '18px 0', fontSize: 17, fontWeight: 700, cursor: timerActive ? 'default' : 'pointer',
                 boxShadow: timerActive ? 'none' : '0 6px 20px rgba(22,163,74,0.35)',
                 transition: 'all 0.15s',
               }}
