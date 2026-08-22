@@ -52,6 +52,17 @@ export default function RelatorioPortaPage() {
     })
   )
 
+  const { data: capturas = [], isLoading: isLoadingCapturas } = useSWR(
+    profile?.company_id ? ['relatorio-porta-lista', profile.company_id, comercialId, campanhaId, from, to] : null,
+    () => doorCaptureService.getAll({
+      company_id: profile!.company_id!,
+      comercial_id: comercialId || undefined,
+      campanha_id: campanhaId || undefined,
+      from: from || undefined,
+      to: to || undefined,
+    })
+  )
+
   const selectStyle: React.CSSProperties = {
     padding: '9px 12px', borderRadius: 10, border: '1.5px solid #E2E8F0', fontSize: 13, background: '#fff', outline: 'none',
   }
@@ -59,7 +70,7 @@ export default function RelatorioPortaPage() {
   return (
     <div>
       <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <MapPin size={22} color="#2563EB" /> Relatório de Porta
+        <MapPin size={22} color="#2563EB" /> Relatório
       </h1>
       <p style={{ fontSize: 13, color: '#64748B', margin: '0 0 20px' }}>Desempenho das captações porta a porta</p>
 
@@ -95,6 +106,44 @@ export default function RelatorioPortaPage() {
             <RankingList title="Por rua" data={stats.porRua} />
             <RankingList title="Motivos de recusa" data={stats.motivosRecusa} />
             <RankingList title="Origem (Energia/Telecom/Ambos)" data={stats.porOrigem} />
+          </div>
+
+          {/* Lista detalhada, com a morada de cada cliente visitado */}
+          <div style={{ marginTop: 24, background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+            <div style={{ padding: '14px 18px', borderBottom: '1px solid #F1F5F9', fontSize: 14, fontWeight: 700, color: '#0F172A' }}>
+              Captações Detalhadas ({capturas.length})
+            </div>
+            {isLoadingCapturas ? <PageSpinner /> : capturas.length === 0 ? (
+              <div style={{ padding: 24, fontSize: 13, color: '#94A3B8', textAlign: 'center' }}>Sem captações neste periodo.</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
+                  <thead>
+                    <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                      {['Cliente', 'Morada', 'Comercial', 'Campanha', 'Resultado', 'Data'].map(h => (
+                        <th key={h} style={{ padding: '9px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {capturas.map((c: any, i: number) => (
+                      <tr key={c.id} style={{ borderBottom: i < capturas.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                        <td style={{ padding: '10px 14px', fontSize: 13, fontWeight: 600, color: '#0F172A' }}>{c.nome}</td>
+                        <td style={{ padding: '10px 14px', fontSize: 12.5, color: '#374151' }}>
+                          {[c.morada, c.codigo_postal, c.localidade].filter(Boolean).join(', ') || '—'}
+                        </td>
+                        <td style={{ padding: '10px 14px', fontSize: 12.5, color: '#374151' }}>{c.comercial?.full_name ?? '—'}</td>
+                        <td style={{ padding: '10px 14px', fontSize: 12.5, color: '#374151' }}>{c.campanha?.name ?? '—'}</td>
+                        <td style={{ padding: '10px 14px', fontSize: 12.5, color: '#64748B' }}>{c.resultado ?? '—'}</td>
+                        <td style={{ padding: '10px 14px', fontSize: 12, color: '#94A3B8', whiteSpace: 'nowrap' }}>
+                          {new Date(c.created_at).toLocaleDateString('pt-PT')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </>
       )}
