@@ -52,8 +52,16 @@ export default function AgendaPage() {
   const [tab, setTab] = useState<'followups' | 'instalacoes'>('followups')
   const [filterCampanha, setFilterCampanha] = useState('all')
 
-  const { data: followUps = [], isLoading: l1, mutate } = useSWR(user?.id ? ['agenda-fu', user.id] : null, () => fetchFollowUps(user!.id))
-  const { data: instalacoes = [], isLoading: l2, mutate: mutateInst } = useSWR(user?.id ? ['agenda-inst', user.id] : null, () => fetchInstalacoes(user!.id))
+  const { data: followUps = [], isLoading: l1, mutate } = useSWR(
+    user?.id ? ['agenda-fu', user.id] : null,
+    () => fetchFollowUps(user!.id),
+    { revalidateOnFocus: true, revalidateOnMount: true, dedupingInterval: 0, refreshInterval: 60000 }
+  )
+  const { data: instalacoes = [], isLoading: l2, mutate: mutateInst } = useSWR(
+    user?.id ? ['agenda-inst', user.id] : null,
+    () => fetchInstalacoes(user!.id),
+    { revalidateOnFocus: true, revalidateOnMount: true, dedupingInterval: 0, refreshInterval: 60000 }
+  )
 
   if (authLoading || l1 || l2) return <PageSpinner />
 
