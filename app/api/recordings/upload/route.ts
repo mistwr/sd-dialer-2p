@@ -72,7 +72,10 @@ export async function POST(req: NextRequest) {
     const campanha_id = (form.get('campanha_id') as string | null) || null
 
     // 4. Determine file extension
-    const mime = file.type || 'audio/webm'
+    // Nota: o browser envia mimeType com sufixo de codec (ex: "audio/webm;codecs=opus"),
+    // mas o bucket de storage so aceita o tipo base — retiramos o ";codecs=..." antes de usar.
+    const mimeRaw = file.type || 'audio/webm'
+    const mime = mimeRaw.split(';')[0].trim()
     const ext = mime.includes('ogg') ? 'ogg'
               : mime.includes('mp4') || mime.includes('m4a') ? 'm4a'
               : mime.includes('wav') ? 'wav'
