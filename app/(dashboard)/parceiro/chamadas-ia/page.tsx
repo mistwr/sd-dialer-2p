@@ -12,8 +12,10 @@ import useSWR from 'swr'
 import {
   AudioLines, Play, Download, Brain, ChevronDown, ChevronUp,
   Clock, User, Megaphone, Calendar, RefreshCw, Loader2, Mic,
+  Sparkles, Send, Wifi, Zap,
 } from 'lucide-react'
 import AIAnalysisPanel from '@/components/ai/AIAnalysisPanel'
+import { createClient } from '@/lib/supabase/client'
 
 type Recording = {
   id: string
@@ -221,7 +223,127 @@ function RecordingRow({ recording, onAnalyse }: { recording: Recording; onAnalys
   )
 }
 
+function AssistenteComercial() {
+  const [segmento, setSegmento] = useState<'telecom' | 'energia'>('telecom')
+  const [pergunta, setPergunta] = useState('')
+  const [morada, setMorada] = useState('')
+  const [historico, setHistorico] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
+  const [loading, setLoading] = useState(false)
+
+  async function handleSend() {
+    if (!pergunta.trim() || loading) return
+    const perguntaAtual = pergunta
+    setHistorico(h => [...h, { role: 'user', content: perguntaAtual }])
+    setPergunta('')
+    setLoading(true)
+    try {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/assistente-comercial', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ pergunta: perguntaAtual, segmento, morada: morada || undefined }),
+      })
+      const json = await res.json()
+      setHistorico(h => [...h, { role: 'assistant', content: json.resposta ?? json.error ?? 'Erro sem detalhe.' }])
+    } catch (err) {
+      setHistorico(h => [...h, { role: 'assistant', content: 'Erro ao contactar o assistente. Tenta outra vez.' }])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{
+        background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10,
+        padding: '10px 14px', fontSize: 12.5, color: '#92400E',
+      }}>
+        ⚠️ Os preços vêm de uma tabela interna atualizada manualmente pela equipa (não em tempo real da ANACOM — essa fonte bloqueia acesso automático). A cobertura de rede depende de uma ligação ainda a finalizar.
+      </div>
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        {(['telecom', 'energia'] as const).map(s => (
+          <button
+            key={s}
+            onClick={() => setSegmento(s)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '8px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
+              fontSize: 13, fontWeight: 600,
+              background: segmento === s ? '#2563EB' : '#F1F5F9',
+              color: segmento === s ? '#fff' : '#64748B',
+            }}
+          >
+            {s === 'telecom' ? <Wifi size={14} /> : <Zap size={14} />}
+            {s === 'telecom' ? 'Telecom' : 'Energia'}
+          </button>
+        ))}
+      </div>
+
+      <input
+        value={morada}
+        onChange={e => setMorada(e.target.value)}
+        placeholder="Morada do cliente (opcional, ajuda a IA a contextualizar)"
+        style={{ padding: '10px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 13, outline: 'none' }}
+      />
+
+      <div style={{
+        background: '#fff', borderRadius: 12, border: '1px solid #E2E8F0',
+        minHeight: 200, maxHeight: 400, overflowY: 'auto', padding: 16,
+        display: 'flex', flexDirection: 'column', gap: 12,
+      }}>
+        {historico.length === 0 ? (
+          <div style={{ margin: 'auto', textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>
+            <Sparkles size={24} style={{ marginBottom: 8 }} />
+            <div>Pergunta algo tipo: "Qual o melhor pacote MEO para este cliente?"</div>
+          </div>
+        ) : (
+          historico.map((m, i) => (
+            <div key={i} style={{
+              alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+              maxWidth: '85%', padding: '10px 14px', borderRadius: 12,
+              background: m.role === 'user' ? '#2563EB' : '#F8FAFC',
+              color: m.role === 'user' ? '#fff' : '#0F172A',
+              fontSize: 13.5, lineHeight: 1.5, whiteSpace: 'pre-wrap',
+            }}>
+              {m.content}
+            </div>
+          ))
+        )}
+        {loading && <Loader2 size={16} style={{ animation: 'spin 0.75s linear infinite', alignSelf: 'flex-start' }} color="#2563EB" />}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input
+          value={pergunta}
+          onChange={e => setPergunta(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleSend() }}
+          placeholder="Escreve a tua pergunta..."
+          style={{ flex: 1, padding: '11px 14px', borderRadius: 10, border: '1.5px solid #E2E8F0', fontSize: 14, outline: 'none' }}
+        />
+        <button
+          onClick={handleSend}
+          disabled={loading || !pergunta.trim()}
+          style={{
+            width: 44, height: 44, borderRadius: 10, border: 'none',
+            background: '#2563EB', color: '#fff', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            opacity: loading || !pergunta.trim() ? 0.6 : 1, flexShrink: 0,
+          }}
+        >
+          <Send size={16} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function ChamadasIAPage() {
+  const [tab, setTab] = useState<'historico' | 'assistente'>('historico')
   const { data, isLoading, mutate } = useSWR(
     '/api/recordings?limit=50',
     fetcher,
@@ -282,6 +404,31 @@ export default function ChamadasIAPage() {
         </button>
       </div>
 
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4, marginBottom: 20, width: 'fit-content' }}>
+        {[
+          { key: 'historico' as const, label: 'Histórico', icon: <AudioLines size={14} /> },
+          { key: 'assistente' as const, label: 'Assistente Comercial', icon: <Sparkles size={14} /> },
+        ].map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '8px 16px', borderRadius: 7, border: 'none',
+              fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              background: tab === t.key ? '#fff' : 'transparent',
+              color: tab === t.key ? '#0F172A' : '#64748B',
+              boxShadow: tab === t.key ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+            }}
+          >
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'assistente' ? <AssistenteComercial /> : (
+        <>
       {/* Stats bar */}
       {recordings.length > 0 && (
         <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
@@ -342,6 +489,8 @@ export default function ChamadasIAPage() {
             <RecordingRow key={r.id} recording={r} onAnalyse={handleAnalyse} />
           ))}
         </div>
+      )}
+        </>
       )}
     </div>
   )
