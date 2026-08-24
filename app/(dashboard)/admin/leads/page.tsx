@@ -234,17 +234,23 @@ export default function LeadsAdminPage() {
   const [empresarialAlerta, setEmpresarialAlerta] = useState(false)
   const [residencialFollowup, setResidencialFollowup] = useState(false)
   const [empresaFiltro, setEmpresaFiltro] = useState('') // vazio = todas as empresas (so super-admin)
+  const [assignedToFilter, setAssignedToFilter] = useState('') // vazio=todos, '__self__'=a mim, ou um id
   const [page, setPage] = useState(0)
   const [selected, setSelected] = useState<string[]>([])
   const [modal, setModal] = useState<{ type: 'lead' | 'import' | 'assign' | null; editing?: Lead }>({ type: null })
   const [exporting, setExporting] = useState(false)
   const [deletingDuplicates, setDeletingDuplicates] = useState(false)
+  const [deletingFiltered, setDeletingFiltered] = useState(false)
 
   const { data: campanhas = [] } = useSWR('campanhas', () => campanhaService.getAll())
   const { data: parceiros = [] } = useSWR('parceiros-list', async () => {
     const all = await usuarioService.getAll()
     return all.filter(u => u.role === 'parceiro' && u.status === 'active')
   })
+  // Todas as pessoas a quem uma lead pode estar atribuida (admins incluidos, nao so
+  // "parceiro") — a RLS ja limita isto ao que o utilizador atual pode mesmo ver
+  // (a sua propria equipa, ou tudo se for super-admin).
+  const { data: atribuiveis = [] } = useSWR('atribuiveis-list', () => usuarioService.getAll())
   const { data: empresas = [] } = useSWR(
     profile?.is_super_admin ? 'empresas-leads' : null,
     async () => {
@@ -265,7 +271,7 @@ export default function LeadsAdminPage() {
   }, [search])
 
   // Sempre que um filtro muda, volta a pagina 1
-  useEffect(() => { setPage(0) }, [debouncedSearch, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly, empresarialAlerta, residencialFollowup, empresaFiltro])
+  useEffect(() => { setPage(0) }, [debouncedSearch, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly, empresarialAlerta, residencialFollowup, empresaFiltro, assignedToFilter])
 
   // Telefones duplicados (calculado na base de dados, nao no telemovel — necessario
   // porque com dezenas de milhares de leads nao da para carregar tudo so para comparar)
@@ -281,11 +287,11 @@ export default function LeadsAdminPage() {
   const duplicatePhonesList = (duplicateInfo ?? []).map(d => d.telefone).slice(0, 500)
   const duplicateGroupsCount = duplicateInfo?.length ?? 0
 
-  function buildQuery(sb: ReturnType<typeof createClient>, { count }: { count: boolean }) {
+  function buildQuery(sb: ReturnType<typeof createClient>, { count, cols }: { count: boolean; cols?: string }) {
     if (empresarialAlerta) {
       // Vista dedicada: leads MEO Empresas / MEO Energia Empresas cuja
       // fidelizacao termina nos proximos 6 meses — sem embeds (a view nao os expoe).
-      let q = sb.from('leads_fidelizacao_empresarial').select('*', count ? { count: 'exact' } : undefined)
+      let q = sb.from('leads_fidelizacao_empresarial').select(cols ?? '*', count ? { count: 'exact' } : undefined)
       if (empresaFiltro) q = q.eq('company_id', empresaFiltro)
       if (debouncedSearch) {
         const s = debouncedSearch.replace(/[,()]/g, '')
@@ -296,7 +302,7 @@ export default function LeadsAdminPage() {
     }
     if (residencialFollowup) {
       // Residencial sem fidelizacao: follow-up devido 4 meses depois de criada a lead.
-      let q = sb.from('leads_followup_residencial').select('*', count ? { count: 'exact' } : undefined)
+      let q = sb.from('leads_followup_residencial').select(cols ?? '*', count ? { count: 'exact' } : undefined)
       if (empresaFiltro) q = q.eq('company_id', empresaFiltro)
       if (debouncedSearch) {
         const s = debouncedSearch.replace(/[,()]/g, '')
@@ -306,13 +312,14 @@ export default function LeadsAdminPage() {
       return q
     }
     let q = sb.from('leads').select(
-      '*, campanhas!left(id,name), parceiro:assigned_to!left(id,full_name,avatar_url), etapa:pipeline_etapa_id!left(id,nome)',
+      cols ?? '*, campanhas!left(id,name), parceiro:assigned_to!left(id,full_name,avatar_url), etapa:pipeline_etapa_id!left(id,nome)',
       count ? { count: 'exact' } : undefined
     )
     // Sem filtro de empresa aqui por defeito — a RLS ja trata disso (admin/supervisor
     // veem a sua empresa, super-admin ve tudo). So filtra explicitamente se o
     // super-admin tiver escolhido uma empresa especifica no seletor.
     if (empresaFiltro) q = q.eq('company_id', empresaFiltro)
+    if (assignedToFilter) q = q.eq('assigned_to', assignedToFilter === '__self__' ? profile?.id : assignedToFilter)
     if (debouncedSearch) {
       const s = debouncedSearch.replace(/[,()]/g, '')
       q = q.or(`nome.ilike.%${s}%,telefone.ilike.%${s}%,custom_fields->>nif.ilike.%${s}%`)
@@ -339,7 +346,7 @@ export default function LeadsAdminPage() {
 
   const { data: pageResult, isLoading, error: pageError, mutate } = useSWR(
     profile && (!duplicatesOnly || duplicateInfo)
-      ? ['leads-page', profile.id, debouncedSearch, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly, empresarialAlerta, residencialFollowup, empresaFiltro, page, duplicatePhonesList.join(',')]
+      ? ['leads-page', profile.id, debouncedSearch, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly, empresarialAlerta, residencialFollowup, empresaFiltro, assignedToFilter, page, duplicatePhonesList.join(',')]
       : null,
     async () => {
       const sb = createClient()
@@ -498,12 +505,12 @@ export default function LeadsAdminPage() {
       }))
       const inserted = await leadService.bulkInsert(payload)
 
-      // Qualquer lead importada com "Data Proximo CTT" preenchida cria automaticamente
-      // um follow-up na Agenda (independentemente da tipificacao/tipo CTT usado) —
+      // "Retomar Chamada" com Data Proximo CTT preenchida cria follow-up na
+      // Agenda automaticamente para cada lead importada nessas condicoes —
       // mesma logica que ja existe ao editar uma lead a mao.
       const followUpsToCreate = inserted.filter(l => {
-        const dpc = (l as any).custom_fields?.data_proximo_ctt
-        return !!dpc && /^\d{4}-\d{2}-\d{2}$/.test(dpc) && l.assigned_to
+        const tip = String((l as any).custom_fields?.tipificacao ?? '').trim().toLowerCase()
+        return tip === 'retomar chamada' && (l as any).custom_fields?.data_proximo_ctt && l.assigned_to
       })
       if (followUpsToCreate.length > 0 && profile?.company_id) {
         await Promise.allSettled(followUpsToCreate.map(l => followUpService.create({
@@ -511,7 +518,7 @@ export default function LeadsAdminPage() {
           parceiro_id: l.assigned_to!,
           company_id: profile.company_id!,
           scheduled_at: new Date(`${(l as any).custom_fields.data_proximo_ctt}T09:00:00`).toISOString(),
-          notes: 'Criado automaticamente na importacao',
+          notes: 'Retomar chamada (criado automaticamente na importacao)',
         })))
       }
 
@@ -698,6 +705,13 @@ export default function LeadsAdminPage() {
           <option value="">Estado: Todos</option>
           {STATUS_OPTS.map(o => <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>)}
         </select>
+        <select value={assignedToFilter} onChange={e => setAssignedToFilter(e.target.value)}
+          style={{ padding: '9px 12px', borderRadius: 10, border: '1.5px solid #E2E8F0', fontSize: 13, outline: 'none', background: '#fff', color: assignedToFilter ? '#0F172A' : '#94A3B8' }}>
+          <option value="">Atribuído a: Todos</option>
+          {profile?.id && <option value="__self__">👤 A mim</option>}
+          <option value="__none__" disabled>— parceiros —</option>
+          {atribuiveis.filter(u => u.id !== profile?.id).map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+        </select>
         <button onClick={() => setDuplicatesOnly(d => !d)}
           style={{
             display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 10,
@@ -740,6 +754,48 @@ export default function LeadsAdminPage() {
               whiteSpace: 'nowrap', opacity: deletingDuplicates ? 0.6 : 1,
             }}>
             <Trash2 size={14} /> {deletingDuplicates ? 'A apagar...' : 'Eliminar duplicados'}
+          </button>
+        )}
+        {(assignedToFilter || statusFilter || campanhaFilter) && totalCount > 0 && (
+          <button
+            disabled={deletingFiltered}
+            onClick={async () => {
+              if (!confirm(
+                `Isto vai apagar TODAS as ${totalCount.toLocaleString('pt-PT')} leads que correspondem aos filtros ` +
+                `atuais (não só as desta página). Esta ação não pode ser desfeita. Continuar?`
+              )) return
+              setDeletingFiltered(true)
+              try {
+                const sb = createClient()
+                let total = 0
+                // Apaga em blocos: busca so os IDs que correspondem aos filtros e
+                // apaga-os, repetindo ate nao sobrar nenhum.
+                while (true) {
+                  const { data, error } = await buildQuery(sb, { count: false, cols: 'id' }).limit(500)
+                  if (error) throw error
+                  const ids = (data ?? []).map((r: any) => r.id)
+                  if (ids.length === 0) break
+                  const { error: delErr } = await sb.from('leads').delete().in('id', ids)
+                  if (delErr) throw delErr
+                  total += ids.length
+                  if (ids.length < 500) break
+                }
+                alert(`${total} lead(s) apagada(s).`)
+                setSelected([])
+                mutate()
+              } catch (err: any) {
+                alert(`Erro ao apagar: ${err?.message || 'erro desconhecido'}`)
+              } finally {
+                setDeletingFiltered(false)
+              }
+            }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 10,
+              border: '1.5px solid #FECACA', background: '#FEF2F2', color: '#991B1B',
+              fontWeight: 700, fontSize: 13, cursor: deletingFiltered ? 'not-allowed' : 'pointer',
+              whiteSpace: 'nowrap', opacity: deletingFiltered ? 0.6 : 1,
+            }}>
+            <Trash2 size={14} /> {deletingFiltered ? 'A apagar...' : `Eliminar todas as filtradas (${totalCount.toLocaleString('pt-PT')})`}
           </button>
         )}
         <button onClick={() => setEmpresarialAlerta(d => !d)}
