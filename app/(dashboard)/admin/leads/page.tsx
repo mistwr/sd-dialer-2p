@@ -319,7 +319,8 @@ export default function LeadsAdminPage() {
     // veem a sua empresa, super-admin ve tudo). So filtra explicitamente se o
     // super-admin tiver escolhido uma empresa especifica no seletor.
     if (empresaFiltro) q = q.eq('company_id', empresaFiltro)
-    if (assignedToFilter) q = q.eq('assigned_to', assignedToFilter === '__self__' ? profile?.id : assignedToFilter)
+    if (assignedToFilter === '__unassigned__') q = q.is('assigned_to', null)
+    else if (assignedToFilter) q = q.eq('assigned_to', assignedToFilter === '__self__' ? profile?.id : assignedToFilter)
     if (debouncedSearch) {
       const s = debouncedSearch.replace(/[,()]/g, '')
       q = q.or(`nome.ilike.%${s}%,telefone.ilike.%${s}%,custom_fields->>nif.ilike.%${s}%`)
@@ -709,7 +710,8 @@ export default function LeadsAdminPage() {
           style={{ padding: '9px 12px', borderRadius: 10, border: '1.5px solid #E2E8F0', fontSize: 13, outline: 'none', background: '#fff', color: assignedToFilter ? '#0F172A' : '#94A3B8' }}>
           <option value="">Atribuído a: Todos</option>
           {profile?.id && <option value="__self__">👤 A mim</option>}
-          <option value="__none__" disabled>— parceiros —</option>
+          <option value="__unassigned__">🚫 Não Atribuído</option>
+          <option value="__divider__" disabled>— parceiros —</option>
           {atribuiveis.filter(u => u.id !== profile?.id).map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
         </select>
         <button onClick={() => setDuplicatesOnly(d => !d)}
