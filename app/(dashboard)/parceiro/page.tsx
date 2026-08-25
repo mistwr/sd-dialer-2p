@@ -70,8 +70,15 @@ function NovaLeadModal({ companyId, userId, onClose, onCreated }: {
     try {
       const sb = createClient()
       // Deteta duplicados por telefone antes de gravar
-      const { data: dup } = await sb.from('leads').select('id, nome').eq('telefone', telefone.trim()).limit(1)
-      if (dup && dup.length > 0) { setError(`Ja existe uma lead com este telefone: ${dup[0].nome}`); setSaving(false); return }
+      const { data: dup } = await sb.from('leads').select('id, nome, assigned_to, parceiro:assigned_to(full_name)').eq('telefone', telefone.trim()).limit(1)
+      if (dup && dup.length > 0) {
+        const quem = (dup[0] as any).parceiro?.full_name
+        setError(
+          `Já existe uma lead com este telefone: ${dup[0].nome} ` +
+          (quem ? `(atribuída a ${quem})` : '(por atribuir a ninguém — por isso não aparece na tua pesquisa de "Minhas Leads"; pede a um admin para ta atribuir, ou vai à página de Leads do admin para a encontrar).')
+        )
+        setSaving(false); return
+      }
 
       let pipelineEtapaId: string | null = null
       if (pipelineId) {
@@ -192,9 +199,17 @@ function ParceiroDashboardInner() {
   }
 
   const today = new Date().toISOString().slice(0, 10)
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10)
+  // "Futura" (escondida da lista, so na Agenda) so a partir de depois de amanha.
+  // Hoje e amanha continuam visiveis aqui — e sobem ao topo, como prioridade.
   const isAgendadaFutura = (l: Lead) => {
     const dpc = (l as any).custom_fields?.data_proximo_ctt as string | undefined
-    return !!dpc && dpc.slice(0, 10) > today
+    return !!dpc && dpc.slice(0, 10) > tomorrow
+  }
+  const isAgendadaProxima = (l: Lead) => {
+    const dpc = (l as any).custom_fields?.data_proximo_ctt as string | undefined
+    const d = dpc?.slice(0, 10)
+    return d === today || d === tomorrow
   }
 
   const leadsAgendadas = leads.filter(isAgendadaFutura)
@@ -212,21 +227,24 @@ function ParceiroDashboardInner() {
         String((l as any).custom_fields?.nif ?? '').toLowerCase().includes(search.toLowerCase())
       const matchStatus = filterStatus === 'all' || l.status === filterStatus
       const matchCampanha = filterCampanha === 'all' || l.campanha_id === filterCampanha || (filterCampanha === 'sem' && !l.campanha_id)
-      // Uma lead com "Retomar Chamada" agendada para o futuro ja ficou marcada
-      // para aparecer na Agenda nesse dia — nao deve continuar a aparecer aqui
-      // tambem, senao acaba-se por ligar duas vezes para o mesmo cliente.
+      // So esconde daqui as agendadas para depois de amanha (essas ja ficam so
+      // na Agenda). Hoje e amanha continuam a aparecer, como prioridade.
       const matchAgendada = mostrarAgendadas || !isAgendadaFutura(l)
       return matchSearch && matchStatus && matchCampanha && matchAgendada
     })
-    // Entre as agendadas no passado/hoje, as mais atrasadas vem primeiro (mais
-    // urgentes). O resto mantem a ordem original (prioridade/antiguidade).
+    // Hoje/amanha agendadas sobem ao topo (mais urgentes primeiro, por data).
+    // As de "depois de amanha" (quando visiveis via "Ver na mesma") vao para o fim.
     .sort((a, b) => {
       const da = scheduledDate(a)
       const db = scheduledDate(b)
-      const aFuture = !!da && da > today
-      const bFuture = !!db && db > today
-      if (aFuture !== bFuture) return aFuture ? 1 : -1
-      if (aFuture && bFuture) return da! < db! ? -1 : da! > db! ? 1 : 0
+      const aProxima = isAgendadaProxima(a)
+      const bProxima = isAgendadaProxima(b)
+      const aFutura = !!da && da > tomorrow
+      const bFutura = !!db && db > tomorrow
+      if (aProxima !== bProxima) return aProxima ? -1 : 1
+      if (aProxima && bProxima) return da! < db! ? -1 : da! > db! ? 1 : 0
+      if (aFutura !== bFutura) return aFutura ? 1 : -1
+      if (aFutura && bFutura) return da! < db! ? -1 : da! > db! ? 1 : 0
       return 0
     })
 
@@ -238,9 +256,9 @@ function ParceiroDashboardInner() {
   )
   const temLeadsSemCampanha = leads.some(l => !l.campanha_id)
 
-  // Next lead: first priority status among those not scheduled for the future, then others
+  // Next lead: first priority status among those not scheduled for further than tomorrow, then others
   const nextLead =
-    filtered.find(l => PRIORITY_STATUSES.includes(l.status) && !(scheduledDate(l) && scheduledDate(l)! > today)) ?? filtered[0] ?? null
+    filtered.find(l => PRIORITY_STATUSES.includes(l.status) && !(scheduledDate(l) && scheduledDate(l)! > tomorrow)) ?? filtered[0] ?? null
 
   const counts = leads.reduce((acc, l) => {
     acc[l.status] = (acc[l.status] ?? 0) + 1
@@ -421,7 +439,7 @@ function ParceiroDashboardInner() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Calendar size={14} color="#D97706" />
               <span style={{ fontSize: 12.5, color: '#92400E' }}>
-                <strong>{leadsAgendadas.length}</strong> lead{leadsAgendadas.length !== 1 ? 's' : ''} agendada{leadsAgendadas.length !== 1 ? 's' : ''} para uma data futura — {mostrarAgendadas ? 'a aparecer na lista, marcadas com 📅.' : 'escondida(s) daqui (já está na Agenda, sem risco de ligar em duplicado).'}
+                <strong>{leadsAgendadas.length}</strong> lead{leadsAgendadas.length !== 1 ? 's' : ''} agendada{leadsAgendadas.length !== 1 ? 's' : ''} para depois de amanhã — {mostrarAgendadas ? 'a aparecer na lista, marcadas com 📅.' : 'escondida(s) daqui (já está na Agenda). As de hoje e amanhã continuam visíveis, como prioridade.'}
               </span>
             </div>
             <button
