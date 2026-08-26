@@ -6,6 +6,7 @@ import { Calendar, Phone, Wrench, CheckCircle2, Clock, AlertCircle, User, Chevro
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { followUpService } from '@/lib/services'
+import { formatDate, formatDateTimeShort } from '@/lib/utils/formatters'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 
@@ -16,7 +17,7 @@ async function fetchFollowUps(userId: string) {
     .select('*, lead:lead_id(id,nome,telefone,campanha_id,campanhas(id,name),custom_fields,observacoes)')
     .eq('parceiro_id', userId)
     .eq('done', false)
-    .order('scheduled_at', { ascending: true })
+    .order('scheduled_at', { ascending: false })
   if (error) throw error
   return data ?? []
 }
@@ -179,7 +180,7 @@ export default function AgendaPage() {
                             <User size={13} /> {fu.lead?.nome ?? 'Lead'}
                           </div>
                           <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
-                            {new Date(fu.scheduled_at).toLocaleString('pt-PT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            {formatDateTimeShort(fu.scheduled_at)}
                             {fu.notes && <> &middot; {fu.notes}</>}
                           </div>
                           {(() => {
@@ -244,7 +245,7 @@ export default function AgendaPage() {
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{v.client_name}</div>
                             <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
-                              Instalacao: {new Date(v.data_instalacao).toLocaleDateString('pt-PT')} &middot; {v.service_type || 'Servico'} {v.operator ? `· ${v.operator}` : ''}
+                              Instalacao: {formatDate(v.data_instalacao)} &middot; {v.service_type || 'Servico'} {v.operator ? `· ${v.operator}` : ''}
                             </div>
                           </div>
                           <ChevronRight size={15} color="#CBD5E1" style={{ flexShrink: 0 }} />
@@ -253,7 +254,7 @@ export default function AgendaPage() {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{v.client_name}</div>
                           <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
-                            Instalacao: {new Date(v.data_instalacao).toLocaleDateString('pt-PT')} &middot; {v.service_type || 'Servico'} {v.operator ? `· ${v.operator}` : ''}
+                            Instalacao: {formatDate(v.data_instalacao)} &middot; {v.service_type || 'Servico'} {v.operator ? `· ${v.operator}` : ''}
                           </div>
                         </div>
                       )}
