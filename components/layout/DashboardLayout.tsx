@@ -12,6 +12,7 @@ import useSWR from 'swr'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { notificacaoService } from '@/lib/services'
 import { Spinner } from '@/components/ui/Spinner'
+import { formatDateTimeShort } from '@/lib/utils/formatters'
 
 interface NavItem {
   label: string
@@ -337,9 +338,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                           <div style={{ fontSize: 13, fontWeight: n.read ? 500 : 700, color: '#0F172A', marginBottom: 2 }}>{n.title}</div>
                           <div style={{ fontSize: 12, color: '#64748B', lineHeight: 1.4 }}>{n.message}</div>
                           <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
-                            {new Date(n.created_at).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' })}
-                            {' '}
-                            {new Date(n.created_at).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
+                            {formatDateTimeShort(n.created_at)}
                           </div>
                         </div>
                         {!n.read && (
