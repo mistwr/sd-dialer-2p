@@ -17,11 +17,19 @@ export function formatDateTime(date: string | Date): string {
   return format(d, 'dd/MM/yyyy HH:mm', { locale: ptBR })
 }
 
-// Curta e sem ambiguidade (dia/mes, nunca nomes de mes que dependem de ICU
-// no runtime de producao — ver bug da Agenda a mostrar "09/01" em vez de "1 set.")
+// Mes escrito por extenso (curto) para nao haver duvida nenhuma entre dia/mes.
+// Nomes fixos aqui (nao vem do date-fns/ICU) porque o runtime de producao
+// falha a resolver a locale pt-BR do date-fns e mostra numeros trocados
+// (ver bug da Agenda a mostrar "09/01" e gerar duvida se e 1 de Setembro).
+const MESES_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+
 export function formatDateTimeShort(date: string | Date): string {
   const d = typeof date === 'string' ? parseISO(date) : date
-  return format(d, 'dd/MM HH:mm', { locale: ptBR })
+  const dia = String(d.getDate()).padStart(2, '0')
+  const mes = MESES_PT[d.getMonth()]
+  const hora = String(d.getHours()).padStart(2, '0')
+  const min = String(d.getMinutes()).padStart(2, '0')
+  return `${dia} ${mes} ${hora}:${min}`
 }
 
 export function formatTime(date: string | Date): string {
