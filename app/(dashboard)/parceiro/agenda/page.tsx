@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Calendar, Phone, Wrench, CheckCircle2, Clock, AlertCircle, User, ChevronRight, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { followUpService } from '@/lib/services'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 
@@ -81,8 +82,7 @@ export default function AgendaPage() {
   instalacoes.forEach(v => instGroups[classify(v.data_instalacao) as keyof typeof instGroups].push(v))
 
   const markDone = async (id: string) => {
-    const sb = createClient()
-    await sb.from('follow_ups').update({ done: true }).eq('id', id)
+    await followUpService.markDone(id)
     mutate()
   }
 
@@ -94,8 +94,7 @@ export default function AgendaPage() {
 
   const deleteFollowUp = async (id: string) => {
     if (!confirm('Apagar este follow-up? Esta acao nao pode ser desfeita.')) return
-    const sb = createClient()
-    await sb.from('follow_ups').delete().eq('id', id)
+    await followUpService.remove(id)
     mutate()
   }
 
