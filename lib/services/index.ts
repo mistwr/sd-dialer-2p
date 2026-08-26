@@ -279,11 +279,39 @@ export const notificacaoService = {
 // -------------------------------------------------------
 // FOLLOW UPS
 // -------------------------------------------------------
+// Sincroniza custom_fields.data_proximo_ctt da lead com o estado do follow-up.
+// E este campo que a lista "Minhas Leads" le para mostrar o badge 📅 e para
+// ordenar/priorizar quem esta agendado para hoje/amanha — sem isto, uma lead
+// agendada so pela Agenda (tabela follow_ups) nunca aparecia la.
+async function syncLeadScheduledDate(leadId: string, dateStr: string | null) {
+  const sb = createClient()
+  try {
+    const { data: leadRow } = await sb.from('leads').select('custom_fields').eq('id', leadId).single()
+    const cf = { ...((leadRow?.custom_fields as Record<string, any>) ?? {}) }
+    if (dateStr) cf.data_proximo_ctt = dateStr
+    else delete cf.data_proximo_ctt
+    await sb.from('leads').update({ custom_fields: cf }).eq('id', leadId)
+  } catch { /* nao bloqueia a operacao principal se a lead nao atualizar */ }
+}
+
 export const followUpService = {
   async create(payload: Partial<FollowUp>) {
     const sb = createClient()
+
+    // Fecha follow-ups pendentes anteriores desta lead antes de criar um novo,
+    // para nao acumular duplicados na Agenda (ex: reagendar varias vezes a
+    // mesma lead via "Retomar Chamada" ou "Agendar Follow-up").
+    if (payload.lead_id) {
+      await sb.from('follow_ups').update({ done: true }).eq('lead_id', payload.lead_id).eq('done', false)
+    }
+
     const { data, error } = await sb.from('follow_ups').insert(payload).select().single()
     if (error) throw error
+
+    if (payload.lead_id && payload.scheduled_at) {
+      await syncLeadScheduledDate(payload.lead_id, String(payload.scheduled_at).slice(0, 10))
+    }
+
     return data as FollowUp
   },
   async getUpcoming(userId: string) {
@@ -301,8 +329,17 @@ export const followUpService = {
   },
   async markDone(id: string) {
     const sb = createClient()
+    const { data: fu } = await sb.from('follow_ups').select('lead_id').eq('id', id).single()
     const { error } = await sb.from('follow_ups').update({ done: true }).eq('id', id)
     if (error) throw error
+    if (fu?.lead_id) await syncLeadScheduledDate(fu.lead_id, null)
+  },
+  async remove(id: string) {
+    const sb = createClient()
+    const { data: fu } = await sb.from('follow_ups').select('lead_id').eq('id', id).single()
+    const { error } = await sb.from('follow_ups').delete().eq('id', id)
+    if (error) throw error
+    if (fu?.lead_id) await syncLeadScheduledDate(fu.lead_id, null)
   },
 }
 
