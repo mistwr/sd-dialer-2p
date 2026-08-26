@@ -326,12 +326,12 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
       }).eq('id', lead.id)
       if (error) throw error
 
-      // "Retomar Chamada" com uma data marcada em "Data Proximo CTT" cria
-      // automaticamente um follow-up na Agenda, sem precisar de abrir o
-      // modal de Agendar Follow-up a parte.
-      const tipificacao = String(editCustom['tipificacao'] ?? '').trim().toLowerCase()
+      // Qualquer "Data Proximo CTT" preenchida ou alterada cria/atualiza
+      // automaticamente o follow-up na Agenda, sem precisar de abrir o
+      // modal de Agendar Follow-up a parte nem depender da Tipificacao.
       const dataProximoCtt = editCustom['data_proximo_ctt']
-      if (tipificacao === 'retomar chamada' && dataProximoCtt && user && profile?.company_id) {
+      const dataProximoCttAnterior = (lead as any).custom_fields?.data_proximo_ctt
+      if (dataProximoCtt && dataProximoCtt !== dataProximoCttAnterior && user && profile?.company_id) {
         try {
           await followUpService.create({
             lead_id: lead.id,
@@ -339,9 +339,16 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
             company_id: profile.company_id,
             // Sem hora especifica no campo de data, agenda-se para as 09:00 por defeito
             scheduled_at: new Date(`${dataProximoCtt}T09:00:00`).toISOString(),
-            notes: 'Retomar chamada (criado automaticamente a partir da Tipificacao)',
+            notes: 'Criado automaticamente a partir de "Data Proximo CTT"',
           })
         } catch { /* nao bloqueia o guardar da lead se a agenda falhar */ }
+      } else if (!dataProximoCtt && dataProximoCttAnterior && user) {
+        // Campo foi limpo: fecha o follow-up pendente desta lead, se existir.
+        try {
+          const sb2 = createClient()
+          const { data: pendentes } = await sb2.from('follow_ups').select('id').eq('lead_id', lead.id).eq('done', false)
+          for (const p of pendentes ?? []) await followUpService.markDone(p.id)
+        } catch { /* nao bloqueia o guardar da lead */ }
       }
 
       setShowEdit(false)
