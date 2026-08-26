@@ -17,6 +17,13 @@ export function formatDateTime(date: string | Date): string {
   return format(d, 'dd/MM/yyyy HH:mm', { locale: ptBR })
 }
 
+// Curta e sem ambiguidade (dia/mes, nunca nomes de mes que dependem de ICU
+// no runtime de producao — ver bug da Agenda a mostrar "09/01" em vez de "1 set.")
+export function formatDateTimeShort(date: string | Date): string {
+  const d = typeof date === 'string' ? parseISO(date) : date
+  return format(d, 'dd/MM HH:mm', { locale: ptBR })
+}
+
 export function formatTime(date: string | Date): string {
   const d = typeof date === 'string' ? parseISO(date) : date
   return format(d, 'HH:mm', { locale: ptBR })
