@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { leadService, followUpService } from '@/lib/services'
 import { createClient } from '@/lib/supabase/client'
+import { formatDateTimeShort } from '@/lib/utils/formatters'
 import { CustomFieldsRenderer, fetchCustomFieldDefs, type CustomFieldDef } from '@/components/common/CustomFields'
 import type { Lead, LeadStatus, FollowUp } from '@/lib/types'
 
@@ -230,7 +231,11 @@ function ParceiroDashboardInner() {
       // So esconde daqui as agendadas para depois de amanha (essas ja ficam so
       // na Agenda). Hoje e amanha continuam a aparecer, como prioridade.
       const matchAgendada = mostrarAgendadas || !isAgendadaFutura(l)
-      return matchSearch && matchStatus && matchCampanha && matchAgendada
+      // Leads já fechadas (nao interessado / desligado) saem da lista para ligar —
+      // nao ha nada mais a fazer com elas, so continuam a contar nas stats.
+      const isFechada = l.status === 'nao_interessado' || l.status === 'desligado'
+      const matchAberta = filterStatus !== 'all' || !isFechada
+      return matchSearch && matchStatus && matchCampanha && matchAgendada && matchAberta
     })
     // Hoje/amanha agendadas sobem ao topo (mais urgentes primeiro, por data).
     // As de "depois de amanha" (quando visiveis via "Ver na mesma") vao para o fim.
@@ -385,7 +390,7 @@ function ParceiroDashboardInner() {
                         </div>
                         <div style={{ fontSize: 11, color: isOverdue ? '#DC2626' : '#D97706', marginTop: 1 }}>
                           {isOverdue ? 'Atrasado — ' : ''}
-                          {d.toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' })} {d.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
+                          {formatDateTimeShort(fu.scheduled_at)}
                         </div>
                       </div>
                     </Link>
