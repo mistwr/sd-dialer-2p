@@ -15,6 +15,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { leadService, callHistoryService, followUpService } from '@/lib/services'
 import { createClient } from '@/lib/supabase/client'
 import { CustomFieldsRenderer, fetchCustomFieldDefs, type CustomFieldDef } from '@/components/common/CustomFields'
+import { DateInputPT } from '@/components/common/DateInputPT'
 import type { Lead, CallResult, CallHistory } from '@/lib/types'
 import CallRecorder from '@/components/ai/CallRecorder'
 import AssistenteIA from '@/components/ai/AssistenteIA'
@@ -1167,12 +1168,10 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Data</label>
-                <input
-                  type="date"
+                <DateInputPT
                   value={followUpDate}
-                  onChange={e => setFollowUpDate(e.target.value)}
+                  onChange={setFollowUpDate}
                   min={new Date().toISOString().split('T')[0]}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #E2E8F0', fontSize: 13, outline: 'none', boxSizing: 'border-box', color: '#0F172A' }}
                 />
               </div>
               <div>
