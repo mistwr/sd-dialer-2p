@@ -45,16 +45,16 @@ export default function DistribuicaoPage() {
     empresaAtiva ? ['unassigned-count', empresaAtiva, campanhaFiltro] : null,
     async () => {
       const sb = createClient()
-      let q = sb.from('leads').select('id', { count: 'exact', head: true })
-        .eq('company_id', empresaAtiva!)
-        .is('assigned_to', null)
-      if (campanhaFiltro) q = q.eq('campanha_id', campanhaFiltro)
-      const { count, error } = await q
-      // Antes isto engolia o erro e mostrava sempre "0" sem avisar nada —
-      // se a query falhar (ex: instabilidade da BD), agora aparece a dizer
-      // isso em vez de parecer que so nao ha leads por atribuir.
+      // RPC dedicada — a contagem normal (select + count:exact) demorava ~4s
+      // e por vezes falhava, porque a RLS tinha de correr a verificacao de
+      // permissao (get_is_super_admin) uma vez por cada uma das 66 mil
+      // leads. Esta funcao verifica a permissao UMA vez so.
+      const { data, error } = await sb.rpc('count_unassigned_leads', {
+        p_company_id: empresaAtiva!,
+        p_campanha_id: campanhaFiltro || null,
+      })
       if (error) throw error
-      return count ?? 0
+      return data ?? 0
     }
   )
 
