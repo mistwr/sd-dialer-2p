@@ -106,6 +106,8 @@ export default function DistribuicaoPage() {
           .eq('company_id', empresaAtiva!)
           .is('assigned_to', null)
           .range(from, from + BATCH - 1)
+        // A RLS ja restringe isto sozinha para um admin restrito (so ve as
+        // que ele importou) — nao e preciso filtro extra aqui.
         if (campanhaFiltro) q = q.eq('campanha_id', campanhaFiltro)
         const { data, error: err } = await q
         if (err) throw err
