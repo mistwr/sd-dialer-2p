@@ -205,7 +205,11 @@ function ParceiroDashboardInner() {
   // Hoje e amanha continuam visiveis aqui — e sobem ao topo, como prioridade.
   const isAgendadaFutura = (l: Lead) => {
     const dpc = (l as any).custom_fields?.data_proximo_ctt as string | undefined
-    return !!dpc && dpc.slice(0, 10) > tomorrow
+    // So conta como "agendada no futuro" se for mesmo uma data valida (YYYY-MM-DD);
+    // qualquer outra coisa (texto malformado de importacao) e ignorada em vez de
+    // ser comparada como se fosse data — evita esconder leads por engano.
+    if (!dpc || !/^\d{4}-\d{2}-\d{2}/.test(dpc)) return false
+    return dpc.slice(0, 10) > tomorrow
   }
   const isAgendadaProxima = (l: Lead) => {
     const dpc = (l as any).custom_fields?.data_proximo_ctt as string | undefined
