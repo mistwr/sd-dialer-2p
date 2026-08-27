@@ -1,5 +1,6 @@
 'use client'
 import { createClient } from '@/lib/supabase/client'
+import { DateInputPT } from '@/components/common/DateInputPT'
 
 export interface CustomFieldDef {
   id: string
@@ -60,9 +61,14 @@ export function CustomFieldsRenderer({
               rows={3}
               style={{ ...fieldStyle, resize: 'vertical' as const }}
             />
+          ) : f.field_type === 'date' ? (
+            <DateInputPT
+              value={values[f.field_key] ?? ''}
+              onChange={v => onChange(f.field_key, v)}
+            />
           ) : (
             <input
-              type={f.field_type === 'date' ? 'date' : f.field_type === 'number' ? 'number' : 'text'}
+              type={f.field_type === 'number' ? 'number' : 'text'}
               required={f.required}
               value={values[f.field_key] ?? ''}
               onChange={e => onChange(f.field_key, e.target.value)}
