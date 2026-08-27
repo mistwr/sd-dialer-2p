@@ -138,21 +138,41 @@ export const leadService = {
   async getAssigned(userId: string) {
     const sb = createClient()
     const PAGE = 1000
-    let all: Lead[] = []
+    // Com dezenas de milhares de leads atribuidas (ex: toda uma base fria),
+    // trazer tudo para o browser em memoria trava a pagina — por isso ha
+    // um teto de seguranca. Os leads com trabalho real (status != 'novo')
+    // vem sempre todos primeiro (sao poucos e sao os que importam no dia a
+    // dia); a base fria ("novo") e limitada, e quem precisar de mais usa a
+    // pesquisa por nome/telefone/NIF que consulta a base de dados diretamente.
+    const MAX_TOTAL = 8000
+
+    const { data: trabalhadas, error: errT } = await sb
+      .from('leads')
+      .select('*, campanhas(id,name)')
+      .eq('assigned_to', userId)
+      .neq('status', 'novo')
+      .order('priority', { ascending: false })
+      .order('created_at', { ascending: true })
+    if (errT) throw errT
+    let all: Lead[] = (trabalhadas ?? []) as Lead[]
+
+    let restante = MAX_TOTAL - all.length
     let from = 0
-    while (true) {
+    while (restante > 0) {
+      const take = Math.min(PAGE, restante)
       const { data, error } = await sb
         .from('leads')
         .select('*, campanhas(id,name)')
         .eq('assigned_to', userId)
-        .order('priority', { ascending: false })
+        .eq('status', 'novo')
         .order('created_at', { ascending: true })
-        .range(from, from + PAGE - 1)
+        .range(from, from + take - 1)
       if (error) throw error
       const page = (data ?? []) as Lead[]
       all = all.concat(page)
-      if (page.length < PAGE) break
-      from += PAGE
+      restante -= page.length
+      if (page.length < take) break
+      from += take
     }
     return all
   },
