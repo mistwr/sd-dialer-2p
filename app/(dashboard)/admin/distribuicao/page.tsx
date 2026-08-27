@@ -41,7 +41,7 @@ export default function DistribuicaoPage() {
 
   // So o numero de leads por atribuir (nao a lista toda — com dezenas de milhares
   // de leads, carregar tudo so para saber "quantas ha" trava a pagina).
-  const { data: unassignedCount = 0, isLoading: loadingLeads, mutate } = useSWR(
+  const { data: unassignedCount = 0, isLoading: loadingLeads, mutate, error: unassignedError } = useSWR(
     empresaAtiva ? ['unassigned-count', empresaAtiva, campanhaFiltro] : null,
     async () => {
       const sb = createClient()
@@ -49,7 +49,11 @@ export default function DistribuicaoPage() {
         .eq('company_id', empresaAtiva!)
         .is('assigned_to', null)
       if (campanhaFiltro) q = q.eq('campanha_id', campanhaFiltro)
-      const { count } = await q
+      const { count, error } = await q
+      // Antes isto engolia o erro e mostrava sempre "0" sem avisar nada —
+      // se a query falhar (ex: instabilidade da BD), agora aparece a dizer
+      // isso em vez de parecer que so nao ha leads por atribuir.
+      if (error) throw error
       return count ?? 0
     }
   )
@@ -140,6 +144,11 @@ export default function DistribuicaoPage() {
 
       {isLoading ? <PageSpinner /> : (
         <>
+          {unassignedError && (
+            <div style={{ background: '#FEE2E2', border: '1px solid #FECACA', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#991B1B', marginBottom: 16 }}>
+              Erro ao contar leads por atribuir: {unassignedError.message || 'erro desconhecido'}. Tenta atualizar a pagina.
+            </div>
+          )}
           {/* Filtros: que base de dados distribuir */}
           <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 24px', marginBottom: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <h2 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700, color: '#0F172A' }}>Que base de dados distribuir?</h2>
