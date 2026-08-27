@@ -87,6 +87,12 @@ export default function AgendaPage() {
 
   const groups = { atrasado: [] as any[], hoje: [] as any[], proximo: [] as any[] }
   followUpsFiltrados.forEach((fu: any) => groups[classify(fu.scheduled_at) as keyof typeof groups].push(fu))
+  // Atrasados: o mais recente (menos atrasado, mais perto de hoje) primeiro.
+  // Hoje/Proximos: o mais proximo (data/hora mais cedo a seguir) primeiro —
+  // e a data mais urgente a tratar, nao a mais distante no futuro.
+  groups.atrasado.sort((a, b) => (a.scheduled_at < b.scheduled_at ? 1 : -1))
+  groups.hoje.sort((a, b) => (a.scheduled_at < b.scheduled_at ? -1 : 1))
+  groups.proximo.sort((a, b) => (a.scheduled_at < b.scheduled_at ? -1 : 1))
 
   const instGroups = { atrasado: [] as any[], hoje: [] as any[], proximo: [] as any[] }
   instalacoes.forEach(v => instGroups[classify(v.data_instalacao) as keyof typeof instGroups].push(v))
