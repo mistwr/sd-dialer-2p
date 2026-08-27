@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import useSWR from 'swr'
 import {
-  Phone, MessageCircle, MapPin, ChevronLeft, Clock,
+  Phone, MessageCircle, MapPin, ChevronLeft, ChevronRight, Clock,
   User, MapPinned, Hash, Wifi, FileText, CheckCircle2,
   PhoneOff, PhoneMissed, AlertCircle, Calendar,
   HelpCircle, Plus, History, X, Sparkles, Brain, Trash2, Pencil,
@@ -369,6 +369,32 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
       router.push('/parceiro')
     } finally {
       setDeleting(false)
+    }
+  }
+
+  const [loadingNext, setLoadingNext] = useState(false)
+  const handleNextCall = async () => {
+    if (!user || !lead) return
+    setLoadingNext(true)
+    try {
+      const sb = createClient()
+      const { data, error } = await sb
+        .from('leads')
+        .select('id')
+        .eq('assigned_to', user.id)
+        .neq('id', lead.id)
+        .in('status', ['novo', 'nao_atende', 'ligar_depois'])
+        .order('status', { ascending: true }) // 'ligar_depois'/'nao_atende' antes de 'novo' alfabeticamente nao interessa, so precisamos de alguma ordem estavel
+        .order('created_at', { ascending: true })
+        .limit(1)
+      if (error) throw error
+      if (data && data.length > 0) {
+        router.push(`/parceiro/leads/${data[0].id}`)
+      } else {
+        router.push('/parceiro')
+      }
+    } finally {
+      setLoadingNext(false)
     }
   }
 
@@ -1126,6 +1152,20 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
                     )}
                   </div>
                 )}
+
+                {/* Proxima chamada */}
+                <button
+                  onClick={handleNextCall}
+                  disabled={loadingNext}
+                  style={{
+                    width: '100%', padding: '15px', borderRadius: 12, border: 'none',
+                    background: '#2563EB', color: '#fff', fontSize: 15, fontWeight: 700,
+                    cursor: loadingNext ? 'not-allowed' : 'pointer', opacity: loadingNext ? 0.7 : 1,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  }}
+                >
+                  {loadingNext ? <Spinner size={18} color="#fff" /> : <>Proxima Chamada <ChevronRight size={16} /></>}
+                </button>
 
                 {/* Close / follow-up */}
                 <button
