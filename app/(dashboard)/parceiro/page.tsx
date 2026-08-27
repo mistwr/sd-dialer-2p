@@ -231,9 +231,11 @@ function ParceiroDashboardInner() {
       // So esconde daqui as agendadas para depois de amanha (essas ja ficam so
       // na Agenda). Hoje e amanha continuam a aparecer, como prioridade.
       const matchAgendada = mostrarAgendadas || !isAgendadaFutura(l)
-      // Leads já fechadas (nao interessado / desligado) saem da lista para ligar —
-      // nao ha nada mais a fazer com elas, so continuam a contar nas stats.
+      // Leads já fechadas ou sem acao imediata saem da lista para ligar —
+      // fica so "novo" (base fria), "nao_atende" e as que tem retomar chamada/
+      // follow-up agendado. As demais so continuam a contar nas stats.
       const isFechada = l.status === 'nao_interessado' || l.status === 'desligado'
+        || l.status === 'contactado' || l.status === 'numero_errado'
       const matchAberta = filterStatus !== 'all' || !isFechada
       return matchSearch && matchStatus && matchCampanha && matchAgendada && matchAberta
     })
