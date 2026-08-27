@@ -21,9 +21,9 @@ interface DateInputPTProps {
 }
 
 function splitIso(iso: string): { d: string; m: string; y: string } {
-  if (!iso || iso.length < 10) return { d: '', m: '', y: '' }
-  const [y, m, d] = iso.split('-')
-  return { d, m, y }
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '')
+  if (!m) return { d: '', m: '', y: '' }
+  return { y: m[1], m: m[2], d: m[3] }
 }
 
 export function DateInputPT({ value, onChange, min }: DateInputPTProps) {
