@@ -2,7 +2,7 @@
 import useSWR from 'swr'
 import { useState } from 'react'
 import Link from 'next/link'
-import { Calendar, Phone, Wrench, CheckCircle2, Clock, AlertCircle, User, ChevronRight, Trash2 } from 'lucide-react'
+import { Calendar, Phone, Wrench, CheckCircle2, Clock, AlertCircle, User, ChevronRight, Trash2, Search } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { followUpService } from '@/lib/services'
@@ -53,6 +53,7 @@ export default function AgendaPage() {
   const { user, loading: authLoading } = useAuth()
   const [tab, setTab] = useState<'followups' | 'instalacoes'>('followups')
   const [filterCampanha, setFilterCampanha] = useState('all')
+  const [search, setSearch] = useState('')
 
   const { data: followUps = [], isLoading: l1, mutate } = useSWR(
     user?.id ? ['agenda-fu', user.id] : null,
@@ -72,9 +73,17 @@ export default function AgendaPage() {
       followUps.filter((fu: any) => fu.lead?.campanhas).map((fu: any) => [fu.lead.campanhas.id, fu.lead.campanhas.name])
     ).entries()
   )
-  const followUpsFiltrados = filterCampanha === 'all'
+  const followUpsFiltrados = (filterCampanha === 'all'
     ? followUps
     : followUps.filter((fu: any) => fu.lead?.campanha_id === filterCampanha)
+  ).filter((fu: any) => {
+    if (!search.trim()) return true
+    const q = search.trim().toLowerCase()
+    const nome = (fu.lead?.nome ?? '').toLowerCase()
+    const telefone = (fu.lead?.telefone ?? '').toLowerCase()
+    const nif = ((fu.lead?.custom_fields as any)?.nif ?? '').toLowerCase()
+    return nome.includes(q) || telefone.includes(q) || nif.includes(q)
+  })
 
   const groups = { atrasado: [] as any[], hoje: [] as any[], proximo: [] as any[] }
   followUpsFiltrados.forEach((fu: any) => groups[classify(fu.scheduled_at) as keyof typeof groups].push(fu))
@@ -136,6 +145,25 @@ export default function AgendaPage() {
           </button>
         ))}
       </div>
+
+      {tab === 'followups' && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ position: 'relative' }}>
+            <Search size={15} color="#94A3B8" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Pesquisar por nome, telefone ou NIF..."
+              style={{
+                width: '100%', padding: '10px 12px 10px 36px', borderRadius: 10,
+                border: '1.5px solid #E2E8F0', fontSize: 13, outline: 'none',
+                boxSizing: 'border-box', color: '#0F172A',
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {tab === 'followups' && campanhasDisponiveis.length > 0 && (
         <div style={{ marginBottom: 20 }}>
