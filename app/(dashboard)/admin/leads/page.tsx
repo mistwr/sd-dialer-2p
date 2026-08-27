@@ -351,6 +351,33 @@ export default function LeadsAdminPage() {
       : null,
     async () => {
       const sb = createClient()
+      // Para um admin restrito (so ve o que e dele), contar linhas na tabela
+      // "leads" toda (mesmo so para saber quantas ha) obriga a base de dados a
+      // verificar a permissao de CADA uma das dezenas de milhares de leads da
+      // empresa — demora segundos e pode falhar. Nesse caso simples (sem os
+      // filtros especiais de fidelizacao/duplicados), usa-se uma funcao dedicada
+      // que faz a mesma conta de forma direta e rapida.
+      const simplesFilters = !empresarialAlerta && !residencialFollowup && !duplicatesOnly && !fidelizacaoAno && !fidelizacaoMes
+      if (profile?.restricted_admin && simplesFilters) {
+        const empresaAlvo = empresaFiltro || profile.company_id || ''
+        const [{ count: totalRestrito, error: errCount }, { data, error }] = await Promise.all([
+          sb.rpc('count_my_visible_leads', {
+            p_company_id: empresaAlvo,
+            p_status: statusFilter || null,
+            p_assigned_to: assignedToFilter && assignedToFilter !== '__unassigned__' && assignedToFilter !== '__self__' ? assignedToFilter : (assignedToFilter === '__self__' ? profile.id : null),
+            p_assigned_unassigned: assignedToFilter === '__unassigned__',
+            p_campanha_id: campanhaFilter || null,
+            p_origem: origemFilter || null,
+            p_search: debouncedSearch || null,
+          }).then(r => ({ count: r.data as number, error: r.error })),
+          buildQuery(sb, { count: false })
+            .order('created_at', { ascending: false })
+            .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1),
+        ])
+        if (errCount) throw errCount
+        if (error) throw error
+        return { rows: (data ?? []) as Lead[], total: totalRestrito ?? 0 }
+      }
       let q = buildQuery(sb, { count: true })
       // Ordem cronologica: nas leads normais, mais recentes primeiro; no aviso
       // de fidelizacao, a terminar mais cedo primeiro; no follow-up residencial,
