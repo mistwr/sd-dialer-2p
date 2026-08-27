@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import useSWR from 'swr'
 import { Users, PhoneCall, Shuffle, CheckCircle2, AlertCircle, UserCheck } from 'lucide-react'
-import { leadService, usuarioService, campanhaService } from '@/lib/services'
+import { leadService, usuarioService, campanhaService, companyService } from '@/lib/services'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { PageSpinner } from '@/components/ui/Spinner'
@@ -16,27 +16,37 @@ export default function DistribuicaoPage() {
   const [error, setError] = useState<string | null>(null)
   const [campanhaFiltro, setCampanhaFiltro] = useState('')
   const [parceirosSelecionados, setParceirosSelecionados] = useState<Set<string>>(new Set())
+  // Super-admin ve/distribui para qualquer empresa — mas tem de escolher UMA
+  // de cada vez, para nunca misturar leads de uma empresa com parceiros de
+  // outra (ex: atribuir leads da Solucoes Diferentes a alguem da Parcendi).
+  const [empresaFiltro, setEmpresaFiltro] = useState('')
+
+  const { data: empresas = [] } = useSWR(
+    profile?.is_super_admin ? 'empresas-dist' : null,
+    () => companyService.getAll().catch(() => [])
+  )
+
+  useEffect(() => {
+    if (profile?.company_id && !empresaFiltro) setEmpresaFiltro(profile.company_id)
+  }, [profile])
+
+  const empresaAtiva = profile?.is_super_admin ? empresaFiltro : profile?.company_id
 
   const { data: campanhas = [] } = useSWR('campanhas-dist', () => campanhaService.getAll().catch(() => []))
 
   const { data: parceiros = [], isLoading: loadingParceiros } = useSWR(
-    profile?.company_id ? ['parceiros', profile.company_id, profile.is_super_admin] : null,
-    () => (
-      profile?.is_super_admin
-        // Super-admin: ve parceiros de TODAS as empresas, nao so a sua
-        ? usuarioService.getAll().then(u => u.filter(x => x.role === 'parceiro' && x.status === 'active'))
-        : usuarioService.getByCompany(profile!.company_id!).then(u => u.filter(x => x.role === 'parceiro' && x.status === 'active'))
-    )
+    empresaAtiva ? ['parceiros', empresaAtiva] : null,
+    () => usuarioService.getByCompany(empresaAtiva!).then(u => u.filter(x => x.role === 'parceiro' && x.status === 'active'))
   )
 
   // So o numero de leads por atribuir (nao a lista toda — com dezenas de milhares
   // de leads, carregar tudo so para saber "quantas ha" trava a pagina).
   const { data: unassignedCount = 0, isLoading: loadingLeads, mutate } = useSWR(
-    profile?.company_id ? ['unassigned-count', profile.company_id, campanhaFiltro] : null,
+    empresaAtiva ? ['unassigned-count', empresaAtiva, campanhaFiltro] : null,
     async () => {
       const sb = createClient()
       let q = sb.from('leads').select('id', { count: 'exact', head: true })
-        .eq('company_id', profile!.company_id!)
+        .eq('company_id', empresaAtiva!)
         .is('assigned_to', null)
       if (campanhaFiltro) q = q.eq('campanha_id', campanhaFiltro)
       const { count } = await q
@@ -89,7 +99,7 @@ export default function DistribuicaoPage() {
       const BATCH = 1000
       while (true) {
         let q = sb.from('leads').select('id')
-          .eq('company_id', profile!.company_id!)
+          .eq('company_id', empresaAtiva!)
           .is('assigned_to', null)
           .range(from, from + BATCH - 1)
         if (campanhaFiltro) q = q.eq('campanha_id', campanhaFiltro)
@@ -134,6 +144,15 @@ export default function DistribuicaoPage() {
           <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 24px', marginBottom: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <h2 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700, color: '#0F172A' }}>Que base de dados distribuir?</h2>
             <p style={{ color: '#64748B', fontSize: 13, margin: '0 0 14px' }}>Filtra por campanha para distribuir só um lote especifico (ex: uma importacao recente).</p>
+            {profile?.is_super_admin && (
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Empresa</label>
+                <select value={empresaFiltro} onChange={e => { setEmpresaFiltro(e.target.value); setCampanhaFiltro(''); setParceirosSelecionados(new Set()) }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #FDE68A', background: '#FFFBEB', fontSize: 13, fontWeight: 600, outline: 'none' }}>
+                  {empresas.map((e: any) => <option key={e.id} value={e.id}>{e.name}</option>)}
+                </select>
+              </div>
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Campanha</label>
