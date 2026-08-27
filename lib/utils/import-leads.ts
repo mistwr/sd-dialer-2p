@@ -301,7 +301,7 @@ export function parseFile(file: File, customDefs: CustomFieldDefLite[] = []): Pr
                   const d = String(rawVal.getDate()).padStart(2, '0')
                   val = `${y}-${mo}-${d}`
                 } else {
-                  const m = val.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/)
+                  const m = val.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/)
                   if (m) {
                     let [, d, mo, y] = m
                     const year = y.length === 2 ? `20${y}` : y
