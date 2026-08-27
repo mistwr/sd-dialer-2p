@@ -291,7 +291,7 @@ export default function LeadsAdminPage() {
     if (empresarialAlerta) {
       // Vista dedicada: leads MEO Empresas / MEO Energia Empresas cuja
       // fidelizacao termina nos proximos 6 meses — sem embeds (a view nao os expoe).
-      let q = sb.from('leads_fidelizacao_empresarial').select(cols ?? '*', count ? { count: 'exact' } : undefined)
+      let q = sb.from('leads_fidelizacao_empresarial').select(cols ?? '*', count ? { count: 'estimated' } : undefined)
       if (empresaFiltro) q = q.eq('company_id', empresaFiltro)
       if (debouncedSearch) {
         const s = debouncedSearch.replace(/[,()]/g, '')
@@ -302,7 +302,7 @@ export default function LeadsAdminPage() {
     }
     if (residencialFollowup) {
       // Residencial sem fidelizacao: follow-up devido 4 meses depois de criada a lead.
-      let q = sb.from('leads_followup_residencial').select(cols ?? '*', count ? { count: 'exact' } : undefined)
+      let q = sb.from('leads_followup_residencial').select(cols ?? '*', count ? { count: 'estimated' } : undefined)
       if (empresaFiltro) q = q.eq('company_id', empresaFiltro)
       if (debouncedSearch) {
         const s = debouncedSearch.replace(/[,()]/g, '')
@@ -313,7 +313,7 @@ export default function LeadsAdminPage() {
     }
     let q = sb.from('leads').select(
       cols ?? '*, campanhas!left(id,name), parceiro:assigned_to!left(id,full_name,avatar_url), etapa:pipeline_etapa_id!left(id,nome)',
-      count ? { count: 'exact' } : undefined
+      count ? { count: 'estimated' } : undefined
     )
     // Sem filtro de empresa aqui por defeito — a RLS ja trata disso (admin/supervisor
     // veem a sua empresa, super-admin ve tudo). So filtra explicitamente se o
