@@ -24,7 +24,7 @@ export function CampanhaCodigosPage({ embutido = false }: { embutido?: boolean }
   const aPesquisar = query.trim().length > 0;
 
   return (
-    <div className={embutido ? "" : "mx-auto max-w-5xl px-4 py-6"}>
+    <div className={embutido ? "min-w-0" : "mx-auto min-w-0 max-w-5xl px-3 py-4 sm:px-4 sm:py-6"}>
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         {!embutido && <h1 className="text-xl font-bold text-gray-900">Campanhas — Códigos D2D</h1>}
         <input
@@ -37,12 +37,12 @@ export function CampanhaCodigosPage({ embutido = false }: { embutido?: boolean }
       </div>
 
       {!aPesquisar && (
-        <div className="mb-4 flex gap-2 overflow-x-auto">
+        <div className="mb-4 grid grid-cols-3 gap-1.5 rounded-2xl bg-gray-100 p-1 sm:flex sm:bg-transparent sm:p-0">
           {folhasCodigos.map((folha) => (
             <button
               key={folha.id}
               onClick={() => setProdutoAtivo(folha.id)}
-              className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+              className={`min-w-0 rounded-xl px-2 py-2.5 text-center text-xs font-semibold leading-tight transition-colors sm:whitespace-nowrap sm:rounded-full sm:px-4 sm:text-sm ${
                 produtoAtivo === folha.id
                   ? "bg-indigo-600 text-white"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
@@ -79,7 +79,7 @@ export function CampanhaCodigosPage({ embutido = false }: { embutido?: boolean }
         </div>
       ) : (
         <div>
-          <p className="mb-4 text-xs text-gray-400">
+          <p className="mb-4 text-xs leading-relaxed text-gray-400">
             Atualizado em {folhaAtiva.atualizadoEm} · toca num código para o copiar
           </p>
           {folhaAtiva.tabelas.map((tabela) => (
