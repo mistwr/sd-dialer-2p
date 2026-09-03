@@ -101,6 +101,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const effectiveRole = canSwitchView ? viewRole : role
   const visibleNav = NAV.filter(n => n.roles.includes(effectiveRole))
+  const activeNavItem = visibleNav.find(item => pathname === item.href || (item.href !== '/admin' && item.href !== '/parceiro' && pathname.startsWith(item.href)))
 
   const avatarInitials = profile?.full_name
     ? profile.full_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
@@ -117,7 +118,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       )}
 
       <aside style={{
-        width: 240,
+        width: 'min(86vw, 280px)',
         background: '#0F172A',
         display: 'flex',
         flexDirection: 'column',
@@ -266,7 +267,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
         <header style={{
           height: 56, background: '#fff', borderBottom: '1px solid #E2E8F0',
-          display: 'flex', alignItems: 'center', padding: '0 20px', gap: 12,
+          display: 'flex', alignItems: 'center', padding: '0 12px', gap: 6,
           flexShrink: 0, position: 'sticky', top: 0, zIndex: 10,
         }}>
           <button
@@ -293,6 +294,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             >
               <ArrowRight size={19} />
             </button>
+          </div>
+          <div className="mobile-page-title" style={{ minWidth: 0, fontSize: 14, fontWeight: 700, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {activeNavItem?.label ?? 'SD Dialer'}
           </div>
           <div style={{ flex: 1 }} />
           <div ref={bellRef} style={{ position: 'relative' }}>
@@ -324,7 +328,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {bellOpen && (
               <div style={{
                 position: 'absolute', top: 'calc(100% + 8px)', right: 0,
-                width: 340, background: '#fff', borderRadius: 14,
+                width: 'min(340px, calc(100vw - 24px))', background: '#fff', borderRadius: 14,
                 border: '1px solid #E2E8F0', boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
                 zIndex: 50, overflow: 'hidden',
               }}>
@@ -378,7 +382,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        <main style={{ flex: 1, overflowY: 'auto', padding: '24px 20px' }}>
+        <main className="dashboard-main" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '24px 20px' }}>
           {user?.id && profile?.company_id && (
             <div style={{ maxWidth: 900, margin: '0 auto 0' }}>
               <MensagemMotivacional userId={user.id} companyId={profile.company_id} />
@@ -390,12 +394,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <style>{`
         @media (min-width: 768px) {
-          .sidebar-fixed { transform: translateX(0) !important; position: relative !important; }
+          .sidebar-fixed { width: 240px !important; transform: translateX(0) !important; position: relative !important; }
           .sidebar-spacer { display: none; }
           .md-hidden { display: none !important; }
+          .mobile-page-title { display: none !important; }
         }
         @media (max-width: 767px) {
           .sidebar-spacer { display: none; }
+          .dashboard-main { padding: 14px 12px 24px !important; }
         }
       `}</style>
     </div>
