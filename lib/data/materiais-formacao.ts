@@ -98,13 +98,6 @@ export const materiaisFormacao: MaterialFormacao[] = [
     ],
     destaque: "Bora equipa. Juntos Somos +",
   },
-  {
-    id: "post-modo-poupanca",
-    tipo: "post",
-    titulo: "Modo Poupança Ativado",
-    imagem: "/formacao/mypoupar-modo-poupanca-ativado.png",
-    notas: ["+ TV · + Energia · + Resultados"],
-  },
 ];
 
 export const logoEliteMeo = "/formacao/mypoupar-elite-meo-logo.png";
