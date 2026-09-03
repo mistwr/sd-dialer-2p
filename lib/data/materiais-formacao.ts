@@ -1,7 +1,8 @@
 /**
  * Materiais de Formação — MyPoupar Elite MEO.
  * Texto extraído diretamente dos guiões/scripts em imagem, para poder ser
- * pesquisado, copiado e mantido atualizado em texto.
+ * pesquisado, copiado e mantido atualizado em texto (as imagens ficam em
+ * public/formacao/ como referência visual/para partilhar).
  */
 
 export interface PassoGuiao {
@@ -15,10 +16,10 @@ export interface MaterialFormacao {
   tipo: "guiao" | "post";
   titulo: string;
   subtitulo?: string;
-  imagem: string;
+  imagem: string; // caminho em /public
   passos?: PassoGuiao[];
   notas?: string[];
-  destaque?: string;
+  destaque?: string; // frase de fecho / call-to-action
 }
 
 export const materiaisFormacao: MaterialFormacao[] = [
@@ -27,7 +28,7 @@ export const materiaisFormacao: MaterialFormacao[] = [
     tipo: "guiao",
     titulo: "Guião pronto a usar",
     subtitulo: "Para fechar com a MyPoupar + SD Dialer",
-    imagem: "/formacao/mypoupar-guiao-pronto-a-usar.svg",
+    imagem: "/formacao/mypoupar-guiao-pronto-a-usar.png",
     passos: [
       {
         numero: 1,
@@ -80,7 +81,7 @@ export const materiaisFormacao: MaterialFormacao[] = [
     tipo: "guiao",
     titulo: "Novo script — Registo + acompanhamento + produção",
     subtitulo: "MyPoupar Elite MEO",
-    imagem: "/formacao/mypoupar-elite-meo-novo-script.svg",
+    imagem: "/formacao/mypoupar-elite-meo-novo-script.png",
     notas: [
       "Registem sempre todas as vendas no CRM SD Dialer.",
       "Acompanhem os estados da venda em tempo real, do registo até à instalação, para dar acompanhamento ao cliente e às vossas comissões.",
@@ -98,16 +99,11 @@ export const materiaisFormacao: MaterialFormacao[] = [
     destaque: "Bora equipa. Juntos Somos +",
   },
   {
-    id: "post-bom-arranque",
+    id: "post-modo-poupanca",
     tipo: "post",
-    titulo: "Bom arranque. Agora é crescer.",
-    subtitulo: "4 TV · 5 Energia",
-    imagem: "/formacao/mypoupar-bom-arranque-4tv-5energia.jpg",
-    notas: [
-      "Obrigado a todos pelo percurso. Mesmo sem estarmos todos operacionais, já há resultados.",
-      "Agora é usar o sistema, o SD Dialer e as ferramentas para aumentar a produção.",
-      "Quem quiser acesso ao SD Dialer ou tiver dúvidas, fale comigo.",
-    ],
+    titulo: "Modo Poupança Ativado",
+    imagem: "/formacao/mypoupar-modo-poupanca-ativado.png",
+    notas: ["+ TV · + Energia · + Resultados"],
   },
 ];
 
