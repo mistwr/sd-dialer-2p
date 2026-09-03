@@ -67,7 +67,9 @@ function GuiaoCard({ material }: { material: MaterialFormacao }) {
 export function MateriaisFormacaoGrid() {
   return (
     <div className="space-y-4">
-      {materiaisFormacao.map((m) => (
+      {materiaisFormacao
+        .filter((m) => m.id !== "post-bom-arranque")
+        .map((m) => (
         <GuiaoCard key={m.id} material={m} />
       ))}
     </div>
