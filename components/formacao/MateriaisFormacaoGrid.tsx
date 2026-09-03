@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import { materiaisFormacao, type MaterialFormacao } from "@/lib/data/materiais-formacao";
 
 function GuiaoCard({ material }: { material: MaterialFormacao }) {
@@ -10,16 +9,14 @@ function GuiaoCard({ material }: { material: MaterialFormacao }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
       <div className="p-4">
-        {/* Mantém sempre a proporção original da imagem, sem cortes no mobile. */}
-        <div className="mb-4 flex w-full items-center justify-center overflow-hidden rounded-xl bg-slate-950">
-          <Image
+        {/* Usa a proporção NATIVA do ficheiro. Sem fill, sem aspect ratio imposto e sem altura máxima. */}
+        <div className="mb-4 w-full overflow-hidden rounded-xl bg-slate-950">
+          <img
             src={material.imagem}
             alt={material.titulo}
-            width={1600}
-            height={1600}
-            unoptimized
-            sizes="(max-width: 768px) 100vw, 900px"
-            className="block h-auto max-h-[80vh] w-full object-contain"
+            loading="lazy"
+            decoding="async"
+            className="block h-auto w-full max-w-full"
           />
         </div>
 
