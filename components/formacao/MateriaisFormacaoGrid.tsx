@@ -1,143 +1,103 @@
-"use client";
-
-import { useState } from "react";
-import { materiaisFormacao, type MaterialFormacao, type PassoGuiao } from "@/lib/data/materiais-formacao";
-
 /**
- * Cartão do guião "Pronto a usar" renderizado 100% em HTML/CSS — não depende
- * de nenhuma imagem PNG. Usa apenas os dados já existentes em
- * materiais-formacao.ts (passos + destaque). Sem alturas fixas, sem
- * overflow que corte conteúdo — cresce naturalmente com o texto.
+ * Materiais de Formação — MyPoupar Elite MEO.
+ * Texto extraído diretamente dos guiões/scripts em imagem, para poder ser
+ * pesquisado, copiado e mantido atualizado em texto (as imagens ficam em
+ * public/formacao/ como referência visual/para partilhar).
  */
-function GuiaoHtmlCard({
-  titulo,
-  subtitulo,
-  passos,
-  destaque,
-}: {
+
+export interface PassoGuiao {
+  numero: number;
+  titulo: string;
+  texto: string;
+}
+
+export interface MaterialFormacao {
+  id: string;
+  tipo: "guiao" | "post";
   titulo: string;
   subtitulo?: string;
-  passos: PassoGuiao[];
-  destaque?: string;
-}) {
-  return (
-    <div className="w-full rounded-xl border border-amber-500/30 bg-gradient-to-b from-slate-950 to-slate-900 p-5 sm:p-6">
-      <p className="text-xs font-semibold uppercase tracking-widest text-amber-400">
-        MyPoupar MEO
-      </p>
-      <h3 className="mt-1 text-xl font-extrabold uppercase tracking-tight text-white sm:text-2xl">
-        {titulo}
-      </h3>
-      {subtitulo && <p className="mt-1 text-sm text-slate-400">{subtitulo}</p>}
-
-      <div className="mt-5 space-y-3">
-        {passos.map((p) => (
-          <div
-            key={p.numero}
-            className="flex gap-3 rounded-lg border border-amber-500/20 bg-slate-900/60 p-3"
-          >
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500 text-sm font-bold text-slate-950">
-              {p.numero}
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-amber-300">{p.titulo}</p>
-              <p className="mt-0.5 text-sm leading-snug text-slate-200">{p.texto}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {destaque && (
-        <p className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-200">
-          {destaque}
-        </p>
-      )}
-    </div>
-  );
+  imagem: string; // caminho em /public
+  passos?: PassoGuiao[];
+  notas?: string[];
+  destaque?: string; // frase de fecho / call-to-action
 }
 
-function GuiaoCard({ material }: { material: MaterialFormacao }) {
-  const [aberto, setAberto] = useState(false);
-  const semImagemDefeituosa = material.id === "guiao-pronto-a-usar";
+export const materiaisFormacao: MaterialFormacao[] = [
+  {
+    id: "guiao-pronto-a-usar",
+    tipo: "guiao",
+    titulo: "Guião pronto a usar",
+    subtitulo: "Para fechar com a MyPoupar + SD Dialer",
+    imagem: "/formacao/mypoupar-guiao-pronto-a-usar.png",
+    passos: [
+      {
+        numero: 1,
+        titulo: "Abertura",
+        texto:
+          "Boa tarde, fala o [NOME] da MyPoupar. Ajudamos famílias a baixar o que pagam em telecomunicações e energia. Posso fazer-lhe 3 perguntas rápidas para perceber se faz sentido no seu caso?",
+      },
+      {
+        numero: 2,
+        titulo: "Diagnóstico",
+        texto:
+          "Que operador tem atualmente? · Quanto paga mais ou menos por mês? · Tem fidelização? · E na energia, quanto costuma pagar?",
+      },
+      {
+        numero: 3,
+        titulo: "Transição",
+        texto:
+          "Perfeito. Pelo que me está a dizer, vale a pena comparar. A nossa função é simples: manter ou melhorar o serviço e tentar reduzir o custo.",
+      },
+      {
+        numero: 4,
+        titulo: "Proposta",
+        texto:
+          "Consigo apresentar-lhe uma solução MEO por [X€]. Neste momento paga [Y€], por isso estamos a falar de uma diferença de cerca de [Z€] por mês.",
+      },
+      {
+        numero: 5,
+        titulo: "Fecho",
+        texto:
+          "Se fizer sentido para si, tratamos já do processo consigo e fica acompanhado pela MyPoupar. Tem aí os seus dados para avançarmos?",
+      },
+      {
+        numero: 6,
+        titulo: 'Se disser "vou pensar"',
+        texto:
+          "Claro. Só para eu perceber: o que ainda precisa de confirmar? Preço? Fidelização? Cobertura? Condições? Ficando essa dúvida resolvida, podemos avançar?",
+      },
+      {
+        numero: 7,
+        titulo: "Regra SD Dialer",
+        texto:
+          "Nenhuma chamada termina sem registo do próximo passo: Venda · Follow-up com data · Interessado · Sem interesse · Inválido",
+      },
+    ],
+    destaque:
+      "Não vendemos só MEO. Somos gestores de poupança. Método + acompanhamento + ação = resultados.",
+  },
+  {
+    id: "novo-script-registo",
+    tipo: "guiao",
+    titulo: "Novo script — Registo + acompanhamento + produção",
+    subtitulo: "MyPoupar Elite MEO",
+    imagem: "/formacao/mypoupar-elite-meo-novo-script.png",
+    notas: [
+      "Registem sempre todas as vendas no CRM SD Dialer.",
+      "Acompanhem os estados da venda em tempo real, do registo até à instalação, para dar acompanhamento ao cliente e às vossas comissões.",
+      "Quanto mais organizado estiver, mais fácil é acompanhar, fechar e receber.",
+      "500 leads por pessoa · 2 tipos: fim de contrato + cross-sell energia.",
+      "A cada 3 vendas de energia, vale praticamente 1 TV.",
+    ],
+    passos: [
+      { numero: 1, titulo: "Abertura", texto: "Boa tarde, fala o [NOME] da MyPoupar. Posso fazer-lhe 3 perguntas rápidas?" },
+      { numero: 2, titulo: "Diagnóstico", texto: "Operador? Quanto paga? Fidelização? E a energia?" },
+      { numero: 3, titulo: "Proposta", texto: "Telecom + Energia. Procuramos a melhor solução e mais poupança." },
+      { numero: 4, titulo: "Fecho", texto: "Se fizer sentido, tratamos já do processo consigo." },
+      { numero: 5, titulo: "SD Dialer", texto: "Registar sempre: Venda · Interessado · Follow-up · Sem interesse · Inválido" },
+    ],
+    destaque: "Bora equipa. Juntos Somos +",
+  },
+];
 
-  return (
-    <div className="w-full overflow-visible rounded-xl border border-gray-200">
-      <div className="w-full p-4">
-        {semImagemDefeituosa ? (
-          <GuiaoHtmlCard
-            titulo={material.titulo}
-            subtitulo={material.subtitulo}
-            passos={material.passos ?? []}
-            destaque={material.destaque}
-          />
-        ) : (
-          <>
-            <img
-              src={material.imagem}
-              alt={material.titulo}
-              className="block h-auto w-full max-w-full rounded-lg"
-            />
-            <div className="mt-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-indigo-500">
-                {material.tipo === "guiao" ? "Guião" : "Post"}
-              </p>
-              <h3 className="text-base font-bold text-gray-900">{material.titulo}</h3>
-              {material.subtitulo && (
-                <p className="text-sm text-gray-500">{material.subtitulo}</p>
-              )}
-
-              {material.notas && (
-                <ul className="mt-2 space-y-1 text-sm text-gray-600">
-                  {material.notas.map((n, i) => (
-                    <li key={i}>• {n}</li>
-                  ))}
-                </ul>
-              )}
-
-              {material.passos && (
-                <button
-                  onClick={() => setAberto((v) => !v)}
-                  className="mt-3 text-sm font-medium text-indigo-600 hover:underline"
-                >
-                  {aberto ? "Esconder guião passo a passo" : "Ver guião passo a passo"}
-                </button>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-
-      {!semImagemDefeituosa && material.passos && aberto && (
-        <div className="w-full space-y-3 border-t border-gray-100 bg-gray-50 p-4">
-          {material.passos.map((p) => (
-            <div key={p.numero} className="flex gap-3 text-sm">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">
-                {p.numero}
-              </span>
-              <div>
-                <p className="font-semibold text-gray-800">{p.titulo}</p>
-                <p className="text-gray-600">{p.texto}</p>
-              </div>
-            </div>
-          ))}
-          {material.destaque && (
-            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
-              {material.destaque}
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Galeria de materiais de formação (guiões + posts), imagem + texto pesquisável. */
-export function MateriaisFormacaoGrid() {
-  return (
-    <div className="w-full space-y-4">
-      {materiaisFormacao.map((m) => (
-        <GuiaoCard key={m.id} material={m} />
-      ))}
-    </div>
-  );
-}
+export const logoEliteMeo = "/formacao/mypoupar-elite-meo-logo.png";
