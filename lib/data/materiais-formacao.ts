@@ -1,8 +1,7 @@
 /**
  * Materiais de Formação — MyPoupar Elite MEO.
  * Texto extraído diretamente dos guiões/scripts em imagem, para poder ser
- * pesquisado, copiado e mantido atualizado em texto (as imagens ficam em
- * public/formacao/ como referência visual/para partilhar).
+ * pesquisado, copiado e mantido atualizado em texto.
  */
 
 export interface PassoGuiao {
@@ -16,10 +15,10 @@ export interface MaterialFormacao {
   tipo: "guiao" | "post";
   titulo: string;
   subtitulo?: string;
-  imagem: string; // caminho em /public
+  imagem: string;
   passos?: PassoGuiao[];
   notas?: string[];
-  destaque?: string; // frase de fecho / call-to-action
+  destaque?: string;
 }
 
 export const materiaisFormacao: MaterialFormacao[] = [
@@ -28,7 +27,7 @@ export const materiaisFormacao: MaterialFormacao[] = [
     tipo: "guiao",
     titulo: "Guião pronto a usar",
     subtitulo: "Para fechar com a MyPoupar + SD Dialer",
-    imagem: "/formacao/mypoupar-guiao-pronto-a-usar.png",
+    imagem: "/formacao/mypoupar-guiao-pronto-a-usar.svg",
     passos: [
       {
         numero: 1,
@@ -81,7 +80,7 @@ export const materiaisFormacao: MaterialFormacao[] = [
     tipo: "guiao",
     titulo: "Novo script — Registo + acompanhamento + produção",
     subtitulo: "MyPoupar Elite MEO",
-    imagem: "/formacao/mypoupar-elite-meo-novo-script.png",
+    imagem: "/formacao/mypoupar-elite-meo-novo-script.svg",
     notas: [
       "Registem sempre todas as vendas no CRM SD Dialer.",
       "Acompanhem os estados da venda em tempo real, do registo até à instalação, para dar acompanhamento ao cliente e às vossas comissões.",
