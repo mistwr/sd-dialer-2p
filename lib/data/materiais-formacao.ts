@@ -110,13 +110,6 @@ export const materiaisFormacao: MaterialFormacao[] = [
       "Quem quiser acesso ao SD Dialer ou tiver dúvidas, fale comigo.",
     ],
   },
-  {
-    id: "post-modo-poupanca",
-    tipo: "post",
-    titulo: "Modo Poupança Ativado",
-    imagem: "/formacao/mypoupar-modo-poupanca-ativado.png",
-    notas: ["+ TV · + Energia · + Resultados"],
-  },
 ];
 
 export const logoEliteMeo = "/formacao/mypoupar-elite-meo-logo.png";
