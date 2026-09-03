@@ -10,8 +10,8 @@ function GuiaoCard({ material }: { material: MaterialFormacao }) {
   return (
     <div className="overflow-hidden rounded-xl border border-gray-200">
       <div className="grid gap-4 p-4 sm:grid-cols-[160px_1fr]">
-        <div className="relative h-40 w-full overflow-hidden rounded-lg bg-gray-900 sm:h-full">
-          <Image src={material.imagem} alt={material.titulo} fill className="object-cover" />
+        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl bg-slate-950 sm:min-h-52 sm:aspect-auto sm:h-full">
+          <Image src={material.imagem} alt={material.titulo} fill unoptimized sizes="(max-width: 640px) 100vw, 160px" className="object-contain" />
         </div>
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-indigo-500">
@@ -68,7 +68,7 @@ export function MateriaisFormacaoGrid() {
   return (
     <div className="space-y-4">
       {materiaisFormacao
-        .filter((m) => m.id !== "post-bom-arranque")
+        .filter((m) => m.id !== "post-bom-arranque" && m.id !== "post-modo-poupanca")
         .map((m) => (
         <GuiaoCard key={m.id} material={m} />
       ))}
