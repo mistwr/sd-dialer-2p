@@ -4,21 +4,21 @@ import { useEffect, useState } from "react";
 
 const SLIDES = [
   {
-    imagem: "/formacao/mypoupar-marketing-casa-energia.png",
+    imagem: "/formacao/mypoupar-marketing-casa-energia.svg",
     etiqueta: "MYPOUPAR · MEO + ENERGIA",
     titulo: "Mais poupança para o cliente. Mais resultados para a equipa.",
     texto: "Compara telecomunicações e energia numa só conversa e transforma cada contacto em duas oportunidades.",
   },
   {
-    imagem: "/formacao/mypoupar-guiao-pronto-a-usar.png",
+    imagem: "/formacao/mypoupar-guiao-pronto-a-usar.svg",
     etiqueta: "GUIÃO COMERCIAL",
     titulo: "Pergunta. Compara. Mostra a poupança. Fecha.",
     texto: "Segue o método MyPoupar e regista sempre o próximo passo no SD Dialer.",
   },
   {
-    imagem: "/formacao/mypoupar-elite-meo-novo-script.png",
+    imagem: "/formacao/mypoupar-elite-meo-novo-script.svg",
     etiqueta: "MODO PRODUÇÃO",
-    titulo: "Cada lead bem acompanhado pode valer MEO + Energia.",
+    titulo: "Cada lead bem acompanhada pode valer MEO + Energia.",
     texto: "Organização, acompanhamento e ação: a fórmula para vender mais e receber melhor.",
   },
 ];
@@ -43,17 +43,12 @@ export function MarketingSlideshow() {
   return (
     <section className="relative mb-8 overflow-hidden rounded-2xl bg-slate-950 text-white shadow-xl">
       <div className="flex flex-col sm:grid sm:grid-cols-[1fr_46%]">
-        {/*
-          IMPORTANTE:
-          Sem altura fixa, sem fill e sem object-cover.
-          A imagem usa a proporção real do ficheiro e fica sempre inteira.
-        */}
         <div className="order-1 flex w-full items-center justify-center bg-black sm:order-2">
           <img
             key={slide.imagem}
             src={slide.imagem}
             alt={slide.titulo}
-            className="block h-auto w-full max-w-full object-contain sm:max-h-[620px] sm:w-auto"
+            className="block h-auto w-full max-w-full sm:max-h-[620px] sm:w-auto"
           />
         </div>
 
