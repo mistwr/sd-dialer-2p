@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1350" role="img" aria-labelledby="t d">
+<title id="t">Guião pronto a usar</title><desc id="d">Guião comercial MyPoupar MEO com os passos de abertura, diagnóstico, transição, proposta e fecho.</desc>
+<rect width="1080" height="1350" rx="44" fill="#050915"/>
+<rect x="42" y="42" width="996" height="1266" rx="34" fill="#0B1227" stroke="#F5B51B" stroke-width="3"/>
+<text x="540" y="120" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="44" font-weight="800" fill="#FFFFFF">MYPOUPAR MEO</text>
+<text x="540" y="205" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="64" font-weight="900" fill="#F5B51B">GUIÃO PRONTO A USAR</text>
+<text x="540" y="255" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#FFFFFF">Para fechar com a MyPoupar + SD Dialer</text>
+<g font-family="Arial,Helvetica,sans-serif">
+<g transform="translate(92 330)"><circle cx="42" cy="42" r="42" fill="#F5B51B"/><text x="42" y="54" text-anchor="middle" font-size="34" font-weight="900" fill="#07101F">1</text><text x="110" y="30" font-size="30" font-weight="800" fill="#F5B51B">ABERTURA</text><text x="110" y="70" font-size="24" fill="#E8EEF8">Identifica-te, explica o motivo e pede 3 perguntas rápidas.</text></g>
+<g transform="translate(92 490)"><circle cx="42" cy="42" r="42" fill="#F5B51B"/><text x="42" y="54" text-anchor="middle" font-size="34" font-weight="900" fill="#07101F">2</text><text x="110" y="30" font-size="30" font-weight="800" fill="#F5B51B">DIAGNÓSTICO</text><text x="110" y="70" font-size="24" fill="#E8EEF8">Operador · valor mensal · fidelização · energia.</text></g>
+<g transform="translate(92 650)"><circle cx="42" cy="42" r="42" fill="#F5B51B"/><text x="42" y="54" text-anchor="middle" font-size="34" font-weight="900" fill="#07101F">3</text><text x="110" y="30" font-size="30" font-weight="800" fill="#F5B51B">TRANSIÇÃO</text><text x="110" y="70" font-size="24" fill="#E8EEF8">Confirma o que percebeste e introduz a comparação.</text></g>
+<g transform="translate(92 810)"><circle cx="42" cy="42" r="42" fill="#F5B51B"/><text x="42" y="54" text-anchor="middle" font-size="34" font-weight="900" fill="#07101F">4</text><text x="110" y="30" font-size="30" font-weight="800" fill="#F5B51B">PROPOSTA</text><text x="110" y="70" font-size="24" fill="#E8EEF8">Mostra a solução, a diferença mensal e o valor para o cliente.</text></g>
+<g transform="translate(92 970)"><circle cx="42" cy="42" r="42" fill="#F5B51B"/><text x="42" y="54" text-anchor="middle" font-size="34" font-weight="900" fill="#07101F">5</text><text x="110" y="30" font-size="30" font-weight="800" fill="#F5B51B">FECHO</text><text x="110" y="70" font-size="24" fill="#E8EEF8">Se fizer sentido, avança e trata do processo com o cliente.</text></g>
+<rect x="92" y="1145" width="896" height="105" rx="22" fill="#151F3D" stroke="#F5B51B" stroke-width="2"/>
+<text x="540" y="1188" text-anchor="middle" font-size="27" font-weight="800" fill="#FFFFFF">REGRA SD DIALER</text>
+<text x="540" y="1228" text-anchor="middle" font-size="22" fill="#E8EEF8">Venda · Follow-up · Interessado · Sem interesse · Inválido</text>
+</g></svg>
