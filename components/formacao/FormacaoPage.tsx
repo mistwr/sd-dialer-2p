@@ -27,7 +27,7 @@ export function FormacaoPage() {
   const [seccao, setSeccao] = useState<Seccao>("materiais");
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6">
+    <div className="mx-auto min-w-0 max-w-5xl px-3 py-4 sm:px-4 sm:py-6">
       <h1 className="mb-4 text-xl font-bold text-gray-900">Formação</h1>
 
       <MarketingSlideshow />
@@ -43,12 +43,12 @@ export function FormacaoPage() {
         </a>
       </div>
 
-      <div className="mb-6 flex gap-2 overflow-x-auto">
+      <div className="mb-6 grid grid-cols-3 gap-1.5 rounded-2xl bg-gray-100 p-1 sm:flex sm:bg-transparent sm:p-0">
         {SECCOES.map((s) => (
           <button
             key={s.id}
             onClick={() => setSeccao(s.id)}
-            className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+            className={`min-w-0 rounded-xl px-2 py-2.5 text-center text-xs font-semibold leading-tight transition-colors sm:whitespace-nowrap sm:rounded-full sm:px-4 sm:text-sm ${
               seccao === s.id
                 ? "bg-indigo-600 text-white"
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
