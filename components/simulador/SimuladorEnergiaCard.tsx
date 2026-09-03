@@ -3,17 +3,16 @@
 import { ExternalLink, FileSpreadsheet } from "lucide-react";
 
 /**
- * URL do simulador de energia (repo tiagofelicia.github.io rebrandizado para
- * Soluções Diferentes, hospedado na Netlify). Substitui pelo domínio final
- * assim que o rebrand estiver publicado.
+ * Portal MyPoupar para a comparação completa de telecomunicações e energia.
  */
-const SIMULADOR_URL = "https://simulador.solucoesdiferentes.pt"; // TODO: confirmar URL final
+const MYPOUPAR_URL = "https://mypoupar.pt";
 const EXCEL_URL = "/simuladores/Simulador_MEO_Energia_2026_Mobile.xlsx";
 
 /**
  * Cartão para a aba "Formação" (ou dentro da campanha MEO Energia) com:
- *  1. o simulador embebido (iframe) para o cliente ver a poupança em tempo real
- *  2. um resumo das ofertas que DUPLICAM quando o cliente já é MEO
+ *  1. o simulador Excel otimizado para telemóvel
+ *  2. ligação ao comparador completo MyPoupar
+ *  3. um resumo das ofertas que DUPLICAM quando o cliente já é MEO
  *     (Duplica Net Fixa / Duplica Net Móvel — retirado das folhas de códigos)
  */
 export function SimuladorEnergiaCard() {
@@ -39,7 +38,7 @@ export function SimuladorEnergiaCard() {
         </ul>
         <p className="mt-2 text-xs text-emerald-700">
           Usa isto como argumento de venda: mostra primeiro a poupança na
-          fatura de energia no simulador abaixo, depois soma o valor do bónus
+          fatura de energia no simulador Excel, depois soma o valor do bónus
           de dados duplicados.
         </p>
       </div>
@@ -66,30 +65,20 @@ export function SimuladorEnergiaCard() {
         </a>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm max-sm:-mx-3 max-sm:rounded-none max-sm:border-x-0">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 bg-gray-50 px-4 py-3">
-          <div>
-            <h3 className="text-sm font-semibold text-gray-800">Simulador online</h3>
-            <p className="mt-0.5 text-xs text-gray-500">Resultado atualizado em tempo real</p>
-          </div>
-          <a
-            href={SIMULADOR_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
-          >
-            Ecrã inteiro <ExternalLink size={14} aria-hidden="true" />
-          </a>
-        </div>
-        <div className="relative w-full overflow-hidden bg-white">
-          <iframe
-            src={SIMULADOR_URL}
-            title="Simulador de poupança de energia"
-            className="block h-[720px] min-h-[640px] w-full border-0 max-sm:h-[calc(100dvh-9rem)]"
-            loading="lazy"
-            allow="clipboard-write"
-          />
-        </div>
+      <div className="rounded-2xl border border-slate-200 bg-slate-950 p-5 text-white shadow-sm">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-400">MyPoupar</p>
+        <h3 className="mt-2 text-lg font-bold">Comparador completo</h3>
+        <p className="mt-1 text-sm leading-relaxed text-slate-300">
+          Consulta as soluções MyPoupar e apresenta ao cliente a melhor opção de telecomunicações e energia.
+        </p>
+        <a
+          href={MYPOUPAR_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-950"
+        >
+          Abrir mypoupar.pt <ExternalLink size={17} aria-hidden="true" />
+        </a>
       </div>
     </div>
   );
