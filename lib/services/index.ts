@@ -184,9 +184,15 @@ export const leadService = {
   },
   async bulkInsert(leads: Partial<Lead>[]) {
     const sb = createClient()
-    const { data, error } = await sb.from('leads').insert(leads).select()
-    if (error) throw error
-    return (data ?? []) as Lead[]
+    const CHUNK = 200
+    const results: Lead[] = []
+    for (let i = 0; i < leads.length; i += CHUNK) {
+      const chunk = leads.slice(i, i + CHUNK)
+      const { data, error } = await sb.from('leads').insert(chunk).select()
+      if (error) throw error
+      results.push(...((data ?? []) as Lead[]))
+    }
+    return results
   },
   async assign(leadIds: string[], userId: string) {
     const sb = createClient()
