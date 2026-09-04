@@ -163,6 +163,21 @@ function buildFieldMap(
     if (COLUMN_MAP[norm]) fieldMap[h] = COLUMN_MAP[norm]
   }
 
+  // Correspondencia mais tolerante para "morada": muitos ficheiros usam nomes
+  // como "Endereco Completo", "Morada do Cliente", "Morada Fiscal Completa" que
+  // nao batem certo com a lista exata de aliases acima. Se ainda nao encontrou
+  // uma coluna de morada, aceita qualquer cabecalho que CONTENHA "morada" ou
+  // "endereco" (e nao seja claramente uma sub-parte tipo "codigo postal").
+  if (!Object.values(fieldMap).includes('morada')) {
+    const moradaFallback = headers.find(h => {
+      if (fieldMap[h]) return false
+      const norm = normalizeHeader(h)
+      return (norm.includes('morada') || norm.includes('endereco') || norm.includes('address'))
+        && !norm.includes('codigo') && !norm.includes('postal')
+    })
+    if (moradaFallback) fieldMap[moradaFallback] = 'morada'
+  }
+
   // Identify address sub-part columns not yet mapped
   const { streetCols, doorCols } = getAddressPartHeaders(
     headers.filter(h => !fieldMap[h])
@@ -339,7 +354,10 @@ export function parseFile(file: File, customDefs: CustomFieldDefLite[] = []): Pr
         reject(err)
       }
     }
-    reader.onerror = reject
+    reader.onerror = () => {
+      const msg = reader.error?.message || 'Falha ao ler o ficheiro (verifique se não está corrompido, protegido por password, ou se o dispositivo tem memória suficiente para o abrir).'
+      reject(new Error(msg))
+    }
     reader.readAsArrayBuffer(file)
   })
 }
