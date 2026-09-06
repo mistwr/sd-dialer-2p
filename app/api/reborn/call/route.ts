@@ -56,8 +56,21 @@ async function originateViaTwilio(to: string, leadId: string) {
   if (!sid || !token || !from || !publicBase) return null
 
   const base = publicBase.startsWith('http') ? publicBase : `https://${publicBase}`
-  const twimlUrl = `${base.replace(/\/$/, '')}/api/reborn/twiml?lead_id=${encodeURIComponent(leadId)}`
-  const form = new URLSearchParams({ To: to, From: from, Url: twimlUrl, Method: 'POST' })
+  const appBase = base.replace(/\/$/, '')
+  const twimlUrl = `${appBase}/api/reborn/twiml?lead_id=${encodeURIComponent(leadId)}`
+  const statusUrl = `${appBase}/api/reborn/call-status`
+
+  const form = new URLSearchParams({
+    To: to,
+    From: from,
+    Url: twimlUrl,
+    Method: 'POST',
+    StatusCallback: statusUrl,
+    StatusCallbackMethod: 'POST',
+  })
+  for (const event of ['initiated', 'ringing', 'answered', 'completed']) {
+    form.append('StatusCallbackEvent', event)
+  }
 
   const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Calls.json`, {
     method: 'POST',
@@ -110,11 +123,25 @@ export async function POST(request: NextRequest) {
       requested_by: user.id,
     }
 
-    const asterisk = await originateViaAsterisk(payload)
-    if (asterisk) return NextResponse.json({ ok: true, ...asterisk })
+    const provider = (process.env.REBORN_VOICE_PROVIDER || 'auto').toLowerCase()
 
-    const twilio = await originateViaTwilio(to, String(lead?.id ?? body.lead_id ?? ''))
-    if (twilio) return NextResponse.json({ ok: true, ...twilio })
+    if (provider === 'twilio') {
+      const twilio = await originateViaTwilio(to, String(lead?.id ?? body.lead_id ?? ''))
+      if (twilio) return NextResponse.json({ ok: true, ...twilio })
+    }
+
+    if (provider === 'asterisk') {
+      const asterisk = await originateViaAsterisk(payload)
+      if (asterisk) return NextResponse.json({ ok: true, ...asterisk })
+    }
+
+    if (provider === 'auto') {
+      const asterisk = await originateViaAsterisk(payload)
+      if (asterisk) return NextResponse.json({ ok: true, ...asterisk })
+
+      const twilio = await originateViaTwilio(to, String(lead?.id ?? body.lead_id ?? ''))
+      if (twilio) return NextResponse.json({ ok: true, ...twilio })
+    }
 
     return NextResponse.json({
       error: 'Telefonia IA ainda sem endpoint ativo. Configura REBORN_ORIGINATE_URL ou TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN/TWILIO_FROM_NUMBER/REBORN_PUBLIC_BASE_URL.',
