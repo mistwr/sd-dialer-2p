@@ -171,13 +171,33 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
     }
   }, [stopTimer])
 
-  const handleCall = () => {
-    if (!lead) return
-    const phone = lead.telefone.replace(/\s/g, '')
-    callInitiated.current = true
+  const handleCall = async () => {
+  if (!lead) return
+  try {
+    const sb = createClient()
+    const { data: { session } } = await sb.auth.getSession()
+    if (!session?.access_token) throw new Error('Sessão expirada. Volta a entrar no SD Dialer.')
+
+    const response = await fetch('/api/reborn/call', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ lead_id: lead.id }),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(data.error || 'Não foi possível iniciar a chamada IA.')
+
+    // A chamada agora nasce no servidor (Asterisk/Twilio), não no dialer Android.
+    // Mantemos o ecrã aberto para contexto, memória e assistência em tempo real.
+    callInitiated.current = false
     startTimer()
-    window.location.href = `tel:${phone}`
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Erro ao iniciar chamada IA.'
+    alert(message)
   }
+}
 
   const handleWhatsApp = () => {
     if (!lead) return
@@ -544,7 +564,7 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
               onMouseLeave={e => { if (!timerActive) (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 20px rgba(22,163,74,0.35)' }}
             >
               <Phone size={22} />
-              {timerActive ? `Em chamada — ${formatDuration(elapsed)}` : `Chamar  ${lead.telefone}`}
+              {timerActive ? `IA em chamada — ${formatDuration(elapsed)}` : 'Iniciar chamada com IA'}
             </button>
           </div>
 
