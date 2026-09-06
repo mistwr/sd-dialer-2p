@@ -1,0 +1,86 @@
+name: Patch REBORN AI Call
+
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-reborn-ai-call.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Replace tel protocol with REBORN call API
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('app/(dashboard)/parceiro/leads/[id]/page.tsx')
+          s = p.read_text()
+          old = '''  const handleCall = () => {
+              if (!lead) return
+              const phone = lead.telefone.replace(/\\s/g, '')
+              callInitiated.current = true
+              startTimer()
+              window.location.href = `tel:${phone}`
+            }
+          '''
+          # Indentation in source is two spaces; keep a second exact form for safety.
+          old2 = '''  const handleCall = () => {
+            if (!lead) return
+            const phone = lead.telefone.replace(/\\s/g, '')
+            callInitiated.current = true
+            startTimer()
+            window.location.href = `tel:${phone}`
+          }
+          '''
+          new = '''  const handleCall = async () => {
+            if (!lead) return
+            try {
+              const sb = createClient()
+              const { data: { session } } = await sb.auth.getSession()
+              if (!session?.access_token) throw new Error('Sessão expirada. Volta a entrar no SD Dialer.')
+
+              const response = await fetch('/api/reborn/call', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({ lead_id: lead.id }),
+              })
+              const data = await response.json().catch(() => ({}))
+              if (!response.ok) throw new Error(data.error || 'Não foi possível iniciar a chamada IA.')
+
+              // A chamada agora nasce no servidor (Asterisk/Twilio), não no dialer Android.
+              // Mantemos o ecrã aberto para contexto, memória e assistência em tempo real.
+              callInitiated.current = false
+              startTimer()
+            } catch (err) {
+              const message = err instanceof Error ? err.message : 'Erro ao iniciar chamada IA.'
+              alert(message)
+            }
+          }
+          '''
+          if old2 in s:
+              s = s.replace(old2, new, 1)
+          elif old in s:
+              s = s.replace(old, new, 1)
+          else:
+              raise SystemExit('handleCall tel: block not found; refusing blind patch')
+          # Update the CTA copy so the UI makes the new transport explicit.
+          s = s.replace("{timerActive ? `Em chamada — ${formatDuration(elapsed)}` : `Chamar  ${lead.telefone}`}", "{timerActive ? `IA em chamada — ${formatDuration(elapsed)}` : 'Iniciar chamada com IA'}", 1)
+          p.write_text(s)
+      - name: Commit patch
+        run: |
+          git config user.name "REBORN Bot"
+          git config user.email "reborn-bot@users.noreply.github.com"
+          git add 'app/(dashboard)/parceiro/leads/[id]/page.tsx'
+          git diff --cached --quiet && exit 0
+          git commit -m 'Route partner AI calls through server telephony'
+          git push origin main
