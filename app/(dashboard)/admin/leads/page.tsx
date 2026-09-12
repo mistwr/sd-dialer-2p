@@ -225,6 +225,8 @@ export default function LeadsAdminPage() {
 
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [zonaFilter, setZonaFilter] = useState('')
+  const [debouncedZona, setDebouncedZona] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [campanhaFilter, setCampanhaFilter] = useState('')
   const [origemFilter, setOrigemFilter] = useState('')
@@ -270,8 +272,13 @@ export default function LeadsAdminPage() {
     return () => clearTimeout(t)
   }, [search])
 
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedZona(zonaFilter.trim()), 350)
+    return () => clearTimeout(t)
+  }, [zonaFilter])
+
   // Sempre que um filtro muda, volta a pagina 1
-  useEffect(() => { setPage(0) }, [debouncedSearch, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly, empresarialAlerta, residencialFollowup, empresaFiltro, assignedToFilter])
+  useEffect(() => { setPage(0) }, [debouncedSearch, debouncedZona, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly, empresarialAlerta, residencialFollowup, empresaFiltro, assignedToFilter])
 
   // Telefones duplicados (calculado na base de dados, nao no telemovel — necessario
   // porque com dezenas de milhares de leads nao da para carregar tudo so para comparar)
@@ -297,6 +304,10 @@ export default function LeadsAdminPage() {
         const s = debouncedSearch.replace(/[,()]/g, '')
         q = q.or(`nome.ilike.%${s}%,telefone.ilike.%${s}%,custom_fields->>nif.ilike.%${s}%`)
       }
+      if (debouncedZona) {
+        const z = debouncedZona.replace(/[,()]/g, '')
+        q = q.or(`localidade.ilike.%${z}%,morada.ilike.%${z}%,codigo_postal.ilike.%${z}%`)
+      }
       if (statusFilter) q = q.eq('status', statusFilter)
       return q
     }
@@ -307,6 +318,10 @@ export default function LeadsAdminPage() {
       if (debouncedSearch) {
         const s = debouncedSearch.replace(/[,()]/g, '')
         q = q.or(`nome.ilike.%${s}%,telefone.ilike.%${s}%,custom_fields->>nif.ilike.%${s}%`)
+      }
+      if (debouncedZona) {
+        const z = debouncedZona.replace(/[,()]/g, '')
+        q = q.or(`localidade.ilike.%${z}%,morada.ilike.%${z}%,codigo_postal.ilike.%${z}%`)
       }
       if (statusFilter) q = q.eq('status', statusFilter)
       return q
@@ -324,6 +339,10 @@ export default function LeadsAdminPage() {
     if (debouncedSearch) {
       const s = debouncedSearch.replace(/[,()]/g, '')
       q = q.or(`nome.ilike.%${s}%,telefone.ilike.%${s}%,custom_fields->>nif.ilike.%${s}%`)
+    }
+    if (debouncedZona) {
+      const z = debouncedZona.replace(/[,()]/g, '')
+      q = q.or(`localidade.ilike.%${z}%,morada.ilike.%${z}%,codigo_postal.ilike.%${z}%`)
     }
     if (statusFilter) q = q.eq('status', statusFilter)
     if (campanhaFilter) q = q.eq('campanha_id', campanhaFilter)
@@ -347,7 +366,7 @@ export default function LeadsAdminPage() {
 
   const { data: pageResult, isLoading, error: pageError, mutate } = useSWR(
     profile && (!duplicatesOnly || duplicateInfo)
-      ? ['leads-page', profile.id, debouncedSearch, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly, empresarialAlerta, residencialFollowup, empresaFiltro, assignedToFilter, page, duplicatePhonesList.join(',')]
+      ? ['leads-page', profile.id, debouncedSearch, debouncedZona, statusFilter, campanhaFilter, origemFilter, fidelizacaoAno, fidelizacaoMes, duplicatesOnly, empresarialAlerta, residencialFollowup, empresaFiltro, assignedToFilter, page, duplicatePhonesList.join(',')]
       : null,
     async () => {
       const sb = createClient()
@@ -357,7 +376,7 @@ export default function LeadsAdminPage() {
       // empresa — demora segundos e pode falhar. Nesse caso simples (sem os
       // filtros especiais de fidelizacao/duplicados), usa-se uma funcao dedicada
       // que faz a mesma conta de forma direta e rapida.
-      const simplesFilters = !empresarialAlerta && !residencialFollowup && !duplicatesOnly && !fidelizacaoAno && !fidelizacaoMes
+      const simplesFilters = !empresarialAlerta && !residencialFollowup && !duplicatesOnly && !fidelizacaoAno && !fidelizacaoMes && !debouncedZona
       if (profile?.restricted_admin && simplesFilters) {
         const empresaAlvo = empresaFiltro || profile.company_id || ''
         const [{ count: totalRestrito, error: errCount }, { data, error }] = await Promise.all([
@@ -598,6 +617,10 @@ export default function LeadsAdminPage() {
           const s = debouncedSearch.replace(/[,()]/g, '')
           q = q.or(`nome.ilike.%${s}%,telefone.ilike.%${s}%,custom_fields->>nif.ilike.%${s}%`)
         }
+        if (debouncedZona) {
+          const z = debouncedZona.replace(/[,()]/g, '')
+          q = q.or(`localidade.ilike.%${z}%,morada.ilike.%${z}%,codigo_postal.ilike.%${z}%`)
+        }
         const { data, error } = await q.range(from, from + BATCH - 1)
         if (error) throw error
         const page = (data ?? []) as unknown as Record<string, unknown>[]
@@ -735,6 +758,28 @@ export default function LeadsAdminPage() {
           <option value="">Estado: Todos</option>
           {STATUS_OPTS.map(o => <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>)}
         </select>
+        <div style={{ position: 'relative', flex: '1 1 190px' }}>
+          <Search size={15} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', pointerEvents: 'none' }} />
+          <input
+            aria-label="Filtrar por cidade ou zona"
+            placeholder="Cidade / zona..."
+            value={zonaFilter}
+            onChange={e => setZonaFilter(e.target.value)}
+            style={{ width: '100%', padding: '9px 36px 9px 33px', borderRadius: 10, border: '1.5px solid #E2E8F0', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+            onFocus={e => e.target.style.borderColor = '#2563EB'}
+            onBlur={e => e.target.style.borderColor = '#E2E8F0'}
+          />
+          {zonaFilter && (
+            <button
+              type="button"
+              aria-label="Limpar cidade ou zona"
+              onClick={() => setZonaFilter('')}
+              style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', color: '#64748B', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}
+            >
+              ×
+            </button>
+          )}
+        </div>
         <select value={assignedToFilter} onChange={e => setAssignedToFilter(e.target.value)}
           style={{ padding: '9px 12px', borderRadius: 10, border: '1.5px solid #E2E8F0', fontSize: 13, outline: 'none', background: '#fff', color: assignedToFilter ? '#0F172A' : '#94A3B8' }}>
           <option value="">Atribuído a: Todos</option>
