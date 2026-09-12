@@ -2,12 +2,15 @@
 import useSWR from 'swr'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
-import { ShoppingBag, Plus, Download, Clock } from 'lucide-react'
+import { ShoppingBag, Plus, Download, Clock, CheckCircle, Hourglass, XCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Badge } from '@/components/ui/Badge'
+import { StatCard } from '@/components/ui/StatCard'
+
+const CRM_REPORT_URL = 'https://lblnhttwadvofhkhkbsv.supabase.co/functions/v1/sd-sales-report'
 
 async function fetchVendas(userId: string) {
   const sb = createClient()
@@ -20,17 +23,29 @@ async function fetchVendas(userId: string) {
   return data ?? []
 }
 
+async function fetchCrmResumo(email: string) {
+  const url = new URL(CRM_REPORT_URL)
+  url.searchParams.set('seller_email', email)
+  const res = await fetch(url.toString(), { cache: 'no-store' })
+  if (!res.ok) throw new Error('Nao foi possivel consultar o CRM Mae')
+  return res.json()
+}
+
 const STATUS_LABEL: Record<string, string> = {
   pendente: 'Pendente',
   aprovado: 'Aprovado',
   ativo: 'Ativo',
+  validado: 'Validado',
   cancelado: 'Cancelado',
+  cancelada: 'Cancelada',
 }
 const STATUS_COLOR: Record<string, string> = {
   pendente: '#D97706',
   aprovado: '#2563EB',
   ativo: '#16A34A',
+  validado: '#16A34A',
   cancelado: '#DC2626',
+  cancelada: '#DC2626',
 }
 
 function DocLink({ path, label }: { path: string | null; label: string }) {
@@ -51,17 +66,30 @@ function DocLink({ path, label }: { path: string | null; label: string }) {
 export default function VendasPage() {
   const { user, loading: authLoading } = useAuth()
   const { data: vendas = [], isLoading } = useSWR(user?.id ? ['vendas', user.id] : null, () => fetchVendas(user!.id))
+  const { data: crmResumo, isLoading: crmLoading } = useSWR(
+    user?.email ? ['crm-mae-vendas', user.email] : null,
+    () => fetchCrmResumo(user!.email!),
+    { refreshInterval: 30000 }
+  )
 
-  if (authLoading || isLoading) return <PageSpinner />
+  if (authLoading || isLoading || crmLoading) return <PageSpinner />
+
+  const byStatus = crmResumo?.by_status ?? {}
+  const totalOficial = crmResumo?.total_sales ?? vendas.length
+  const validadas = (byStatus.validado ?? 0) + (byStatus.validada ?? 0) + (byStatus.aprovado ?? 0) + (byStatus.ativo ?? 0)
+  const pendentes = byStatus.pendente ?? 0
+  const canceladas = (byStatus.cancelado ?? 0) + (byStatus.cancelada ?? 0)
 
   return (
-    <div className="anim-fade-in" style={{ maxWidth: 800 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+    <div className="anim-fade-in" style={{ maxWidth: 900 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 800, color: '#0F172A', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
             <ShoppingBag size={20} /> As Minhas Vendas
           </h1>
-          <p style={{ fontSize: 13, color: '#64748B', margin: '4px 0 0' }}>{vendas.length} venda{vendas.length !== 1 ? 's' : ''} registada{vendas.length !== 1 ? 's' : ''}</p>
+          <p style={{ fontSize: 13, color: '#64748B', margin: '4px 0 0' }}>
+            {totalOficial} venda{totalOficial !== 1 ? 's' : ''} no CRM Mae · fonte oficial
+          </p>
         </div>
         <Link href="/parceiro/vendas/nova" style={{
           display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 10,
@@ -71,8 +99,19 @@ export default function VendasPage() {
         </Link>
       </div>
 
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12, marginBottom: 22 }}>
+        <StatCard label="Vendas CRM Mae" value={totalOficial} icon={ShoppingBag} color="#2563EB" />
+        <StatCard label="Validadas/Ativas" value={validadas} icon={CheckCircle} color="#16A34A" />
+        <StatCard label="Pendentes" value={pendentes} icon={Hourglass} color="#D97706" />
+        <StatCard label="Canceladas" value={canceladas} icon={XCircle} color="#DC2626" />
+      </div>
+
+      <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 10, background: '#EFF6FF', color: '#1D4ED8', fontSize: 12, border: '1px solid #BFDBFE' }}>
+        O total acima vem diretamente do CRM Mae. Os cartoes abaixo sao apenas os registos detalhados que ainda existem no SD Dialer.
+      </div>
+
       {vendas.length === 0 ? (
-        <EmptyState icon={ShoppingBag} title="Ainda sem vendas registadas" description="Regista a tua primeira venda para começares a acompanhar aqui." />
+        <EmptyState icon={ShoppingBag} title="Sem registos locais no SD Dialer" description="A tua producao oficial continua a ser contabilizada no CRM Mae acima." />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {vendas.map((v: any) => (
