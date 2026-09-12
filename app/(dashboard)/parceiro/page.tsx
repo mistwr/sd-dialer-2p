@@ -191,7 +191,7 @@ function ParceiroDashboardInner() {
   const [showNovaLead, setShowNovaLead] = useState(false)
   const [filterStatus, setFilterStatus] = useState<LeadStatus | 'all'>('all')
   const [filterCampanha, setFilterCampanha] = useState<string>(searchParams.get('campanha') ?? 'all')
-  const [filterLocalidade, setFilterLocalidade] = useState('all')
+  const [filterLocalidade, setFilterLocalidade] = useState('')
   const [mostrarAgendadas, setMostrarAgendadas] = useState(false)
 
   const { data: leads = [], isLoading, mutate: mutateLeads } = useSWR(
@@ -247,9 +247,9 @@ function ParceiroDashboardInner() {
         String((l as any).custom_fields?.nif ?? '').toLowerCase().includes(search.toLowerCase())
       const matchStatus = filterStatus === 'all' || l.status === filterStatus
       const matchCampanha = filterCampanha === 'all' || l.campanha_id === filterCampanha || (filterCampanha === 'sem' && !l.campanha_id)
-      const matchLocalidade = filterLocalidade === 'all'
-        || (filterLocalidade === 'sem' && !l.localidade?.trim())
-        || normalizarLocalidade(l.localidade) === filterLocalidade
+      const zonaPesquisa = normalizarLocalidade(filterLocalidade)
+      const matchLocalidade = !zonaPesquisa || [l.localidade, l.morada, l.codigo_postal]
+        .some(value => normalizarLocalidade(value).includes(zonaPesquisa))
       // So esconde daqui as agendadas para depois de amanha (essas ja ficam so
       // na Agenda). Hoje e amanha continuam a aparecer, como prioridade.
       const matchAgendada = mostrarAgendadas || !isAgendadaFutura(l)
@@ -284,15 +284,7 @@ function ParceiroDashboardInner() {
     ).entries()
   )
   const temLeadsSemCampanha = leads.some(l => !l.campanha_id)
-  const localidadesDisponiveis = Array.from(
-    new Map(
-      leads
-        .filter(l => l.localidade?.trim())
-        .map(l => [normalizarLocalidade(l.localidade), l.localidade!.trim()])
-    ).entries()
-  ).sort(([, a], [, b]) => a.localeCompare(b, 'pt-PT'))
-  const temLeadsSemLocalidade = leads.some(l => !l.localidade?.trim())
-  const filtrosAtivos = search || filterStatus !== 'all' || filterCampanha !== 'all' || filterLocalidade !== 'all'
+  const filtrosAtivos = search || filterStatus !== 'all' || filterCampanha !== 'all' || filterLocalidade
 
   // Next lead: first priority status among those not scheduled for further than tomorrow, then others
   const nextLead =
@@ -520,27 +512,20 @@ function ParceiroDashboardInner() {
               ))}
             </select>
           </div>
-          {localidadesDisponiveis.length > 0 && (
-            <div style={{ position: 'relative', flex: '1 1 170px' }}>
+          <div style={{ position: 'relative', flex: '1 1 170px' }}>
               <Filter size={14} color="#94A3B8" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-              <select
+              <input
                 aria-label="Filtrar por cidade ou zona"
+                placeholder="Cidade / zona..."
                 value={filterLocalidade}
                 onChange={e => setFilterLocalidade(e.target.value)}
                 style={{
                   width: '100%', paddingLeft: 28, paddingRight: 32, paddingTop: 9, paddingBottom: 9,
                   borderRadius: 8, border: '1px solid #E2E8F0', fontSize: 13,
-                  background: '#fff', cursor: 'pointer', outline: 'none', color: '#0F172A', appearance: 'none',
+                  background: '#fff', outline: 'none', color: '#0F172A',
                 }}
-              >
-                <option value="all">Todas as cidades / zonas</option>
-                {localidadesDisponiveis.map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-                {temLeadsSemLocalidade && <option value="sem">Sem cidade / zona</option>}
-              </select>
-            </div>
-          )}
+              />
+          </div>
           {filtrosAtivos && (
             <button
               type="button"
@@ -548,7 +533,7 @@ function ParceiroDashboardInner() {
                 setSearch('')
                 setFilterStatus('all')
                 setFilterCampanha('all')
-                setFilterLocalidade('all')
+                setFilterLocalidade('')
               }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 5, padding: '9px 11px', borderRadius: 8,
