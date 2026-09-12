@@ -1,11 +1,13 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { BarChart2, PhoneCall, Clock, TrendingUp, CheckCircle, Download, Users2, Target, PhoneIncoming, Hourglass, ThumbsDown } from 'lucide-react'
+import { BarChart2, PhoneCall, Clock, TrendingUp, CheckCircle, Download, Users2, Target, PhoneIncoming, Hourglass, ThumbsDown, Database } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { StatCard } from '@/components/ui/StatCard'
 import type { CallResult } from '@/lib/types'
+
+const CRM_REPORT_URL = 'https://lblnhttwadvofhkhkbsv.supabase.co/functions/v1/sd-sales-report'
 
 const RESULT_LABELS: Record<CallResult, string> = {
   venda: 'Venda', nao_interessado: 'Nao Interessado', nao_atende: 'Nao Atende',
@@ -15,6 +17,9 @@ const RESULT_COLORS: Record<CallResult, string> = {
   venda: '#16A34A', nao_interessado: '#DC2626', nao_atende: '#6B7280',
   numero_errado: '#8B5CF6', ligar_depois: '#0891B2', sem_cobertura: '#EA580C', outro: '#94A3B8',
 }
+
+type EquipaUser = { id: string; full_name: string; email: string | null; equipa: string | null; meta_ligacoes_dia: number }
+type CrmSeller = { user_id: string; email: string | null; full_name: string; sales: number }
 
 function fmtTime(sec: number) {
   const h = Math.floor(sec / 3600)
@@ -35,7 +40,10 @@ export default function RelatoriosPage() {
   const [to, setTo] = useState(todayStr())
   const [groupBy, setGroupBy] = useState<'comercial' | 'equipa' | 'campanha'>('comercial')
   const [calls, setCalls] = useState<any[]>([])
-  const [equipe, setEquipe] = useState<{ id: string; full_name: string; equipa: string | null; meta_ligacoes_dia: number }[]>([])
+  const [equipe, setEquipe] = useState<EquipaUser[]>([])
+  const [crmSalesTotal, setCrmSalesTotal] = useState(0)
+  const [crmBySeller, setCrmBySeller] = useState<CrmSeller[]>([])
+  const [crmOnline, setCrmOnline] = useState(false)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -43,18 +51,34 @@ export default function RelatoriosPage() {
     const fetchData = async () => {
       setLoading(true)
       const sb = createClient()
-      const [{ data: callsData }, { data: usersData }] = await Promise.all([
-        sb.from('call_history')
-          .select('*, parceiro:parceiro_id(id,full_name,equipa), lead:lead_id(nome,telefone,campanha_id,campanhas(name))')
-          .eq('company_id', profile.company_id!)
-          .gte('called_at', from + 'T00:00:00')
-          .lte('called_at', to + 'T23:59:59')
-          .order('called_at', { ascending: false }),
-        sb.from('usuarios').select('id, full_name, equipa, meta_ligacoes_dia').eq('company_id', profile.company_id!).eq('role', 'parceiro'),
-      ])
-      setCalls(callsData ?? [])
-      setEquipe(usersData ?? [])
-      setLoading(false)
+      try {
+        const [callsRes, usersRes, crmRes] = await Promise.all([
+          sb.from('call_history')
+            .select('*, parceiro:parceiro_id(id,full_name,equipa), lead:lead_id(nome,telefone,campanha_id,campanhas(name))')
+            .eq('company_id', profile.company_id!)
+            .gte('called_at', from + 'T00:00:00')
+            .lte('called_at', to + 'T23:59:59')
+            .order('called_at', { ascending: false }),
+          sb.from('usuarios').select('id, full_name, email, equipa, meta_ligacoes_dia').eq('company_id', profile.company_id!).eq('role', 'parceiro'),
+          fetch(`${CRM_REPORT_URL}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, { cache: 'no-store' })
+            .then(async r => ({ ok: r.ok, data: r.ok ? await r.json() : null }))
+            .catch(() => ({ ok: false, data: null })),
+        ])
+
+        setCalls(callsRes.data ?? [])
+        setEquipe((usersRes.data ?? []) as EquipaUser[])
+        if (crmRes.ok && crmRes.data?.ok) {
+          setCrmSalesTotal(Number(crmRes.data.total_sales ?? 0))
+          setCrmBySeller(Array.isArray(crmRes.data.by_seller) ? crmRes.data.by_seller : [])
+          setCrmOnline(true)
+        } else {
+          setCrmSalesTotal(0)
+          setCrmBySeller([])
+          setCrmOnline(false)
+        }
+      } finally {
+        setLoading(false)
+      }
     }
     fetchData()
   }, [profile, from, to])
@@ -63,13 +87,19 @@ export default function RelatoriosPage() {
   const atendidas = calls.filter(c => c.result !== 'nao_atende').length
   const interessados = calls.filter(c => c.result === 'ligar_depois').length
   const naoInteressados = calls.filter(c => c.result === 'nao_interessado').length
-  const vendas = calls.filter(c => c.result === 'venda').length
+  const vendasMarcadasDialer = calls.filter(c => c.result === 'venda').length
+  const vendasReais = crmOnline ? crmSalesTotal : vendasMarcadasDialer
   const totalSec = calls.reduce((s, c) => s + (c.duration_sec ?? 0), 0)
   const avgSec = total > 0 ? Math.round(totalSec / total) : 0
-  const conversao = total > 0 ? ((vendas / total) * 100).toFixed(1) : '0'
+  const conversao = total > 0 ? ((vendasReais / total) * 100).toFixed(1) : '0'
 
   const byResult: Record<string, number> = {}
   calls.forEach(c => { byResult[c.result] = (byResult[c.result] ?? 0) + 1 })
+
+  const crmSalesByEmail = new Map<string, number>()
+  crmBySeller.forEach(s => {
+    if (s.email) crmSalesByEmail.set(s.email.toLowerCase(), s.sales)
+  })
 
   const grouped: Record<string, { name: string; calls: number; atendidas: number; vendas: number; sec: number }> = {}
   calls.forEach(c => {
@@ -87,6 +117,24 @@ export default function RelatoriosPage() {
     if (c.result !== 'nao_atende') grouped[key].atendidas++
     if (c.result === 'venda') grouped[key].vendas++
   })
+
+  if (crmOnline && groupBy === 'comercial') {
+    equipe.forEach(u => {
+      const key = u.id
+      if (!grouped[key]) grouped[key] = { name: u.full_name, calls: 0, atendidas: 0, vendas: 0, sec: 0 }
+      grouped[key].vendas = u.email ? (crmSalesByEmail.get(u.email.toLowerCase()) ?? 0) : 0
+    })
+  }
+
+  if (crmOnline && groupBy === 'equipa') {
+    Object.values(grouped).forEach(g => { g.vendas = 0 })
+    equipe.forEach(u => {
+      const key = u.equipa ?? 'sem-equipa'
+      if (!grouped[key]) grouped[key] = { name: u.equipa ?? 'Sem equipa', calls: 0, atendidas: 0, vendas: 0, sec: 0 }
+      grouped[key].vendas += u.email ? (crmSalesByEmail.get(u.email.toLowerCase()) ?? 0) : 0
+    })
+  }
+
   const ranking = Object.values(grouped).sort((a, b) => b.vendas - a.vendas || b.calls - a.calls)
 
   const today = todayStr()
@@ -121,151 +169,91 @@ export default function RelatoriosPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: 0 }}>Relatorios</h1>
-          <p style={{ color: '#64748B', fontSize: 14, margin: '3px 0 0' }}>Analise de chamadas e desempenho</p>
+          <p style={{ color: '#64748B', fontSize: 14, margin: '3px 0 0' }}>Chamadas do SD Dialer + vendas reais do CRM Mae</p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <input type="date" value={from} onChange={e => setFrom(e.target.value)}
-            style={{ padding: '8px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 13, outline: 'none' }} />
+          <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={{ padding: '8px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 13, outline: 'none' }} />
           <span style={{ color: '#94A3B8', fontSize: 13 }}>ate</span>
-          <input type="date" value={to} onChange={e => setTo(e.target.value)}
-            style={{ padding: '8px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 13, outline: 'none' }} />
+          <input type="date" value={to} onChange={e => setTo(e.target.value)} style={{ padding: '8px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 13, outline: 'none' }} />
           <button onClick={exportCSV} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, background: '#F8FAFC', color: '#64748B', border: '1.5px solid #E2E8F0', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
             <Download size={14} /> Exportar
           </button>
         </div>
       </div>
 
+      <div style={{ marginBottom: 18, padding: '12px 14px', borderRadius: 12, background: crmOnline ? '#F0FDF4' : '#FFF7ED', border: `1px solid ${crmOnline ? '#BBF7D0' : '#FED7AA'}`, color: crmOnline ? '#166534' : '#9A3412', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Database size={16} /> {crmOnline ? 'CRM Mae ligado: as vendas apresentadas abaixo sao lidas diretamente do CRM central.' : 'CRM Mae indisponivel: a mostrar temporariamente apenas vendas marcadas no SD Dialer.'}
+      </div>
+
       {loading ? <PageSpinner /> : (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 14, marginBottom: 20 }}>
-            <StatCard label="Ligacoes Feitas"        value={total}           icon={PhoneCall}    color="#2563EB" />
-            <StatCard label="Pessoas Atendidas"      value={atendidas}       icon={PhoneIncoming} color="#0891B2" />
-            <StatCard label="Interessados/Pendentes" value={interessados}    icon={Hourglass}    color="#D97706" />
-            <StatCard label="Nao Interessados"       value={naoInteressados} icon={ThumbsDown}   color="#DC2626" />
-            <StatCard label="Vendas Feitas"          value={vendas}          icon={CheckCircle}  color="#16A34A" />
+            <StatCard label="Ligacoes Feitas" value={total} icon={PhoneCall} color="#2563EB" />
+            <StatCard label="Pessoas Atendidas" value={atendidas} icon={PhoneIncoming} color="#0891B2" />
+            <StatCard label="Interessados/Pendentes" value={interessados} icon={Hourglass} color="#D97706" />
+            <StatCard label="Nao Interessados" value={naoInteressados} icon={ThumbsDown} color="#DC2626" />
+            <StatCard label="Vendas CRM Mae" value={vendasReais} icon={CheckCircle} color="#16A34A" />
+            <StatCard label="Marcadas no Dialer" value={vendasMarcadasDialer} icon={Database} color="#64748B" />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 14, marginBottom: 28 }}>
-            <StatCard label="Taxa Conversao"  value={`${conversao}%`}  icon={TrendingUp}  color="#16A34A" />
-            <StatCard label="Tempo Total"     value={fmtTime(totalSec)} icon={Clock}       color="#8B5CF6" />
-            <StatCard label="Tempo Medio"     value={fmtTime(avgSec)}   icon={Clock}       color="#D97706" />
+            <StatCard label="Taxa Conversao Real" value={`${conversao}%`} icon={TrendingUp} color="#16A34A" />
+            <StatCard label="Tempo Total" value={fmtTime(totalSec)} icon={Clock} color="#8B5CF6" />
+            <StatCard label="Tempo Medio" value={fmtTime(avgSec)} icon={Clock} color="#D97706" />
           </div>
 
           <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '20px 24px', marginBottom: 28, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Target size={16} color="#D97706" /> Objetivo Diario de Ligacoes
-            </h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: 8 }}><Target size={16} color="#D97706" /> Objetivo Diario de Ligacoes</h2>
             <p style={{ fontSize: 12, color: '#94A3B8', margin: '0 0 16px' }}>Progresso de hoje face a meta de cada comercial</p>
-            {metaEquipe.length === 0 ? (
-              <div style={{ color: '#94A3B8', fontSize: 14, textAlign: 'center', padding: '16px 0' }}>Sem comerciais ativos</div>
-            ) : (
+            {metaEquipe.length === 0 ? <div style={{ color: '#94A3B8', fontSize: 14, textAlign: 'center', padding: '16px 0' }}>Sem comerciais ativos</div> : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {metaEquipe.map(u => (
-                  <div key={u.id}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{u.full_name}</span>
-                      <span style={{ fontSize: 12, color: '#64748B' }}>{u.feitas} / {u.meta} <strong style={{ color: u.pct >= 100 ? '#16A34A' : '#0F172A' }}>({u.pct}%)</strong></span>
-                    </div>
-                    <div style={{ height: 8, borderRadius: 4, background: '#F1F5F9', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', borderRadius: 4, background: u.pct >= 100 ? '#16A34A' : u.pct >= 60 ? '#D97706' : '#DC2626', width: `${u.pct}%`, transition: 'width 0.5s ease' }} />
-                    </div>
-                  </div>
-                ))}
+                {metaEquipe.map(u => <div key={u.id}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}><span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{u.full_name}</span><span style={{ fontSize: 12, color: '#64748B' }}>{u.feitas} / {u.meta} <strong style={{ color: u.pct >= 100 ? '#16A34A' : '#0F172A' }}>({u.pct}%)</strong></span></div>
+                  <div style={{ height: 8, borderRadius: 4, background: '#F1F5F9', overflow: 'hidden' }}><div style={{ height: '100%', borderRadius: 4, background: u.pct >= 100 ? '#16A34A' : u.pct >= 60 ? '#D97706' : '#DC2626', width: `${u.pct}%`, transition: 'width 0.5s ease' }} /></div>
+                </div>)}
               </div>
             )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 28 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20, marginBottom: 28 }}>
             <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <BarChart2 size={16} color="#2563EB" /> Resultados
-              </h2>
-              {!Object.keys(byResult).length ? (
-                <div style={{ color: '#94A3B8', fontSize: 14, textAlign: 'center', padding: '20px 0' }}>Sem dados</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {Object.entries(byResult).sort((a, b) => b[1] - a[1]).map(([result, count]) => (
-                    <div key={result}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <span style={{ fontSize: 13, color: '#374151' }}>{RESULT_LABELS[result as CallResult] ?? result}</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: RESULT_COLORS[result as CallResult] ?? '#64748B' }}>{count}</span>
-                      </div>
-                      <div style={{ height: 6, borderRadius: 3, background: '#F1F5F9', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', borderRadius: 3, background: RESULT_COLORS[result as CallResult] ?? '#94A3B8', width: `${Math.round((count / total) * 100)}%`, transition: 'width 0.5s ease' }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 8 }}><BarChart2 size={16} color="#2563EB" /> Resultados de chamadas</h2>
+              {!Object.keys(byResult).length ? <div style={{ color: '#94A3B8', fontSize: 14, textAlign: 'center', padding: '20px 0' }}>Sem dados</div> : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{Object.entries(byResult).sort((a, b) => b[1] - a[1]).map(([result, count]) => <div key={result}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}><span style={{ fontSize: 13, color: '#374151' }}>{RESULT_LABELS[result as CallResult] ?? result}</span><span style={{ fontSize: 13, fontWeight: 700, color: RESULT_COLORS[result as CallResult] ?? '#64748B' }}>{count}</span></div>
+                  <div style={{ height: 6, borderRadius: 3, background: '#F1F5F9', overflow: 'hidden' }}><div style={{ height: '100%', borderRadius: 3, background: RESULT_COLORS[result as CallResult] ?? '#94A3B8', width: `${total ? Math.round((count / total) * 100) : 0}%`, transition: 'width 0.5s ease' }} /></div>
+                </div>)}</div>
               )}
             </div>
 
             <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <h2 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Users2 size={16} color="#16A34A" /> Ranking
-                </h2>
-                <select value={groupBy} onChange={e => setGroupBy(e.target.value as any)}
-                  style={{ fontSize: 12, padding: '5px 8px', borderRadius: 7, border: '1.5px solid #E2E8F0', background: '#fff', outline: 'none', color: '#374151' }}>
-                  <option value="comercial">Por Comercial</option>
-                  <option value="equipa">Por Equipa</option>
-                  <option value="campanha">Por Campanha</option>
-                </select>
+                <h2 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}><Users2 size={16} color="#16A34A" /> Ranking</h2>
+                <select value={groupBy} onChange={e => setGroupBy(e.target.value as any)} style={{ fontSize: 12, padding: '5px 8px', borderRadius: 7, border: '1.5px solid #E2E8F0', background: '#fff', outline: 'none', color: '#374151' }}><option value="comercial">Por Comercial</option><option value="equipa">Por Equipa</option><option value="campanha">Por Campanha</option></select>
               </div>
-              {!ranking.length ? (
-                <div style={{ color: '#94A3B8', fontSize: 14, textAlign: 'center', padding: '20px 0' }}>Sem dados</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {ranking.slice(0, 8).map((p, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#64748B', flexShrink: 0 }}>
-                        {i + 1}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
-                        <div style={{ fontSize: 11, color: '#94A3B8' }}>{p.calls} chamadas &middot; {p.atendidas} atendidas &middot; {fmtTime(p.sec)}</div>
-                      </div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#16A34A' }}>{p.vendas} v</div>
-                    </div>
-                  ))}
-                </div>
+              {groupBy === 'campanha' && crmOnline && <div style={{ fontSize: 11, color: '#92400E', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '7px 9px', marginBottom: 10 }}>Por campanha, as vendas continuam a usar a marcacao da chamada porque o CRM Mae ainda nao guarda a campanha de origem.</div>}
+              {!ranking.length ? <div style={{ color: '#94A3B8', fontSize: 14, textAlign: 'center', padding: '20px 0' }}>Sem dados</div> : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{ranking.slice(0, 8).map((p, i) => <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#64748B', flexShrink: 0 }}>{i + 1}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div><div style={{ fontSize: 11, color: '#94A3B8' }}>{p.calls} chamadas &middot; {p.atendidas} atendidas &middot; {fmtTime(p.sec)}</div></div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#16A34A' }}>{p.vendas} v</div>
+                </div>)}</div>
               )}
             </div>
           </div>
 
           <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid #F1F5F9' }}>
-              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0F172A' }}>Registo de Chamadas ({calls.length})</h2>
-            </div>
-            {!calls.length ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: '#94A3B8', fontSize: 14 }}>Nenhuma chamada no periodo selecionado.</div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
-                  <thead>
-                    <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                      {['Data', 'Parceiro', 'Campanha', 'Lead', 'Resultado', 'Duracao', 'Notas'].map(h => (
-                        <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {calls.slice(0, 100).map((c, i) => (
-                      <tr key={c.id} style={{ borderBottom: i < calls.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
-                        <td style={{ padding: '10px 16px', fontSize: 12, color: '#64748B', whiteSpace: 'nowrap' }}>{new Date(c.called_at).toLocaleString('pt-PT')}</td>
-                        <td style={{ padding: '10px 16px', fontSize: 13, color: '#374151' }}>{c.parceiro?.full_name ?? '—'}</td>
-                        <td style={{ padding: '10px 16px', fontSize: 13, color: '#374151' }}>{c.lead?.campanhas?.name ?? '—'}</td>
-                        <td style={{ padding: '10px 16px', fontSize: 13, color: '#374151' }}>{c.lead?.nome ?? '—'}</td>
-                        <td style={{ padding: '10px 16px' }}>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: RESULT_COLORS[c.result as CallResult] ?? '#64748B' }}>
-                            {RESULT_LABELS[c.result as CallResult] ?? c.result}
-                          </span>
-                        </td>
-                        <td style={{ padding: '10px 16px', fontSize: 12, color: '#64748B' }}>{fmtTime(c.duration_sec ?? 0)}</td>
-                        <td style={{ padding: '10px 16px', fontSize: 12, color: '#94A3B8', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.notes ?? '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #F1F5F9' }}><h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0F172A' }}>Registo de Chamadas ({calls.length})</h2></div>
+            {!calls.length ? <div style={{ padding: '40px', textAlign: 'center', color: '#94A3B8', fontSize: 14 }}>Nenhuma chamada no periodo selecionado.</div> : (
+              <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}><thead><tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>{['Data', 'Parceiro', 'Campanha', 'Lead', 'Resultado', 'Duracao', 'Notas'].map(h => <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
+                <tbody>{calls.slice(0, 100).map((c, i) => <tr key={c.id} style={{ borderBottom: i < calls.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                  <td style={{ padding: '10px 16px', fontSize: 12, color: '#64748B', whiteSpace: 'nowrap' }}>{new Date(c.called_at).toLocaleString('pt-PT')}</td>
+                  <td style={{ padding: '10px 16px', fontSize: 13, color: '#374151' }}>{c.parceiro?.full_name ?? '—'}</td>
+                  <td style={{ padding: '10px 16px', fontSize: 13, color: '#374151' }}>{c.lead?.campanhas?.name ?? '—'}</td>
+                  <td style={{ padding: '10px 16px', fontSize: 13, color: '#374151' }}>{c.lead?.nome ?? '—'}</td>
+                  <td style={{ padding: '10px 16px' }}><span style={{ fontSize: 12, fontWeight: 600, color: RESULT_COLORS[c.result as CallResult] ?? '#64748B' }}>{RESULT_LABELS[c.result as CallResult] ?? c.result}</span></td>
+                  <td style={{ padding: '10px 16px', fontSize: 12, color: '#64748B' }}>{fmtTime(c.duration_sec ?? 0)}</td>
+                  <td style={{ padding: '10px 16px', fontSize: 12, color: '#94A3B8', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.notes ?? '—'}</td>
+                </tr>)}</tbody></table></div>
             )}
           </div>
         </>
