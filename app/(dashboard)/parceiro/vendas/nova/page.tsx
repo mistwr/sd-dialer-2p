@@ -64,6 +64,38 @@ function NovaVendaContent() {
     setSaving(true)
     try {
       const sb = createClient()
+
+      // 1) O CRM Mãe é a fonte oficial. A venda só continua se entrar lá primeiro.
+      const { data: crmData, error: crmError } = await sb.functions.invoke('register-crm-sale', {
+        body: {
+          direct_sale: {
+            lead_id: leadId || null,
+            client_name: form.client_name.trim(),
+            client_nif: form.client_nif.trim() || null,
+            client_phone: form.client_phone.trim(),
+            client_email: form.client_email.trim() || null,
+            client_address: form.client_address.trim() || null,
+            service_type: form.service_type.trim() || null,
+            operator: form.operator.trim() || null,
+            plano: form.plano.trim() || null,
+            amount: form.amount ? parseFloat(form.amount) : null,
+            contract_type: form.contract_type.trim() || null,
+            notes: form.notes.trim() || null,
+          },
+        },
+      })
+      if (crmError || !crmData?.ok || !crmData?.sale_id) {
+        throw new Error(crmData?.error || crmError?.message || 'A venda não entrou no CRM Mãe. Tenta novamente.')
+      }
+
+      // 2) Mantemos apenas um espelho local para documentos/compatibilidade da interface.
+      // O número e estado oficiais vêm sempre do CRM Mãe.
+      const localNotes = [
+        form.notes.trim() || null,
+        `CRM_MAE_ID:${crmData.sale_id}`,
+        'Espelho local — fonte oficial: CRM Mãe',
+      ].filter(Boolean).join('\n')
+
       const { data: venda, error: e1 } = await sb.from('vendas').insert({
         company_id: profile!.company_id,
         lead_id: leadId || null,
@@ -78,10 +110,10 @@ function NovaVendaContent() {
         plano: form.plano.trim() || null,
         amount: form.amount ? parseFloat(form.amount) : null,
         contract_type: form.contract_type.trim() || null,
-        notes: form.notes.trim() || null,
+        notes: localNotes,
         status: 'pendente',
       }).select().single()
-      if (e1) throw e1
+      if (e1) throw new Error(`Venda já registada no CRM Mãe, mas o espelho local falhou: ${e1.message}`)
 
       if (doc1) {
         const ext = doc1.name.split('.').pop()
@@ -115,7 +147,7 @@ function NovaVendaContent() {
     return (
       <div style={{ textAlign: 'center', padding: '60px 20px' }}>
         <CheckCircle2 size={48} color="#22C55E" style={{ margin: '0 auto 14px' }} />
-        <p style={{ fontSize: 16, fontWeight: 700, color: '#0F172A' }}>Venda registada com sucesso!</p>
+        <p style={{ fontSize: 16, fontWeight: 700, color: '#0F172A' }}>Venda registada no CRM Mãe com sucesso!</p>
       </div>
     )
   }
@@ -126,6 +158,7 @@ function NovaVendaContent() {
         <h1 style={{ fontSize: 20, fontWeight: 800, color: '#0F172A', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
           <ShoppingBag size={20} /> Registar Venda
         </h1>
+        <p style={{ fontSize: 12, color: '#16A34A', margin: '5px 0 0', fontWeight: 600 }}>Fonte oficial: CRM Mãe</p>
         {leadNome && <p style={{ fontSize: 13, color: '#64748B', margin: '4px 0 0' }}>A partir da lead: <strong>{leadNome}</strong></p>}
       </div>
 
@@ -213,7 +246,7 @@ function NovaVendaContent() {
             cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1,
           }}
         >
-          {saving ? 'A guardar...' : 'Registar Venda'}
+          {saving ? 'A guardar no CRM Mãe...' : 'Registar Venda'}
         </button>
       </form>
     </div>
