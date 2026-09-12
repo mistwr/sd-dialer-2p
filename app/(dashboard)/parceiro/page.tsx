@@ -4,7 +4,7 @@ import useSWR from 'swr'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import {
-  PhoneCall, Search, ChevronRight, Clock, User,
+  PhoneCall, Search, ChevronRight,
   CheckCircle2, PhoneOff, PhoneMissed, AlertCircle,
   Calendar, Wifi, HelpCircle, Filter, Bell, Plus, X,
 } from 'lucide-react'
@@ -15,7 +15,7 @@ import { leadService, followUpService } from '@/lib/services'
 import { createClient } from '@/lib/supabase/client'
 import { formatDateTimeShort } from '@/lib/utils/formatters'
 import { CustomFieldsRenderer, fetchCustomFieldDefs, type CustomFieldDef } from '@/components/common/CustomFields'
-import type { Lead, LeadStatus, FollowUp } from '@/lib/types'
+import type { Lead, LeadStatus } from '@/lib/types'
 
 const STATUS_META: Record<LeadStatus, { label: string; color: string; bg: string; Icon: React.ElementType }> = {
   novo:            { label: 'Novo',           color: '#2563EB', bg: '#EFF6FF', Icon: PhoneCall },
@@ -34,6 +34,14 @@ const STATUS_META: Record<LeadStatus, { label: string; color: string; bg: string
 
 const PRIORITY_STATUSES: LeadStatus[] = ['novo', 'ligar_depois', 'contactado']
 
+function normalizarLocalidade(value: string | null | undefined) {
+  return (value ?? '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-PT')
+}
+
 // ── Modal: adicionar contacto manualmente, sem passar por importacao ─────────
 function NovaLeadModal({ companyId, userId, onClose, onCreated }: {
   companyId: string; userId: string; onClose: () => void; onCreated: () => void
@@ -42,6 +50,7 @@ function NovaLeadModal({ companyId, userId, onClose, onCreated }: {
   const [telefone, setTelefone] = useState('')
   const [email, setEmail] = useState('')
   const [morada, setMorada] = useState('')
+  const [localidade, setLocalidade] = useState('')
   const [observacoes, setObservacoes] = useState('')
   const [pipelines, setPipelines] = useState<{ id: string; nome: string }[]>([])
   const [pipelineId, setPipelineId] = useState('')
@@ -89,7 +98,8 @@ function NovaLeadModal({ companyId, userId, onClose, onCreated }: {
 
       const { error: err } = await sb.from('leads').insert({
         nome: nome.trim(), telefone: telefone.trim(), email: email.trim() || null,
-        morada: morada.trim() || null, observacoes: observacoes.trim() || null,
+        morada: morada.trim() || null, localidade: localidade.trim() || null,
+        observacoes: observacoes.trim() || null,
         company_id: companyId, status: 'novo', imported_at: new Date().toISOString(),
         custom_fields: customValues, pipeline_etapa_id: pipelineEtapaId,
         assigned_to: userId, skip_auto_assign: true, priority: 1,
@@ -143,6 +153,10 @@ function NovaLeadModal({ companyId, userId, onClose, onCreated }: {
             <label style={labelStyle}>Morada</label>
             <input value={morada} onChange={e => setMorada(e.target.value)} style={fieldStyle} />
           </div>
+          <div>
+            <label style={labelStyle}>Cidade / zona</label>
+            <input value={localidade} onChange={e => setLocalidade(e.target.value)} style={fieldStyle} placeholder="Ex.: Vila Nova de Gaia, Ermesinde..." />
+          </div>
 
           {customDefs.length > 0 && (
             <>
@@ -177,6 +191,7 @@ function ParceiroDashboardInner() {
   const [showNovaLead, setShowNovaLead] = useState(false)
   const [filterStatus, setFilterStatus] = useState<LeadStatus | 'all'>('all')
   const [filterCampanha, setFilterCampanha] = useState<string>(searchParams.get('campanha') ?? 'all')
+  const [filterLocalidade, setFilterLocalidade] = useState('all')
   const [mostrarAgendadas, setMostrarAgendadas] = useState(false)
 
   const { data: leads = [], isLoading, mutate: mutateLeads } = useSWR(
@@ -232,6 +247,9 @@ function ParceiroDashboardInner() {
         String((l as any).custom_fields?.nif ?? '').toLowerCase().includes(search.toLowerCase())
       const matchStatus = filterStatus === 'all' || l.status === filterStatus
       const matchCampanha = filterCampanha === 'all' || l.campanha_id === filterCampanha || (filterCampanha === 'sem' && !l.campanha_id)
+      const matchLocalidade = filterLocalidade === 'all'
+        || (filterLocalidade === 'sem' && !l.localidade?.trim())
+        || normalizarLocalidade(l.localidade) === filterLocalidade
       // So esconde daqui as agendadas para depois de amanha (essas ja ficam so
       // na Agenda). Hoje e amanha continuam a aparecer, como prioridade.
       const matchAgendada = mostrarAgendadas || !isAgendadaFutura(l)
@@ -241,7 +259,7 @@ function ParceiroDashboardInner() {
       const isFechada = l.status === 'nao_interessado' || l.status === 'desligado'
         || l.status === 'contactado' || l.status === 'numero_errado'
       const matchAberta = filterStatus !== 'all' || !isFechada
-      return matchSearch && matchStatus && matchCampanha && matchAgendada && matchAberta
+      return matchSearch && matchStatus && matchCampanha && matchLocalidade && matchAgendada && matchAberta
     })
     // Hoje/amanha agendadas sobem ao topo (mais urgentes primeiro, por data).
     // As de "depois de amanha" (quando visiveis via "Ver na mesma") vao para o fim.
@@ -266,6 +284,15 @@ function ParceiroDashboardInner() {
     ).entries()
   )
   const temLeadsSemCampanha = leads.some(l => !l.campanha_id)
+  const localidadesDisponiveis = Array.from(
+    new Map(
+      leads
+        .filter(l => l.localidade?.trim())
+        .map(l => [normalizarLocalidade(l.localidade), l.localidade!.trim()])
+    ).entries()
+  ).sort(([, a], [, b]) => a.localeCompare(b, 'pt-PT'))
+  const temLeadsSemLocalidade = leads.some(l => !l.localidade?.trim())
+  const filtrosAtivos = search || filterStatus !== 'all' || filterCampanha !== 'all' || filterLocalidade !== 'all'
 
   // Next lead: first priority status among those not scheduled for further than tomorrow, then others
   const nextLead =
@@ -462,7 +489,7 @@ function ParceiroDashboardInner() {
           </div>
         )}
 
-        {/* Search + Filter */}
+        {/* Pesquisa + filtros */}
         <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
           <div style={{ flex: '1 1 200px', position: 'relative' }}>
             <Search size={15} color="#94A3B8" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
@@ -493,7 +520,52 @@ function ParceiroDashboardInner() {
               ))}
             </select>
           </div>
+          {localidadesDisponiveis.length > 0 && (
+            <div style={{ position: 'relative', flex: '1 1 170px' }}>
+              <Filter size={14} color="#94A3B8" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+              <select
+                aria-label="Filtrar por cidade ou zona"
+                value={filterLocalidade}
+                onChange={e => setFilterLocalidade(e.target.value)}
+                style={{
+                  width: '100%', paddingLeft: 28, paddingRight: 32, paddingTop: 9, paddingBottom: 9,
+                  borderRadius: 8, border: '1px solid #E2E8F0', fontSize: 13,
+                  background: '#fff', cursor: 'pointer', outline: 'none', color: '#0F172A', appearance: 'none',
+                }}
+              >
+                <option value="all">Todas as cidades / zonas</option>
+                {localidadesDisponiveis.map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+                {temLeadsSemLocalidade && <option value="sem">Sem cidade / zona</option>}
+              </select>
+            </div>
+          )}
+          {filtrosAtivos && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch('')
+                setFilterStatus('all')
+                setFilterCampanha('all')
+                setFilterLocalidade('all')
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5, padding: '9px 11px', borderRadius: 8,
+                border: '1px solid #E2E8F0', background: '#fff', color: '#475569', fontSize: 12.5,
+                fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              <X size={14} /> Limpar
+            </button>
+          )}
         </div>
+
+        {filtrosAtivos && !isLoading && (
+          <div style={{ margin: '-6px 0 12px', fontSize: 12, color: '#64748B' }}>
+            <strong style={{ color: '#0F172A' }}>{filtered.length}</strong> lead{filtered.length !== 1 ? 's' : ''} encontrada{filtered.length !== 1 ? 's' : ''} nesta seleção
+          </div>
+        )}
 
         {/* Leads list */}
         {isLoading ? (
@@ -504,7 +576,7 @@ function ParceiroDashboardInner() {
           <EmptyState
             icon={PhoneCall}
             title="Nenhuma lead encontrada"
-            description={search || filterStatus !== 'all' ? 'Tente ajustar os filtros' : 'Ainda nao tens leads atribuidas'}
+            description={filtrosAtivos ? 'Tente ajustar ou limpar os filtros' : 'Ainda nao tens leads atribuidas'}
           />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
