@@ -30,6 +30,42 @@ function clean(value: unknown, max = 500) {
   return String(value ?? '').trim().slice(0, max)
 }
 
+function escapeHtml(value: unknown) {
+  return String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
+  }[char] || char))
+}
+
+async function notifyLead(lead: Record<string, string | null>) {
+  const apiKey = process.env.RESEND_API_KEY
+  const to = process.env.LUMIN_LEAD_NOTIFY_EMAIL || 'misterluminai@gmail.com'
+  const from = process.env.LUMIN_LEAD_FROM_EMAIL || 'LUMIN AI <leads@luminai.pt>'
+  if (!apiKey) {
+    console.error('LUMIN lead notification skipped: RESEND_API_KEY missing')
+    return false
+  }
+  const rows = Object.entries(lead)
+    .filter(([, value]) => value)
+    .map(([key, value]) => '<tr><td style="padding:6px 12px;font-weight:700">' + escapeHtml(key) + '</td><td style="padding:6px 12px">' + escapeHtml(value) + '</td></tr>')
+    .join('')
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from,
+      to: [to],
+      subject: '🔥 Nova lead LUMIN AI — ' + (lead.Empresa || lead.Nome || 'Diagnóstico gratuito'),
+      text: Object.entries(lead).filter(([, value]) => value).map(([key, value]) => key + ': ' + value).join('\n'),
+      html: '<h2>🔥 Nova lead LUMIN AI</h2><table>' + rows + '</table>',
+    }),
+  })
+  if (!response.ok) {
+    console.error('LUMIN lead notification failed', response.status, await response.text())
+    return false
+  }
+  return true
+}
+
 export async function OPTIONS(req: NextRequest) {
   return new NextResponse(null, { status: 204, headers: corsHeaders(req.headers.get('origin')) })
 }
@@ -131,7 +167,18 @@ export async function POST(req: NextRequest) {
       leadId = data?.id ?? null
     }
 
-    return NextResponse.json({ ok: true, lead_id: leadId, status: 'HOT' }, { headers })
+    let notificationSent = false
+    try {
+      notificationSent = await notifyLead({
+        Nome: nome, Empresa: empresa, Email: email, Telefone: telefone,
+        Equipa: equipa, 'Leads/mês': leadsMes, Problema: problema,
+        Objetivo: objetivo, Diagnóstico: resultTitle, UTM: utm, 'Lead ID': leadId,
+      })
+    } catch (notifyError) {
+      console.error('LUMIN lead notification error', notifyError)
+    }
+
+    return NextResponse.json({ ok: true, lead_id: leadId, status: 'HOT', notification_sent: notificationSent }, { headers })
   } catch (error: any) {
     return NextResponse.json({ error: error?.message ?? 'lead capture error' }, { status: 500, headers })
   }
