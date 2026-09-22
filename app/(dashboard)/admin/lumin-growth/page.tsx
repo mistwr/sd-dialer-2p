@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Activity, MousePointerClick, Sparkles, UserPlus,
   MessageCircle, Bot, TrendingUp, RefreshCw, ExternalLink,
+  CircleDollarSign, CreditCard,
 } from 'lucide-react'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { StatCard } from '@/components/ui/StatCard'
@@ -33,6 +34,19 @@ type CreativeRow = {
   resultRate: number
   leadRate: number
 }
+type RevenueRow = {
+  id: string
+  event_type: 'payment' | 'subscription'
+  external_id: string
+  status: string
+  amount: number | null
+  currency: string
+  customer_email: string | null
+  lead_id: string | null
+  session_id: string | null
+  occurred_at: string
+  matched_to_lead: boolean
+}
 type LeadRow = {
   id: string
   nome: string
@@ -59,6 +73,12 @@ type GrowthData = {
     robotClicks: number
     proClicks: number
     checkoutClicks: number
+    verifiedPayments: number
+    activeSubscriptions: number
+  }
+  revenue: {
+    byCurrency: Record<string, number>
+    recent: RevenueRow[]
   }
   funnel: FunnelRow[]
   sources: SourceRow[]
@@ -69,6 +89,14 @@ type GrowthData = {
 function pct(a: number, b: number) {
   if (!b) return '0%'
   return ((a / b) * 100).toFixed(1) + '%'
+}
+
+function money(amount: number, currency: string) {
+  try {
+    return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: currency || 'EUR' }).format(amount)
+  } catch {
+    return amount.toFixed(2) + ' ' + (currency || 'EUR')
+  }
 }
 
 function sourceLabel(source: string) {
@@ -162,6 +190,8 @@ export default function LuminGrowthPage() {
             <StatCard label="Leads CRM" value={data.totals.confirmedLeads} icon={UserPlus} color="#16A34A" />
             <StatCard label="WhatsApp" value={data.totals.whatsappClicks} icon={MessageCircle} color="#059669" />
             <StatCard label="Robot LUMIN" value={data.totals.robotClicks} icon={Bot} color="#0891B2" />
+            <StatCard label="Pagamentos verificados" value={data.totals.verifiedPayments} icon={CircleDollarSign} color="#16A34A" />
+            <StatCard label="Subscrições ativas" value={data.totals.activeSubscriptions} icon={CreditCard} color="#0F766E" />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(320px, .75fr)', gap: 18, marginBottom: 24 }}>
@@ -279,6 +309,43 @@ export default function LuminGrowthPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+
+          <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, overflow: 'hidden', marginBottom: 24 }}>
+            <div style={{ padding: '18px 20px', borderBottom: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 16, color: '#0F172A' }}>Receita verificada</h2>
+                <div style={{ color: '#64748B', fontSize: 12, marginTop: 3 }}>Só entram pagamentos ou subscrições confirmados a partir do Stripe.</div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {Object.entries(data.revenue.byCurrency).length === 0 ? (
+                  <span style={{ fontSize: 12, color: '#94A3B8' }}>Ainda sem receita verificada</span>
+                ) : Object.entries(data.revenue.byCurrency).map(([currency, amount]) => (
+                  <span key={currency} style={{ fontSize: 13, fontWeight: 800, color: '#166534', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 999, padding: '6px 10px' }}>
+                    {money(amount, currency)}
+                  </span>
+                ))}
+              </div>
+            </div>
+            {data.revenue.recent.length === 0 ? (
+              <div style={{ padding: 30, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>À espera do primeiro pagamento LUMIN confirmado no Stripe.</div>
+            ) : (
+              data.revenue.recent.map((event, i) => (
+                <div key={event.id} style={{ padding: '13px 20px', borderTop: i ? '1px solid #F1F5F9' : 'none', display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontWeight: 800, color: '#0F172A', fontSize: 13 }}>
+                      {event.event_type === 'payment' ? 'Pagamento' : 'Subscrição'} · {event.status}
+                      {event.amount != null && event.currency ? ' · ' + money(event.amount, event.currency) : ''}
+                    </div>
+                    <div style={{ color: '#64748B', fontSize: 12, marginTop: 3 }}>
+                      {event.matched_to_lead ? 'Ligado a lead CRM' : 'Sem correspondência CRM'}
+                      {event.customer_email ? ' · ' + event.customer_email : ''}
+                    </div>
+                  </div>
+                  <div style={{ color: '#94A3B8', fontSize: 11 }}>{new Date(event.occurred_at).toLocaleString('pt-PT')}</div>
+                </div>
+              ))
+            )}
           </div>
 
           <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, overflow: 'hidden' }}>
