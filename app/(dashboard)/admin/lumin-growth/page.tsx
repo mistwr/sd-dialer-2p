@@ -37,13 +37,10 @@ type CreativeRow = {
 type RevenueRow = {
   id: string
   event_type: 'payment' | 'subscription'
-  external_id: string
   status: string
   amount: number | null
   currency: string
-  customer_email: string | null
-  lead_id: string | null
-  session_id: string | null
+  customer_email_masked: string | null
   occurred_at: string
   matched_to_lead: boolean
 }
@@ -339,7 +336,7 @@ export default function LuminGrowthPage() {
                     </div>
                     <div style={{ color: '#64748B', fontSize: 12, marginTop: 3 }}>
                       {event.matched_to_lead ? 'Ligado a lead CRM' : 'Sem correspondência CRM'}
-                      {event.customer_email ? ' · ' + event.customer_email : ''}
+                      {event.customer_email_masked ? ' · ' + event.customer_email_masked : ''}
                     </div>
                   </div>
                   <div style={{ color: '#94A3B8', fontSize: 11 }}>{new Date(event.occurred_at).toLocaleString('pt-PT')}</div>
