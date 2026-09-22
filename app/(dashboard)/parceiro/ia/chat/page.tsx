@@ -16,7 +16,7 @@ async function getCallerJwt(): Promise<string> {
 
 export default function IAChatPage() {
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: 'Ola! Sou o assistente do SD Dialer. Posso ajudar-te a perceber como criar leads, distribuir chamadas, ver relatorios ou qualquer duvida sobre o sistema. Em que posso ajudar?' },
+    { role: 'assistant', content: 'Ola! Sou o assistente do Lumin AI CRM. Posso ajudar-te a perceber como criar leads, distribuir chamadas, ver relatorios ou qualquer duvida sobre o sistema. Em que posso ajudar?' },
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -56,7 +56,7 @@ export default function IAChatPage() {
     <div style={{ maxWidth: 760, margin: '0 auto', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 140px)' }}>
       <div style={{ marginBottom: 16 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Sparkles size={20} color="#2563EB" /> Assistente SD Dialer
+          <Sparkles size={20} color="#D4AF37" /> Assistente Lumin AI CRM
         </h1>
         <p style={{ color: '#64748B', fontSize: 14, margin: '3px 0 0' }}>Tira duvidas sobre como usar o sistema</p>
       </div>
@@ -66,15 +66,15 @@ export default function IAChatPage() {
           <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexDirection: m.role === 'user' ? 'row-reverse' : 'row' }}>
             <div style={{
               width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-              background: m.role === 'user' ? '#EFF6FF' : '#2563EB',
-              color: m.role === 'user' ? '#2563EB' : '#fff',
+              background: m.role === 'user' ? '#FFF7DD' : '#D4AF37',
+              color: m.role === 'user' ? '#D4AF37' : '#fff',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
               {m.role === 'user' ? <User size={16} /> : <Sparkles size={16} />}
             </div>
             <div style={{
               maxWidth: '75%', padding: '10px 14px', borderRadius: 14, fontSize: 14, lineHeight: 1.5, whiteSpace: 'pre-wrap',
-              background: m.role === 'user' ? '#2563EB' : '#F1F5F9',
+              background: m.role === 'user' ? '#D4AF37' : '#F1F5F9',
               color: m.role === 'user' ? '#fff' : '#0F172A',
             }}>
               {m.content}
@@ -83,7 +83,7 @@ export default function IAChatPage() {
         ))}
         {loading && (
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#D4AF37', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Sparkles size={16} color="#fff" />
             </div>
             <div style={{ padding: '10px 14px', borderRadius: 14, background: '#F1F5F9', fontSize: 14, color: '#94A3B8' }}>A escrever...</div>
@@ -112,7 +112,7 @@ export default function IAChatPage() {
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             width: 44, height: 44, borderRadius: 10, border: 'none',
-            background: '#2563EB', color: '#fff', cursor: loading ? 'not-allowed' : 'pointer',
+            background: '#D4AF37', color: '#fff', cursor: loading ? 'not-allowed' : 'pointer',
             opacity: loading || !input.trim() ? 0.6 : 1, flexShrink: 0,
           }}
         >
