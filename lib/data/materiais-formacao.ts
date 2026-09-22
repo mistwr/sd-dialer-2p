@@ -27,7 +27,7 @@ export const materiaisFormacao: MaterialFormacao[] = [
     id: "guiao-pronto-a-usar",
     tipo: "guiao",
     titulo: "Guião pronto a usar",
-    subtitulo: "Para fechar com a MyPoupar + SD Dialer",
+    subtitulo: "Para fechar com a MyPoupar + Lumin AI CRM",
     imagem: "/formacao/mypoupar-guiao-pronto-a-usar.png",
     passos: [
       {
@@ -68,7 +68,7 @@ export const materiaisFormacao: MaterialFormacao[] = [
       },
       {
         numero: 7,
-        titulo: "Regra SD Dialer",
+        titulo: "Regra Lumin AI CRM",
         texto:
           "Nenhuma chamada termina sem registo do próximo passo: Venda · Follow-up com data · Interessado · Sem interesse · Inválido",
       },
@@ -83,7 +83,7 @@ export const materiaisFormacao: MaterialFormacao[] = [
     subtitulo: "MyPoupar Elite MEO",
     imagem: "/formacao/mypoupar-elite-meo-novo-script.png",
     notas: [
-      "Registem sempre todas as vendas no CRM SD Dialer.",
+      "Registem sempre todas as vendas no CRM Lumin AI CRM.",
       "Acompanhem os estados da venda em tempo real, do registo até à instalação, para dar acompanhamento ao cliente e às vossas comissões.",
       "Quanto mais organizado estiver, mais fácil é acompanhar, fechar e receber.",
       "500 leads por pessoa · 2 tipos: fim de contrato + cross-sell energia.",
@@ -94,7 +94,7 @@ export const materiaisFormacao: MaterialFormacao[] = [
       { numero: 2, titulo: "Diagnóstico", texto: "Operador? Quanto paga? Fidelização? E a energia?" },
       { numero: 3, titulo: "Proposta", texto: "Telecom + Energia. Procuramos a melhor solução e mais poupança." },
       { numero: 4, titulo: "Fecho", texto: "Se fizer sentido, tratamos já do processo consigo." },
-      { numero: 5, titulo: "SD Dialer", texto: "Registar sempre: Venda · Interessado · Follow-up · Sem interesse · Inválido" },
+      { numero: 5, titulo: "Lumin AI CRM", texto: "Registar sempre: Venda · Interessado · Follow-up · Sem interesse · Inválido" },
     ],
     destaque: "Bora equipa. Juntos Somos +",
   },
