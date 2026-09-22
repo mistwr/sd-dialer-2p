@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, Building2, Megaphone,
   PhoneCall, BarChart2, LogOut, Menu, X, Bell,
   ChevronRight, PhoneIncoming, History, UserCircle,
-  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag, MessageSquare, Users2, ArrowLeft, ArrowRight, GraduationCap, Sparkles,
+  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag, MessageSquare, Users2, ArrowLeft, ArrowRight, GraduationCap,
 } from 'lucide-react'
 import useSWR from 'swr'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -119,7 +119,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <aside style={{
         width: 'min(86vw, 280px)',
-        background: '#07090D',
+        background: '#0F172A',
         display: 'flex',
         flexDirection: 'column',
         flexShrink: 0,
@@ -135,16 +135,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
               width: 32, height: 32, borderRadius: 10,
-              background: 'linear-gradient(135deg, #F5C34D, #C9971A)',
+              background: 'linear-gradient(135deg, #2563EB, #1D4ED8)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 4px 16px rgba(212,175,55,0.28)',
+              boxShadow: '0 4px 12px rgba(37,99,235,0.4)',
             }}>
-              <Sparkles size={16} color="#07090D" />
+              <PhoneCall size={16} color="#fff" />
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.05 }}>
-              <span style={{ color: '#fff', fontWeight: 800, fontSize: 16, letterSpacing: '-0.3px' }}>Lumin AI</span>
-              <span style={{ color: '#D4AF37', fontWeight: 700, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase' }}>CRM</span>
-            </div>
+            <span style={{ color: '#fff', fontWeight: 700, fontSize: 16, letterSpacing: '-0.3px' }}>SD Dialer</span>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="md-hidden" style={{
             background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: 4, borderRadius: 6,
@@ -167,8 +164,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     display: 'flex', alignItems: 'center', gap: 6,
                     padding: '7px 10px', borderRadius: 7, border: 'none',
                     fontSize: 12.5, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
-                    background: viewRole === opt.value ? '#D4AF37' : 'transparent',
-                    color: viewRole === opt.value ? '#111827' : '#94A3B8',
+                    background: viewRole === opt.value ? '#2563EB' : 'transparent',
+                    color: viewRole === opt.value ? '#fff' : '#94A3B8',
                     transition: 'all 0.15s',
                   }}
                 >
@@ -187,8 +184,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 display: 'flex', alignItems: 'center', gap: 10,
                 padding: '9px 12px', borderRadius: 8, marginBottom: 2,
                 textDecoration: 'none',
-                background: active ? '#D4AF37' : 'transparent',
-                color: active ? '#111827' : '#94A3B8',
+                background: active ? '#2563EB' : 'transparent',
+                color: active ? '#fff' : '#94A3B8',
                 fontWeight: active ? 600 : 400,
                 fontSize: 14,
                 transition: 'all 0.15s',
@@ -236,7 +233,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{
                 width: 34, height: 34, borderRadius: '50%',
-                background: '#D4AF37', color: '#111827',
+                background: '#2563EB', color: '#fff',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 12, fontWeight: 700, flexShrink: 0,
               }}>
@@ -299,7 +296,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </button>
           </div>
           <div className="mobile-page-title" style={{ minWidth: 0, fontSize: 14, fontWeight: 700, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {activeNavItem?.label ?? 'Lumin AI CRM'}
+            {activeNavItem?.label ?? 'SD Dialer'}
           </div>
           <div style={{ flex: 1 }} />
           <div ref={bellRef} style={{ position: 'relative' }}>
@@ -311,8 +308,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 }
               }}
               style={{
-                background: bellOpen ? '#FFF7DD' : 'none', border: 'none', cursor: 'pointer',
-                color: bellOpen ? '#A97715' : '#64748B', padding: '6px', borderRadius: 8,
+                background: bellOpen ? '#EFF6FF' : 'none', border: 'none', cursor: 'pointer',
+                color: bellOpen ? '#2563EB' : '#64748B', padding: '6px', borderRadius: 8,
                 display: 'flex', alignItems: 'center', position: 'relative',
                 transition: 'all 0.15s',
               }}
@@ -338,7 +335,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <div style={{ padding: '14px 16px', borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Notificacoes</span>
                   {unread > 0 && (
-                    <span style={{ fontSize: 11, background: '#FFF7DD', color: '#A97715', padding: '2px 8px', borderRadius: 12, fontWeight: 600 }}>
+                    <span style={{ fontSize: 11, background: '#EFF6FF', color: '#2563EB', padding: '2px 8px', borderRadius: 12, fontWeight: 600 }}>
                       {unread} novas
                     </span>
                   )}
@@ -361,7 +358,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                           background: n.type === 'nova_lead' ? '#EFF6FF' : n.type === 'follow_up' ? '#ECFEFF' : '#F0FDF4',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                         }}>
-                          {n.type === 'nova_lead' && <PhoneCall size={14} color="#A97715" />}
+                          {n.type === 'nova_lead' && <PhoneCall size={14} color="#2563EB" />}
                           {n.type === 'follow_up' && <Calendar size={14} color="#0891B2" />}
                           {n.type === 'objetivo'  && <CheckCircle2 size={14} color="#16A34A" />}
                           {n.type === 'sistema'   && <Bell size={14} color="#D97706" />}
