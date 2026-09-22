@@ -91,6 +91,11 @@ export async function POST(req: NextRequest) {
     const utm = clean(body.utm, 1000)
     const resultTitle = clean(body.resultado, 220)
     const sessionId = clean(body.session_id, 120)
+    const utmParams = new URLSearchParams(utm)
+    const utmSource = clean(utmParams.get('utm_source'), 120)
+    const utmMedium = clean(utmParams.get('utm_medium'), 120)
+    const utmCampaign = clean(utmParams.get('utm_campaign'), 160)
+    const utmContent = clean(utmParams.get('utm_content'), 160)
 
     if (!nome || !telefone || !email) {
       return NextResponse.json({ error: 'nome, telefone e email required' }, { status: 400, headers })
@@ -127,6 +132,10 @@ export async function POST(req: NextRequest) {
       objetivo,
       resultado: resultTitle,
       utm,
+      utm_source: utmSource || null,
+      utm_medium: utmMedium || null,
+      utm_campaign: utmCampaign || null,
+      utm_content: utmContent || null,
       page_url: pageUrl,
       session_id: sessionId || null,
     }
@@ -140,6 +149,9 @@ export async function POST(req: NextRequest) {
       problema ? `Problema: ${problema}` : null,
       objetivo ? `Objetivo: ${objetivo}` : null,
       resultTitle ? `Diagnóstico: ${resultTitle}` : null,
+      utmSource ? `Origem: ${utmSource}` : null,
+      utmCampaign ? `Campanha: ${utmCampaign}` : null,
+      utmContent ? `Criativo: ${utmContent}` : null,
       utm ? `UTM: ${utm}` : null,
       sessionId ? `Sessão: ${sessionId}` : null,
     ].filter(Boolean).join('\n')
@@ -189,7 +201,9 @@ export async function POST(req: NextRequest) {
       notificationSent = await notifyLead({
         Nome: nome, Empresa: empresa, Email: email, Telefone: telefone,
         Equipa: equipa, 'Leads/mês': leadsMes, Problema: problema,
-        Objetivo: objetivo, Diagnóstico: resultTitle, UTM: utm, Sessão: sessionId, 'Lead ID': leadId,
+        Objetivo: objetivo, Diagnóstico: resultTitle,
+        Origem: utmSource, Campanha: utmCampaign, Criativo: utmContent,
+        UTM: utm, Sessão: sessionId, 'Lead ID': leadId,
       })
     } catch (notifyError) {
       console.error('LUMIN lead notification error', notifyError)
