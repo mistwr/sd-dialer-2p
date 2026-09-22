@@ -9,7 +9,7 @@ function privateJson(body: unknown, init: ResponseInit = {}) {
   headers.set('Cache-Control', 'private, no-store, max-age=0, must-revalidate')
   headers.set('Pragma', 'no-cache')
   headers.set('X-Robots-Tag', 'noindex, nofollow')
-  return privateJson(body, { ...init, headers })
+  return NextResponse.json(body, { ...init, headers })
 }
 
 function maskEmail(value: unknown) {
