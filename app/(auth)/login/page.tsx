@@ -1,17 +1,17 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { PhoneCall, Eye, EyeOff, Loader2, TrendingUp, Users, Phone, Award, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Sparkles, Eye, EyeOff, Loader2, TrendingUp, Users, Phone, Award, ChevronLeft, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 const SLIDES = [
   {
     tag: 'Produtividade',
     headline: 'Mais chamadas,\nmenos trabalho manual.',
-    body: 'O SD Dialer automatiza a distribuição de leads e garante que cada parceiro recebe sempre o próximo contacto certo.',
+    body: 'O Lumin AI CRM automatiza a distribuição de leads e garante que cada parceiro recebe sempre o próximo contacto certo.',
     stat: { value: '3x', label: 'mais chamadas por dia' },
-    accent: '#2563EB',
-    bg: 'linear-gradient(135deg, #0F172A 0%, #1E3A5F 100%)',
+    accent: '#D4AF37',
+    bg: 'linear-gradient(135deg, #07090D 0%, #221A08 100%)',
     icon: <Phone size={22} />,
   },
   {
@@ -19,8 +19,8 @@ const SLIDES = [
     headline: 'Toda a equipa\nsincronizada em tempo real.',
     body: 'Acompanhe o desempenho de cada parceiro, supervisione chamadas e tome decisões com dados atualizados ao segundo.',
     stat: { value: '98%', label: 'taxa de sincronização' },
-    accent: '#0EA5E9',
-    bg: 'linear-gradient(135deg, #0F172A 0%, #0C2340 100%)',
+    accent: '#E2B93B',
+    bg: 'linear-gradient(135deg, #07090D 0%, #18140A 100%)',
     icon: <Users size={22} />,
   },
   {
@@ -28,17 +28,17 @@ const SLIDES = [
     headline: 'Converta mais leads\ncom menos esforço.',
     body: 'Relatórios detalhados, ranking de conversão e histórico completo de chamadas para otimizar continuamente.',
     stat: { value: '+47%', label: 'taxa de conversão média' },
-    accent: '#10B981',
-    bg: 'linear-gradient(135deg, #0F172A 0%, #052E16 100%)',
+    accent: '#F5C34D',
+    bg: 'linear-gradient(135deg, #07090D 0%, #1B1608 100%)',
     icon: <TrendingUp size={22} />,
   },
   {
     tag: 'Confiança',
-    headline: 'Empresas líderes\nescolhem o SD Dialer.',
+    headline: 'Empresas líderes\nescolhem o Lumin AI CRM.',
     body: 'Plataforma desenvolvida para equipas comerciais que precisam de volume, controlo e resultados mensuráveis.',
     stat: { value: '10k+', label: 'chamadas registadas' },
-    accent: '#F59E0B',
-    bg: 'linear-gradient(135deg, #0F172A 0%, #2D1F00 100%)',
+    accent: '#F1CF70',
+    bg: 'linear-gradient(135deg, #07090D 0%, #231A06 100%)',
     icon: <Award size={22} />,
   },
 ]
@@ -173,8 +173,8 @@ export default function LoginPage() {
           transition: all 0.15s ease;
         }
         .field-input:focus {
-          border-color: #2563EB !important;
-          box-shadow: 0 0 0 3px rgba(37,99,235,0.12) !important;
+          border-color: #D4AF37 !important;
+          box-shadow: 0 0 0 3px rgba(212,175,55,0.16) !important;
         }
         @media (max-width: 768px) {
           .split-right { display: none !important; }
@@ -185,7 +185,7 @@ export default function LoginPage() {
       <div style={{
         minHeight: '100vh',
         display: 'flex',
-        background: '#0F172A',
+        background: '#07090D',
         fontFamily: 'Inter, system-ui, sans-serif',
       }}>
 
@@ -207,19 +207,19 @@ export default function LoginPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 40 }}>
               <div style={{
                 width: 40, height: 40, borderRadius: 12,
-                background: 'linear-gradient(135deg, #2563EB, #1D4ED8)',
+                background: 'linear-gradient(135deg, #D4AF37, #A97715)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 4px 16px rgba(37,99,235,0.35)',
+                boxShadow: '0 4px 16px rgba(212,175,55,0.32)',
                 flexShrink: 0,
               }}>
-                <PhoneCall size={20} color="#fff" />
+                <Sparkles size={20} color="#07090D" />
               </div>
-              <span style={{ fontWeight: 800, fontSize: 18, color: '#0F172A', letterSpacing: '-0.4px' }}>
-                SD Dialer
+              <span style={{ fontWeight: 800, fontSize: 18, color: '#07090D', letterSpacing: '-0.4px' }}>
+                Lumin AI CRM
               </span>
             </div>
 
-            <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', margin: '0 0 6px', letterSpacing: '-0.5px', lineHeight: 1.2 }}>
+            <h1 style={{ fontSize: 26, fontWeight: 800, color: '#07090D', margin: '0 0 6px', letterSpacing: '-0.5px', lineHeight: 1.2 }}>
               Bem-vindo de volta
             </h1>
             <p style={{ fontSize: 14, color: '#64748B', margin: '0 0 32px', lineHeight: 1.5 }}>
@@ -248,7 +248,7 @@ export default function LoginPage() {
                   style={{
                     width: '100%', padding: '11px 14px', borderRadius: 10,
                     border: '1.5px solid #E2E8F0', fontSize: 14, outline: 'none',
-                    background: '#F8FAFC', color: '#0F172A', boxSizing: 'border-box',
+                    background: '#F8FAFC', color: '#07090D', boxSizing: 'border-box',
                     transition: 'border-color 0.15s, box-shadow 0.15s',
                   }}
                 />
@@ -265,7 +265,7 @@ export default function LoginPage() {
                     style={{
                       width: '100%', padding: '11px 44px 11px 14px', borderRadius: 10,
                       border: '1.5px solid #E2E8F0', fontSize: 14, outline: 'none',
-                      background: '#F8FAFC', color: '#0F172A', boxSizing: 'border-box',
+                      background: '#F8FAFC', color: '#07090D', boxSizing: 'border-box',
                       transition: 'border-color 0.15s, box-shadow 0.15s',
                     }}
                   />
@@ -288,11 +288,11 @@ export default function LoginPage() {
                 type="submit" disabled={loading}
                 style={{
                   width: '100%', padding: '13px', borderRadius: 12, border: 'none',
-                  background: loading ? '#93C5FD' : 'linear-gradient(135deg, #2563EB, #1D4ED8)',
-                  color: '#fff', fontSize: 15, fontWeight: 700,
+                  background: loading ? '#93C5FD' : 'linear-gradient(135deg, #D4AF37, #A97715)',
+                  color: '#111827', fontSize: 15, fontWeight: 800,
                   cursor: loading ? 'not-allowed' : 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  marginTop: 4, boxShadow: loading ? 'none' : '0 4px 16px rgba(37,99,235,0.3)',
+                  marginTop: 4, boxShadow: loading ? 'none' : '0 4px 16px rgba(212,175,55,0.28)',
                 }}
               >
                 {loading && <Loader2 size={17} style={{ animation: 'spin 1s linear infinite' }} />}
@@ -301,7 +301,7 @@ export default function LoginPage() {
             </form>
 
             <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 32, textAlign: 'center' }}>
-              SD Dialer &copy; {new Date().getFullYear()} — Plataforma comercial de chamadas
+              Lumin AI CRM &copy; {new Date().getFullYear()} — Tecnologia comercial para Soluções Diferentes
             </p>
           </div>
         </div>
