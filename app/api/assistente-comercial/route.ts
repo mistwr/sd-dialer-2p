@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
         .join('\n')
     : 'Sem tarifarios de referencia configurados para esta empresa ainda.'
 
-  const systemPrompt = `Es o Assistente Comercial do SD Dialer. Ajudas comerciais de telecom/energia a decidir, DURANTE uma chamada ou logo a seguir, o que oferecer a um cliente.
+  const systemPrompt = `Es o Assistente Comercial Lumin AI. Ajudas comerciais de telecom/energia a decidir, DURANTE uma chamada ou logo a seguir, o que oferecer a um cliente.
 
 REGRAS CRITICAS:
 - So podes usar os precos e dados que te dou abaixo. NUNCA inventes precos, promocoes ou coberturas que nao estejam aqui.
