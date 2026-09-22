@@ -197,19 +197,19 @@ export async function GET(req: NextRequest) {
       empresa: lead.custom_fields?.empresa || '',
       status: lead.status,
       created_at: lead.created_at,
-      source: (() => {
+      source: lead.custom_fields?.utm_source || (() => {
         try {
           const p = new URLSearchParams(String(lead.custom_fields?.utm || ''))
           return p.get('utm_source') || '(direct)'
         } catch { return '(direct)' }
       })(),
-      campaign: (() => {
+      campaign: lead.custom_fields?.utm_campaign || (() => {
         try {
           const p = new URLSearchParams(String(lead.custom_fields?.utm || ''))
           return p.get('utm_campaign') || ''
         } catch { return '' }
       })(),
-      content: (() => {
+      content: lead.custom_fields?.utm_content || (() => {
         try {
           const p = new URLSearchParams(String(lead.custom_fields?.utm || ''))
           return p.get('utm_content') || ''
