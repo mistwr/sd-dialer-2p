@@ -86,6 +86,16 @@ export async function GET(req: NextRequest) {
       robotClicks: number
       sessions: Set<string>
     }> = {}
+    const creativeMap: Record<string, {
+      source: string
+      campaign: string
+      content: string
+      pageViews: number
+      simulationClicks: number
+      simulationResults: number
+      leadSubmits: number
+      sessions: Set<string>
+    }> = {}
 
     const sourceOf = (e: any) =>
       e.utm_source || e.referrer_domain || '(direct)'
@@ -119,6 +129,28 @@ export async function GET(req: NextRequest) {
       if (e.event_type === 'lead_submit') row.leadSubmits++
       if (e.event_type === 'whatsapp_click') row.whatsappClicks++
       if (e.event_type === 'robot_click') row.robotClicks++
+
+      const campaign = e.utm_campaign || '(sem campanha)'
+      const content = e.utm_content || '(sem conteúdo)'
+      const creativeKey = [source, campaign, content].join('::')
+      if (!creativeMap[creativeKey]) {
+        creativeMap[creativeKey] = {
+          source,
+          campaign,
+          content,
+          pageViews: 0,
+          simulationClicks: 0,
+          simulationResults: 0,
+          leadSubmits: 0,
+          sessions: new Set<string>(),
+        }
+      }
+      const creative = creativeMap[creativeKey]
+      if (e.session_id) creative.sessions.add(e.session_id)
+      if (e.event_type === 'page_view') creative.pageViews++
+      if (e.event_type === 'simulation_click') creative.simulationClicks++
+      if (e.event_type === 'simulation_result') creative.simulationResults++
+      if (e.event_type === 'lead_submit') creative.leadSubmits++
     }
 
     const confirmedLeadSessions = new Set<string>()
@@ -142,6 +174,23 @@ export async function GET(req: NextRequest) {
       }))
       .sort((a, b) => b.leadSubmits - a.leadSubmits || b.simulationResults - a.simulationResults || b.pageViews - a.pageViews)
 
+    const creativeRows = Object.values(creativeMap)
+      .filter(row => row.source !== '(direct)' || row.campaign !== '(sem campanha)' || row.content !== '(sem conteúdo)')
+      .map(row => ({
+        source: row.source,
+        campaign: row.campaign,
+        content: row.content,
+        sessions: row.sessions.size,
+        pageViews: row.pageViews,
+        simulationClicks: row.simulationClicks,
+        simulationResults: row.simulationResults,
+        leadSubmits: row.leadSubmits,
+        resultRate: row.simulationClicks > 0 ? Number(((row.simulationResults / row.simulationClicks) * 100).toFixed(1)) : 0,
+        leadRate: row.simulationResults > 0 ? Number(((row.leadSubmits / row.simulationResults) * 100).toFixed(1)) : 0,
+      }))
+      .sort((a, b) => b.leadSubmits - a.leadSubmits || b.simulationResults - a.simulationResults || b.simulationClicks - a.simulationClicks || b.pageViews - a.pageViews)
+      .slice(0, 30)
+
     const recentLeads = (leads ?? []).slice(0, 20).map((lead: any) => ({
       id: lead.id,
       nome: lead.nome,
@@ -158,6 +207,12 @@ export async function GET(req: NextRequest) {
         try {
           const p = new URLSearchParams(String(lead.custom_fields?.utm || ''))
           return p.get('utm_campaign') || ''
+        } catch { return '' }
+      })(),
+      content: (() => {
+        try {
+          const p = new URLSearchParams(String(lead.custom_fields?.utm || ''))
+          return p.get('utm_content') || ''
         } catch { return '' }
       })(),
       problem: lead.custom_fields?.problema || '',
@@ -189,6 +244,7 @@ export async function GET(req: NextRequest) {
         { key: 'confirmed_lead', label: 'Leads no CRM', value: leads?.length || 0, sessions: confirmedLeadSessions.size },
       ],
       sources: sourceRows,
+      creatives: creativeRows,
       recentLeads,
     })
   } catch (error: any) {

@@ -21,6 +21,18 @@ type SourceRow = {
   resultRate: number
   leadRate: number
 }
+type CreativeRow = {
+  source: string
+  campaign: string
+  content: string
+  sessions: number
+  pageViews: number
+  simulationClicks: number
+  simulationResults: number
+  leadSubmits: number
+  resultRate: number
+  leadRate: number
+}
 type LeadRow = {
   id: string
   nome: string
@@ -29,6 +41,7 @@ type LeadRow = {
   created_at: string
   source: string
   campaign: string
+  content: string
   problem: string
   result: string
 }
@@ -49,6 +62,7 @@ type GrowthData = {
   }
   funnel: FunnelRow[]
   sources: SourceRow[]
+  creatives: CreativeRow[]
   recentLeads: LeadRow[]
 }
 
@@ -235,6 +249,38 @@ export default function LuminGrowthPage() {
             </div>
           </div>
 
+          <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, overflow: 'hidden', marginBottom: 24 }}>
+            <div style={{ padding: '18px 20px', borderBottom: '1px solid #F1F5F9' }}>
+              <h2 style={{ margin: 0, fontSize: 16, color: '#0F172A' }}>Campanhas e criativos</h2>
+              <div style={{ color: '#64748B', fontSize: 12, marginTop: 3 }}>UTM campaign + content: mostra qual publicação está a empurrar pessoas mais fundo no funil.</div>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 860 }}>
+                <thead>
+                  <tr style={{ background: '#F8FAFC', color: '#64748B', fontSize: 11, textAlign: 'left' }}>
+                    {['Origem','Campanha','Criativo','Sessões','Simulação','Resultado','Leads','Res.→Lead'].map(h => <th key={h} style={{ padding: '10px 14px', fontWeight: 800 }}>{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.creatives.length === 0 ? (
+                    <tr><td colSpan={8} style={{ padding: 28, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>Ainda sem UTMs suficientes para comparar criativos.</td></tr>
+                  ) : data.creatives.map((row, i) => (
+                    <tr key={[row.source,row.campaign,row.content,i].join('-')} style={{ borderTop: '1px solid #F1F5F9', fontSize: 13, color: '#334155' }}>
+                      <td style={{ padding: '12px 14px', fontWeight: 800, color: '#0F172A' }}>{sourceLabel(row.source)}</td>
+                      <td style={{ padding: '12px 14px' }}>{row.campaign}</td>
+                      <td style={{ padding: '12px 14px', maxWidth: 240, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={row.content}>{row.content}</td>
+                      <td style={{ padding: '12px 14px' }}>{row.sessions}</td>
+                      <td style={{ padding: '12px 14px' }}>{row.simulationClicks}</td>
+                      <td style={{ padding: '12px 14px' }}>{row.simulationResults}</td>
+                      <td style={{ padding: '12px 14px', fontWeight: 800, color: row.leadSubmits ? '#16A34A' : '#64748B' }}>{row.leadSubmits}</td>
+                      <td style={{ padding: '12px 14px', fontWeight: 700 }}>{row.leadRate}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, overflow: 'hidden' }}>
             <div style={{ padding: '18px 20px', borderBottom: '1px solid #F1F5F9' }}>
               <h2 style={{ margin: 0, fontSize: 16, color: '#0F172A' }}>Leads LUMIN recentes</h2>
@@ -247,7 +293,7 @@ export default function LuminGrowthPage() {
                 <div key={lead.id} style={{ padding: '13px 20px', borderTop: i ? '1px solid #F1F5F9' : 'none', display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
                   <div>
                     <div style={{ fontWeight: 800, color: '#0F172A', fontSize: 13 }}>{lead.nome}{lead.empresa ? ' · ' + lead.empresa : ''}</div>
-                    <div style={{ color: '#64748B', fontSize: 12, marginTop: 3 }}>{sourceLabel(lead.source)}{lead.campaign ? ' · ' + lead.campaign : ''}</div>
+                    <div style={{ color: '#64748B', fontSize: 12, marginTop: 3 }}>{sourceLabel(lead.source)}{lead.campaign ? ' · ' + lead.campaign : ''}{lead.content ? ' · ' + lead.content : ''}</div>
                     {lead.problem && <div style={{ color: '#475569', fontSize: 12, marginTop: 3 }}>{lead.problem}</div>}
                   </div>
                   <div style={{ color: '#94A3B8', fontSize: 11 }}>{new Date(lead.created_at).toLocaleString('pt-PT')}</div>
