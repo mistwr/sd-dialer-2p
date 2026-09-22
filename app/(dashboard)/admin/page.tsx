@@ -152,7 +152,7 @@ export default function AdminDashboard() {
               <span style={{ fontSize: 11, fontWeight: 700, color: '#7C3AED', background: '#F5F3FF', padding: '3px 10px', borderRadius: 999, border: '1px solid #DDD6FE' }}>Todas as empresas</span>
             )}
           </div>
-          <p style={{ color: '#64748B', fontSize: 14, margin: '4px 0 0' }}>Chamadas do Lumin AI CRM + vendas oficiais do CRM Mãe</p>
+          <p style={{ color: '#64748B', fontSize: 14, margin: '4px 0 0' }}>Chamadas do SD Dialer + vendas oficiais do CRM Mãe</p>
         </div>
         <Link href="/admin/vendas" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, textDecoration: 'none', padding: '9px 14px', borderRadius: 9, background: '#16A34A', color: '#fff', fontSize: 13, fontWeight: 700 }}>
           <ShoppingBag size={16} /> Ver vendas CRM
