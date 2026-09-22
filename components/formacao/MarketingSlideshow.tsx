@@ -13,7 +13,7 @@ const SLIDES = [
     imagem: "/formacao/mypoupar-guiao-pronto-a-usar.svg",
     etiqueta: "GUIÃO COMERCIAL",
     titulo: "Pergunta. Compara. Mostra a poupança. Fecha.",
-    texto: "Segue o método MyPoupar e regista sempre o próximo passo no Lumin AI CRM.",
+    texto: "Segue o método MyPoupar e regista sempre o próximo passo no SD Dialer.",
   },
   {
     imagem: "/formacao/mypoupar-elite-meo-novo-script.svg",

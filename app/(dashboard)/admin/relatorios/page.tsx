@@ -169,7 +169,7 @@ export default function RelatoriosPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: 0 }}>Relatorios</h1>
-          <p style={{ color: '#64748B', fontSize: 14, margin: '3px 0 0' }}>Chamadas do Lumin AI CRM + vendas reais do CRM Mae</p>
+          <p style={{ color: '#64748B', fontSize: 14, margin: '3px 0 0' }}>Chamadas do SD Dialer + vendas reais do CRM Mae</p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={{ padding: '8px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 13, outline: 'none' }} />
@@ -182,7 +182,7 @@ export default function RelatoriosPage() {
       </div>
 
       <div style={{ marginBottom: 18, padding: '12px 14px', borderRadius: 12, background: crmOnline ? '#F0FDF4' : '#FFF7ED', border: `1px solid ${crmOnline ? '#BBF7D0' : '#FED7AA'}`, color: crmOnline ? '#166534' : '#9A3412', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Database size={16} /> {crmOnline ? 'CRM Mae ligado: as vendas apresentadas abaixo sao lidas diretamente do CRM central.' : 'CRM Mae indisponivel: a mostrar temporariamente apenas vendas marcadas no Lumin AI CRM.'}
+        <Database size={16} /> {crmOnline ? 'CRM Mae ligado: as vendas apresentadas abaixo sao lidas diretamente do CRM central.' : 'CRM Mae indisponivel: a mostrar temporariamente apenas vendas marcadas no SD Dialer.'}
       </div>
 
       {loading ? <PageSpinner /> : (

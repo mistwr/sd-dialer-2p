@@ -106,12 +106,12 @@ export default function VendasPage() {
         <StatCard label="Canceladas" value={canceladas} icon={XCircle} color="#DC2626" />
       </div>
 
-      <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 10, background: '#FFF7DD', color: '#8A6511', fontSize: 12, border: '1px solid #E9D48B' }}>
-        O total acima vem diretamente do CRM Mae. Os cartoes abaixo sao apenas os registos detalhados que ainda existem no Lumin AI CRM.
+      <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 10, background: '#EFF6FF', color: '#1D4ED8', fontSize: 12, border: '1px solid #BFDBFE' }}>
+        O total acima vem diretamente do CRM Mae. Os cartoes abaixo sao apenas os registos detalhados que ainda existem no SD Dialer.
       </div>
 
       {vendas.length === 0 ? (
-        <EmptyState icon={ShoppingBag} title="Sem registos locais no Lumin AI CRM" description="A tua producao oficial continua a ser contabilizada no CRM Mae acima." />
+        <EmptyState icon={ShoppingBag} title="Sem registos locais no SD Dialer" description="A tua producao oficial continua a ser contabilizada no CRM Mae acima." />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {vendas.map((v: any) => (

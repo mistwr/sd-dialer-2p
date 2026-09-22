@@ -341,7 +341,7 @@ export default function ChatPage() {
                 </div>
               )}
               {!aiAnswer && !aiLoading && (
-                <p style={{ fontSize: 13, color: '#94A3B8' }}>Pergunta qualquer coisa sobre como usar o Lumin AI CRM — a IA responde na hora.</p>
+                <p style={{ fontSize: 13, color: '#94A3B8' }}>Pergunta qualquer coisa sobre como usar o SD Dialer — a IA responde na hora.</p>
               )}
               {aiLoading && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#94A3B8', fontSize: 13 }}>

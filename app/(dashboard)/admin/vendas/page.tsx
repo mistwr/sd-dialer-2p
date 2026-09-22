@@ -56,7 +56,7 @@ export default function AdminVendasPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0 }}>Vendas CRM Mãe</h1>
-          <p style={{ color: '#64748B', fontSize: 14, margin: '4px 0 0' }}>Fonte oficial de produção. O Lumin AI CRM deixa de depender apenas das vendas marcadas nas chamadas.</p>
+          <p style={{ color: '#64748B', fontSize: 14, margin: '4px 0 0' }}>Fonte oficial de produção. O SD Dialer deixa de depender apenas das vendas marcadas nas chamadas.</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #CBD5E1', borderRadius: 8 }} />
