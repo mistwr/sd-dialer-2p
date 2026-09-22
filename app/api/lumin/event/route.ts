@@ -61,6 +61,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'invalid event_type' }, { status: 400, headers })
     }
 
+    const eventData =
+      body.event_data && typeof body.event_data === 'object' && !Array.isArray(body.event_data)
+        ? JSON.parse(JSON.stringify(body.event_data).slice(0, 4000))
+        : {}
+
     const payload = {
       event_type: eventType,
       page_path: clean(body.page_path, 300) || '/',
@@ -69,6 +74,8 @@ export async function POST(req: NextRequest) {
       utm_campaign: clean(body.utm_campaign, 160) || null,
       utm_content: clean(body.utm_content, 160) || null,
       referrer_domain: clean(body.referrer_domain, 200) || null,
+      session_id: clean(body.session_id, 120) || null,
+      event_data: eventData,
     }
 
     const supabase = adminClient()
