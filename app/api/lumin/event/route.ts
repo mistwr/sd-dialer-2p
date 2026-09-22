@@ -13,6 +13,7 @@ const EVENT_TYPES = new Set([
   'checkout_click',
   'whatsapp_click',
   'simulation_click',
+  'simulation_result',
   'analysis_click',
   'lead_submit',
 ])
