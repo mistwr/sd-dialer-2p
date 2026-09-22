@@ -5,15 +5,15 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' })
 
 export const metadata: Metadata = {
-  title: { default: 'SD Dialer', template: '%s | SD Dialer' },
-  description: 'Plataforma de chamadas para equipas comerciais',
+  title: { default: 'Lumin AI CRM', template: '%s | Lumin AI CRM' },
+  description: 'CRM inteligente Lumin AI para equipas comerciais',
   manifest: '/manifest.json',
-  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'SD Dialer' },
+  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Lumin AI CRM' },
   formatDetection: { telephone: false },
 }
 
 export const viewport: Viewport = {
-  themeColor: '#2563EB',
+  themeColor: '#D4AF37',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
