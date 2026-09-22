@@ -2,6 +2,26 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createBrowserlessClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic'
+
+function privateJson(body: unknown, init: ResponseInit = {}) {
+  const headers = new Headers(init.headers)
+  headers.set('Cache-Control', 'private, no-store, max-age=0, must-revalidate')
+  headers.set('Pragma', 'no-cache')
+  headers.set('X-Robots-Tag', 'noindex, nofollow')
+  return privateJson(body, { ...init, headers })
+}
+
+function maskEmail(value: unknown) {
+  const email = String(value || '').trim()
+  const at = email.indexOf('@')
+  if (at <= 0) return null
+  const local = email.slice(0, at)
+  const domain = email.slice(at + 1)
+  const visible = local.slice(0, Math.min(2, local.length))
+  return visible + '***@' + domain
+}
+
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -16,7 +36,7 @@ export async function GET(req: NextRequest) {
     const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
-      return NextResponse.json({ error: 'Nao autenticado' }, { status: 401 })
+      return privateJson({ error: 'Nao autenticado' }, { status: 401 })
     }
 
     const { data: me } = await supabase
@@ -26,7 +46,7 @@ export async function GET(req: NextRequest) {
       .maybeSingle()
 
     if (!me || !['admin', 'supervisor'].includes(me.role)) {
-      return NextResponse.json({ error: 'Sem permissao' }, { status: 403 })
+      return privateJson({ error: 'Sem permissao' }, { status: 403 })
     }
 
     const admin = adminClient()
@@ -41,11 +61,11 @@ export async function GET(req: NextRequest) {
       luminCompanyId = company?.id || ''
     }
     if (!luminCompanyId) {
-      return NextResponse.json({ error: 'LUMIN AI company not configured' }, { status: 500 })
+      return privateJson({ error: 'LUMIN AI company not configured' }, { status: 500 })
     }
 
     if (!me.is_super_admin && me.company_id !== luminCompanyId) {
-      return NextResponse.json({ error: 'Sem permissao para dados LUMIN' }, { status: 403 })
+      return privateJson({ error: 'Sem permissao para dados LUMIN' }, { status: 403 })
     }
 
     const url = new URL(req.url)
@@ -66,7 +86,7 @@ export async function GET(req: NextRequest) {
         .limit(5000),
       admin
         .from('leads')
-        .select('id,nome,email,telefone,status,created_at,custom_fields')
+        .select('id,nome,status,created_at,custom_fields')
         .eq('company_id', luminCompanyId)
         .contains('custom_fields', { source: 'luminai.pt' })
         .gte('created_at', since)
@@ -74,7 +94,7 @@ export async function GET(req: NextRequest) {
         .limit(100),
       admin
         .from('lumin_revenue_events')
-        .select('id,event_type,external_id,status,amount,currency,customer_email,lead_id,session_id,occurred_at,metadata')
+        .select('id,event_type,status,amount,currency,customer_email,lead_id,occurred_at')
         .gte('occurred_at', since)
         .order('occurred_at', { ascending: false })
         .limit(500),
@@ -246,18 +266,15 @@ export async function GET(req: NextRequest) {
     const recentRevenue = (revenueEvents ?? []).slice(0, 20).map((event: any) => ({
       id: event.id,
       event_type: event.event_type,
-      external_id: event.external_id,
       status: event.status,
       amount: event.amount == null ? null : Number(event.amount),
       currency: String(event.currency || '').toUpperCase(),
-      customer_email: event.customer_email || null,
-      lead_id: event.lead_id || null,
-      session_id: event.session_id || null,
+      customer_email_masked: maskEmail(event.customer_email),
       occurred_at: event.occurred_at,
       matched_to_lead: Boolean(event.lead_id),
     }))
 
-    return NextResponse.json({
+    return privateJson({
       days,
       since,
       totals: {
@@ -292,6 +309,6 @@ export async function GET(req: NextRequest) {
     })
   } catch (error: any) {
     console.error('LUMIN growth dashboard error', error)
-    return NextResponse.json({ error: error?.message ?? 'Erro interno' }, { status: 500 })
+    return privateJson({ error: error?.message ?? 'Erro interno' }, { status: 500 })
   }
 }
