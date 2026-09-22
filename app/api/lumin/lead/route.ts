@@ -95,16 +95,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'nome, telefone e email required' }, { status: 400, headers })
     }
 
-    const companyId = process.env.LUMIN_DEFAULT_COMPANY_ID || process.env.REBORN_DEFAULT_COMPANY_ID
+    const supabase = adminClient()
+
+    let companyId = process.env.LUMIN_DEFAULT_COMPANY_ID || process.env.REBORN_DEFAULT_COMPANY_ID || ''
     if (!companyId) {
-      return NextResponse.json({ error: 'LUMIN_DEFAULT_COMPANY_ID missing' }, { status: 500, headers })
+      const { data: luminCompany, error: companyError } = await supabase
+        .from('companies')
+        .select('id')
+        .ilike('name', 'LUMIN AI')
+        .limit(1)
+        .maybeSingle()
+      if (companyError) throw companyError
+      companyId = luminCompany?.id || ''
+    }
+    if (!companyId) {
+      return NextResponse.json({ error: 'LUMIN AI company not configured' }, { status: 500, headers })
     }
 
-    const supabase = adminClient()
+    const form = clean(body.form, 80) || 'diagnostico_gratuito'
+    const pageUrl = clean(body.page_url, 500) || 'https://luminai.pt/analise-gratuita/'
+
     const customFields = {
       source: 'luminai.pt',
       temperature: 'hot',
-      form: 'diagnostico_gratuito',
+      form,
       empresa,
       equipa,
       leads_mes: leadsMes,
@@ -112,7 +126,7 @@ export async function POST(req: NextRequest) {
       objetivo,
       resultado: resultTitle,
       utm,
-      page_url: 'https://luminai.pt/analise-gratuita/',
+      page_url: pageUrl,
     }
 
     const observacoes = [
@@ -180,6 +194,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, lead_id: leadId, status: 'HOT', notification_sent: notificationSent }, { headers })
   } catch (error: any) {
+    console.error('LUMIN lead capture error', error)
     return NextResponse.json({ error: error?.message ?? 'lead capture error' }, { status: 500, headers })
   }
 }
