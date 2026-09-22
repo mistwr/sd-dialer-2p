@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   description: 'CRM inteligente Lumin AI para equipas comerciais',
   manifest: '/manifest.json',
   appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Lumin AI CRM' },
+  icons: { icon: '/icons/lumin-ai.svg' },
   formatDetection: { telephone: false },
 }
 
@@ -24,7 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt" className={inter.variable} style={{ background: '#F8FAFC' }}>
       <head>
-        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        <link rel="icon" type="image/svg+xml" href="/icons/lumin-ai.svg" />
       </head>
       <body>{children}</body>
     </html>
