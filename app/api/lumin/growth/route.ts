@@ -53,7 +53,11 @@ export async function GET(req: NextRequest) {
     const days = [1, 7, 14, 30, 90].includes(rawDays) ? rawDays : 7
     const since = new Date(Date.now() - days * 86400000).toISOString()
 
-    const [{ data: events, error: eventsError }, { data: leads, error: leadsError }] = await Promise.all([
+    const [
+      { data: events, error: eventsError },
+      { data: leads, error: leadsError },
+      { data: revenueEvents, error: revenueError },
+    ] = await Promise.all([
       admin
         .from('lumin_events')
         .select('event_type,page_path,utm_source,utm_medium,utm_campaign,utm_content,referrer_domain,session_id,event_data,created_at')
@@ -68,10 +72,17 @@ export async function GET(req: NextRequest) {
         .gte('created_at', since)
         .order('created_at', { ascending: false })
         .limit(100),
+      admin
+        .from('lumin_revenue_events')
+        .select('id,event_type,external_id,status,amount,currency,customer_email,lead_id,session_id,occurred_at,metadata')
+        .gte('occurred_at', since)
+        .order('occurred_at', { ascending: false })
+        .limit(500),
     ])
 
     if (eventsError) throw eventsError
     if (leadsError) throw leadsError
+    if (revenueError) throw revenueError
 
     const counts: Record<string, number> = {}
     const sessions = new Set<string>()
@@ -220,6 +231,32 @@ export async function GET(req: NextRequest) {
       session_id: lead.custom_fields?.session_id || null,
     }))
 
+    const successfulPayments = (revenueEvents ?? []).filter((event: any) =>
+      event.event_type === 'payment' && ['succeeded', 'paid', 'complete'].includes(String(event.status).toLowerCase())
+    )
+    const activeSubscriptions = (revenueEvents ?? []).filter((event: any) =>
+      event.event_type === 'subscription' && String(event.status).toLowerCase() === 'active'
+    )
+    const revenueByCurrency: Record<string, number> = {}
+    for (const event of successfulPayments) {
+      const currency = String(event.currency || 'eur').toUpperCase()
+      revenueByCurrency[currency] = Number(((revenueByCurrency[currency] || 0) + Number(event.amount || 0)).toFixed(2))
+    }
+
+    const recentRevenue = (revenueEvents ?? []).slice(0, 20).map((event: any) => ({
+      id: event.id,
+      event_type: event.event_type,
+      external_id: event.external_id,
+      status: event.status,
+      amount: event.amount == null ? null : Number(event.amount),
+      currency: String(event.currency || '').toUpperCase(),
+      customer_email: event.customer_email || null,
+      lead_id: event.lead_id || null,
+      session_id: event.session_id || null,
+      occurred_at: event.occurred_at,
+      matched_to_lead: Boolean(event.lead_id),
+    }))
+
     return NextResponse.json({
       days,
       since,
@@ -235,6 +272,12 @@ export async function GET(req: NextRequest) {
         robotClicks: counts.robot_click || 0,
         proClicks: counts.pro_click || 0,
         checkoutClicks: counts.checkout_click || 0,
+        verifiedPayments: successfulPayments.length,
+        activeSubscriptions: activeSubscriptions.length,
+      },
+      revenue: {
+        byCurrency: revenueByCurrency,
+        recent: recentRevenue,
       },
       funnel: [
         { key: 'page_view', label: 'Visitas', value: counts.page_view || 0, sessions: stageSessions.page_view?.size || 0 },
