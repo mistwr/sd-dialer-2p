@@ -5,16 +5,15 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' })
 
 export const metadata: Metadata = {
-  title: { default: 'Lumin AI CRM', template: '%s | Lumin AI CRM' },
-  description: 'CRM inteligente Lumin AI para equipas comerciais',
+  title: { default: 'SD Dialer', template: '%s | SD Dialer' },
+  description: 'Plataforma de chamadas para equipas comerciais',
   manifest: '/manifest.json',
-  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Lumin AI CRM' },
-  icons: { icon: '/icons/lumin-ai.svg' },
+  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'SD Dialer' },
   formatDetection: { telephone: false },
 }
 
 export const viewport: Viewport = {
-  themeColor: '#D4AF37',
+  themeColor: '#2563EB',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -25,7 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt" className={inter.variable} style={{ background: '#F8FAFC' }}>
       <head>
-        <link rel="icon" type="image/svg+xml" href="/icons/lumin-ai.svg" />
+        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
       </head>
       <body>{children}</body>
     </html>
