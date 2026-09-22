@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, Building2, Megaphone,
   PhoneCall, BarChart2, LogOut, Menu, X, Bell,
   ChevronRight, PhoneIncoming, History, UserCircle,
-  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag, MessageSquare, Users2, ArrowLeft, ArrowRight, GraduationCap,
+  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag, MessageSquare, Users2, ArrowLeft, ArrowRight, GraduationCap, TrendingUp,
 } from 'lucide-react'
 import useSWR from 'swr'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -33,6 +33,7 @@ const NAV: NavItem[] = [
   { label: 'Leads',        href: '/admin/leads',          icon: PhoneCall,       roles: ['admin', 'supervisor'] },
   { label: 'Distribuicao', href: '/admin/distribuicao',   icon: Shuffle,         roles: ['admin', 'supervisor'] },
   { label: 'Relatorios',   href: '/admin/relatorios',     icon: BarChart2,       roles: ['admin', 'supervisor'] },
+  { label: 'LUMIN Growth', href: '/admin/lumin-growth',   icon: TrendingUp,      roles: ['admin', 'supervisor'] },
   { label: 'Relatório',    href: '/admin/relatorio-porta', icon: MapPin,         roles: ['admin', 'supervisor'] },
   { label: 'IA Dashboard', href: '/admin/ia',             icon: Brain,           roles: ['admin', 'supervisor'] },
   { label: 'Assist. IA',  href: '/admin/assistente-ia',  icon: Brain,           roles: ['admin', 'supervisor'] },
