@@ -383,8 +383,32 @@ function LuminCallPanel() {
   const agent = VOICE_AGENTS.find(a => a.id === agentId)!
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.15fr) minmax(280px,.85fr)', gap: 16, alignItems: 'start' }}>
-      <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 18 }}>
+    <>
+    <style>{`
+      .lumin-call-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr);
+        gap: 16px;
+        align-items: start;
+        width: 100%;
+      }
+      .lumin-call-card,
+      .lumin-call-status {
+        min-width: 0;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      @media (max-width: 760px) {
+        .lumin-call-grid {
+          grid-template-columns: 1fr;
+        }
+        .lumin-call-status {
+          min-height: 0 !important;
+        }
+      }
+    `}</style>
+    <div className="lumin-call-grid">
+      <div className="lumin-call-card" style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 18 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
           <div style={{ width: 38, height: 38, borderRadius: 10, background: 'linear-gradient(135deg,#111827,#7C3AED)', display: 'grid', placeItems: 'center' }}>
             <PhoneCall size={18} color="#fff" />
@@ -458,7 +482,7 @@ function LuminCallPanel() {
         </div>
       </div>
 
-      <div style={{
+      <div className="lumin-call-status" style={{
         background: 'linear-gradient(160deg,#0F172A,#111827 60%,#312E81)',
         color: '#fff', borderRadius: 16, padding: 20, minHeight: 270,
         boxShadow: '0 12px 32px rgba(15,23,42,.16)',
@@ -492,6 +516,7 @@ function LuminCallPanel() {
         </div>
       </div>
     </div>
+    </>
   )
 }
 
@@ -678,7 +703,7 @@ export default function ChamadasIAPage() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4, marginBottom: 20, width: 'fit-content' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4, marginBottom: 20, width: '100%', boxSizing: 'border-box' }}>
         {[
           { key: 'ligar' as const, label: 'Ligar com Lumin', icon: <PhoneCall size={14} /> },
           { key: 'historico' as const, label: 'Histórico', icon: <AudioLines size={14} /> },
@@ -689,8 +714,8 @@ export default function ChamadasIAPage() {
             onClick={() => setTab(t.key)}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
-              padding: '8px 16px', borderRadius: 7, border: 'none',
-              fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              padding: '8px 10px', borderRadius: 7, border: 'none',
+              fontSize: 12.5, fontWeight: 600, cursor: 'pointer', minWidth: 0,
               background: tab === t.key ? '#fff' : 'transparent',
               color: tab === t.key ? '#0F172A' : '#64748B',
               boxShadow: tab === t.key ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
