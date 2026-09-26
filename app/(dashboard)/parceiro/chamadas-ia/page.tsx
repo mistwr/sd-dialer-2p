@@ -7,12 +7,12 @@
  * Additive only — no existing page modified.
  */
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import useSWR from 'swr'
 import {
   AudioLines, Play, Download, Brain, ChevronDown, ChevronUp,
   Clock, User, Megaphone, Calendar, RefreshCw, Loader2, Mic,
-  Sparkles, Send, Wifi, Zap,
+  Sparkles, Send, Wifi, Zap, PhoneCall, Search, CheckCircle2, AlertCircle,
 } from 'lucide-react'
 import AIAnalysisPanel from '@/components/ai/AIAnalysisPanel'
 import { createClient } from '@/lib/supabase/client'
@@ -223,6 +223,279 @@ function RecordingRow({ recording, onAnalyse }: { recording: Recording; onAnalys
   )
 }
 
+const LUMIN_GATEWAY = 'https://lumin-voice-gateway-production.up.railway.app'
+
+type VoiceLead = {
+  id: string
+  nome: string
+  telefone: string
+  status: string
+  assigned_to?: string | null
+}
+
+const VOICE_AGENTS = [
+  { id: 'lumin-telecom', label: 'Lumin Telecom', detail: 'Qualifica telecomunicações e fecha interesse para comparação.' },
+  { id: 'lumin-energia', label: 'Lumin Energia', detail: 'Qualifica energia e fecha interesse para comparação.' },
+  { id: 'lumin-ai', label: 'Lumin AI Comercial', detail: 'Vende a plataforma LUMIN AI de forma consultiva.' },
+] as const
+
+function LuminCallPanel() {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<VoiceLead[]>([])
+  const [selected, setSelected] = useState<VoiceLead | null>(null)
+  const [searching, setSearching] = useState(false)
+  const [agentId, setAgentId] = useState<(typeof VOICE_AGENTS)[number]['id']>('lumin-telecom')
+  const [callStatus, setCallStatus] = useState<'idle' | 'queued' | 'preparing' | 'ringing' | 'answered' | 'connected' | 'failed'>('idle')
+  const [callMessage, setCallMessage] = useState('Escolhe uma lead e o Lumin liga.')
+  const [error, setError] = useState('')
+  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => {
+    if (pollTimer.current) clearTimeout(pollTimer.current)
+  }, [])
+
+  async function getSessionToken() {
+    const sb = createClient()
+    const { data: { session } } = await sb.auth.getSession()
+    if (!session?.access_token) throw new Error('Sessão expirada. Entra novamente no SD Dialer.')
+    return session.access_token
+  }
+
+  async function searchLeads() {
+    const term = query.trim()
+    if (term.length < 2) {
+      setError('Escreve pelo menos 2 caracteres.')
+      return
+    }
+
+    setSearching(true)
+    setError('')
+    try {
+      const sb = createClient()
+      const { data: { user } } = await sb.auth.getUser()
+      if (!user) throw new Error('Sessão expirada.')
+
+      const { data: profile } = await sb
+        .from('usuarios')
+        .select('role,company_id')
+        .eq('id', user.id)
+        .single()
+
+      if (!profile?.company_id) throw new Error('Perfil sem empresa associada.')
+
+      const buildQuery = (field: 'nome' | 'telefone') => {
+        let q = sb
+          .from('leads')
+          .select('id,nome,telefone,status,assigned_to')
+          .eq('company_id', profile.company_id)
+          .not('telefone', 'is', null)
+          .ilike(field, `%${term.replace(/[%_,()]/g, '')}%`)
+          .limit(12)
+
+        if (profile.role === 'parceiro') q = q.eq('assigned_to', user.id)
+        return q
+      }
+
+      const [nameRes, phoneRes] = await Promise.all([
+        buildQuery('nome'),
+        buildQuery('telefone'),
+      ])
+
+      if (nameRes.error) throw nameRes.error
+      if (phoneRes.error) throw phoneRes.error
+
+      const merged = new Map<string, VoiceLead>()
+      ;[...(nameRes.data ?? []), ...(phoneRes.data ?? [])].forEach((lead: any) => {
+        if (lead?.id && lead?.telefone) merged.set(lead.id, lead as VoiceLead)
+      })
+
+      setResults(Array.from(merged.values()).slice(0, 15))
+      if (merged.size === 0) setError('Nenhuma lead encontrada.')
+    } catch (err: any) {
+      setError(err?.message || 'Erro ao pesquisar leads.')
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  async function pollCall(callId: string, token: string) {
+    try {
+      const res = await fetch(`${LUMIN_GATEWAY}/api/sd-dialer/call/${callId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.detail || 'Erro ao consultar a chamada.')
+
+      const status = json.status as typeof callStatus
+      setCallStatus(status)
+
+      const labels: Record<string, string> = {
+        queued: 'Na fila...',
+        preparing: 'A preparar a chamada...',
+        ringing: 'Telefone a tocar...',
+        answered: 'Cliente atendeu. A ligar o Lumin...',
+        connected: 'Lumin ligado à chamada.',
+        failed: json.error || 'A chamada falhou.',
+      }
+      setCallMessage(labels[status] || status)
+
+      if (!['connected', 'failed'].includes(status)) {
+        pollTimer.current = setTimeout(() => pollCall(callId, token), 1200)
+      }
+    } catch (err: any) {
+      setCallStatus('failed')
+      setCallMessage(err?.message || 'Erro ao acompanhar a chamada.')
+    }
+  }
+
+  async function startCall() {
+    if (!selected || ['queued', 'preparing', 'ringing', 'answered'].includes(callStatus)) return
+    setError('')
+    setCallStatus('queued')
+    setCallMessage('A iniciar chamada...')
+
+    try {
+      const token = await getSessionToken()
+      const res = await fetch(`${LUMIN_GATEWAY}/api/sd-dialer/call`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          lead_id: selected.id,
+          agent_id: agentId,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.detail || 'Não foi possível iniciar a chamada.')
+
+      setCallStatus(json.status || 'queued')
+      setCallMessage('Chamada iniciada.')
+      pollCall(json.callId, token)
+    } catch (err: any) {
+      setCallStatus('failed')
+      setCallMessage(err?.message || 'Falha ao iniciar chamada.')
+    }
+  }
+
+  const agent = VOICE_AGENTS.find(a => a.id === agentId)!
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.15fr) minmax(280px,.85fr)', gap: 16, alignItems: 'start' }}>
+      <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 10, background: 'linear-gradient(135deg,#111827,#7C3AED)', display: 'grid', placeItems: 'center' }}>
+            <PhoneCall size={18} color="#fff" />
+          </div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A' }}>Ligar com Lumin</div>
+            <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>A IA liga à lead escolhida e conversa por voz.</div>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 18 }}>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 6, textTransform: 'uppercase' }}>1. Procurar lead</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ flex: 1, position: 'relative' }}>
+              <Search size={14} color="#94A3B8" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)' }} />
+              <input
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') searchLeads() }}
+                placeholder="Nome ou telefone..."
+                style={{ width: '100%', padding: '10px 12px 10px 34px', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+              />
+            </div>
+            <button onClick={searchLeads} disabled={searching} style={{ padding: '0 14px', borderRadius: 9, border: 'none', background: '#0F172A', color: '#fff', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', opacity: searching ? .65 : 1 }}>
+              {searching ? 'A procurar...' : 'Procurar'}
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div style={{ display: 'flex', gap: 7, alignItems: 'center', marginTop: 10, fontSize: 12, color: '#B91C1C', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '8px 10px' }}>
+            <AlertCircle size={13} /> {error}
+          </div>
+        )}
+
+        {results.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10, maxHeight: 260, overflowY: 'auto' }}>
+            {results.map(lead => {
+              const active = selected?.id === lead.id
+              return (
+                <button
+                  key={lead.id}
+                  onClick={() => { setSelected(lead); setCallStatus('idle'); setCallMessage('Pronto para ligar.') }}
+                  style={{
+                    textAlign: 'left', padding: '10px 12px', borderRadius: 9, cursor: 'pointer',
+                    background: active ? '#EFF6FF' : '#F8FAFC',
+                    border: `1px solid ${active ? '#93C5FD' : '#E2E8F0'}`,
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0F172A' }}>{lead.nome}</span>
+                    {active && <CheckCircle2 size={15} color="#2563EB" />}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{lead.telefone} · {lead.status}</div>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        <div style={{ marginTop: 18 }}>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 6, textTransform: 'uppercase' }}>2. Agente</label>
+          <select
+            value={agentId}
+            onChange={e => setAgentId(e.target.value as typeof agentId)}
+            style={{ width: '100%', padding: '10px 12px', borderRadius: 9, border: '1.5px solid #E2E8F0', background: '#fff', color: '#0F172A', fontSize: 13.5 }}
+          >
+            {VOICE_AGENTS.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+          </select>
+          <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 5 }}>{agent.detail}</div>
+        </div>
+      </div>
+
+      <div style={{
+        background: 'linear-gradient(160deg,#0F172A,#111827 60%,#312E81)',
+        color: '#fff', borderRadius: 16, padding: 20, minHeight: 270,
+        boxShadow: '0 12px 32px rgba(15,23,42,.16)',
+      }}>
+        <div style={{ fontSize: 11, color: '#A5B4FC', fontWeight: 800, letterSpacing: '.08em' }}>LUMIN VOICE</div>
+        <div style={{ fontSize: 20, fontWeight: 800, marginTop: 8 }}>{selected?.nome || 'Escolhe uma lead'}</div>
+        <div style={{ fontSize: 13, color: '#CBD5E1', marginTop: 3 }}>{selected?.telefone || 'A chamada sai pelo número autorizado do Lumin.'}</div>
+
+        <div style={{ marginTop: 24, padding: '12px 14px', borderRadius: 10, background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.08)' }}>
+          <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 5 }}>ESTADO</div>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: callStatus === 'failed' ? '#FCA5A5' : callStatus === 'connected' ? '#86EFAC' : '#fff' }}>
+            {callMessage}
+          </div>
+        </div>
+
+        <button
+          onClick={startCall}
+          disabled={!selected || ['queued','preparing','ringing','answered'].includes(callStatus)}
+          style={{
+            width: '100%', marginTop: 18, minHeight: 48, borderRadius: 11, border: 'none',
+            background: selected ? 'linear-gradient(135deg,#C4B5FD,#818CF8)' : '#334155',
+            color: selected ? '#111827' : '#94A3B8', fontSize: 14, fontWeight: 900,
+            cursor: selected ? 'pointer' : 'not-allowed',
+          }}
+        >
+          {['queued','preparing','ringing','answered'].includes(callStatus) ? 'A LIGAR...' : '📞 LIGAR COM LUMIN'}
+        </button>
+
+        <div style={{ fontSize: 10.5, lineHeight: 1.5, color: '#94A3B8', marginTop: 12 }}>
+          O Lumin identifica-se como assistente virtual de IA. Leads marcadas como não interessadas, desligadas ou com número inválido ficam bloqueadas para nova chamada.
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
 function AssistenteComercial() {
   const [segmento, setSegmento] = useState<'telecom' | 'energia'>('telecom')
   const [pergunta, setPergunta] = useState('')
@@ -343,7 +616,7 @@ function AssistenteComercial() {
 }
 
 export default function ChamadasIAPage() {
-  const [tab, setTab] = useState<'historico' | 'assistente'>('historico')
+  const [tab, setTab] = useState<'ligar' | 'historico' | 'assistente'>('ligar')
   const { data, isLoading, mutate } = useSWR(
     '/api/recordings?limit=50',
     fetcher,
@@ -387,7 +660,7 @@ export default function ChamadasIAPage() {
             </h1>
           </div>
           <p style={{ margin: '6px 0 0 46px', fontSize: 13, color: '#64748B' }}>
-            Historico de gravacoes com analise de IA
+            Chamadas por voz com Lumin, historico e analise de IA
           </p>
         </div>
         <button
@@ -407,6 +680,7 @@ export default function ChamadasIAPage() {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4, marginBottom: 20, width: 'fit-content' }}>
         {[
+          { key: 'ligar' as const, label: 'Ligar com Lumin', icon: <PhoneCall size={14} /> },
           { key: 'historico' as const, label: 'Histórico', icon: <AudioLines size={14} /> },
           { key: 'assistente' as const, label: 'Assistente Comercial', icon: <Sparkles size={14} /> },
         ].map(t => (
@@ -427,7 +701,7 @@ export default function ChamadasIAPage() {
         ))}
       </div>
 
-      {tab === 'assistente' ? <AssistenteComercial /> : (
+      {tab === 'ligar' ? <LuminCallPanel /> : tab === 'assistente' ? <AssistenteComercial /> : (
         <>
       {/* Stats bar */}
       {recordings.length > 0 && (
