@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = adminClient()
-    const { error } = await supabase.from('lumin_events').insert(payload)
+    const { error } = await supabase.from('lumin_analytics_events').insert(payload)
     if (error) throw error
 
     return NextResponse.json({ ok: true }, { headers })
