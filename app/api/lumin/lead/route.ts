@@ -97,8 +97,8 @@ export async function POST(req: NextRequest) {
     const utmCampaign = clean(utmParams.get('utm_campaign'), 160)
     const utmContent = clean(utmParams.get('utm_content'), 160)
 
-    if (!nome || !telefone || !email) {
-      return NextResponse.json({ error: 'nome, telefone e email required' }, { status: 400, headers })
+    if (!nome || !telefone) {
+      return NextResponse.json({ error: 'nome e telefone required' }, { status: 400, headers })
     }
 
     const supabase = adminClient()
@@ -159,7 +159,7 @@ export async function POST(req: NextRequest) {
     const { data: duplicate } = await supabase
       .from('leads')
       .select('id, telefone, email')
-      .or(`telefone.eq.${telefone},email.eq.${email}`)
+      .eq('telefone', telefone)
       .limit(1)
 
     let leadId: string | null = duplicate?.[0]?.id ?? null
