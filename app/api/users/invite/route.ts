@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { email, full_name, role = 'parceiro', phone, password, company_id } = body
+  const { email, full_name, role = 'parceiro', phone, password, company_id, supervisor_id } = body
 
   if (!email?.trim() || !full_name?.trim()) {
     return NextResponse.json({ error: 'Email e nome sao obrigatorios' }, { status: 400 })
@@ -73,6 +73,24 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  let effectiveSupervisorId: string | null = null
+  if (role === 'parceiro') {
+    if (callerProfile.role === 'supervisor') {
+      effectiveSupervisorId = callerData.user.id
+    } else if (supervisor_id) {
+      const { data: supervisor } = await supabaseAdmin
+        .from('usuarios')
+        .select('id, company_id, role, status')
+        .eq('id', supervisor_id)
+        .single()
+
+      if (!supervisor || supervisor.role !== 'supervisor' || supervisor.company_id !== company_id || supervisor.status !== 'active') {
+        return NextResponse.json({ error: 'Supervisor invalido para esta empresa' }, { status: 400 })
+      }
+      effectiveSupervisorId = supervisor.id
+    }
+  }
+
   // Create the auth user with email_confirm: true (no email required)
   const { data: signUpData, error: signUpError } = await supabaseAdmin.auth.admin.createUser({
     email: email.trim(),
@@ -98,6 +116,7 @@ export async function POST(request: NextRequest) {
     role,
     status: 'active',
     created_by: callerData.user.id,
+    supervisor_id: effectiveSupervisorId,
   })
 
   if (profileError) {
