@@ -56,6 +56,7 @@ function UserForm({
   onClose,
   callerRole,
   isSuperAdmin,
+  supervisors,
 }: {
   initial?: Partial<Usuario>
   companies: { id: string; name: string }[]
@@ -63,6 +64,7 @@ function UserForm({
   onClose: () => void
   callerRole: string
   isSuperAdmin: boolean
+  supervisors: { id: string; full_name: string; company_id: string | null }[]
 }) {
   const isEdit = !!initial?.id
   const defaultCompany = companies[0]?.id ?? ''
@@ -76,6 +78,7 @@ function UserForm({
     role: (initial?.role ?? 'parceiro') as string,
     equipa: (initial as any)?.equipa ?? '',
     meta_ligacoes_dia: (initial as any)?.meta_ligacoes_dia ?? 150,
+    supervisor_id: (initial as any)?.supervisor_id ?? '',
     password: '',
   })
   const [saving, setSaving] = useState(false)
@@ -185,6 +188,21 @@ function UserForm({
           </select>
         </div>
       </div>
+
+      {form.role === 'parceiro' && callerRole !== 'supervisor' && (
+        <div>
+          <label style={labelStyle}>Supervisor responsável</label>
+          <select value={form.supervisor_id} onChange={e => set('supervisor_id', e.target.value)} style={selectStyle}>
+            <option value="">— Sem supervisor —</option>
+            {supervisors
+              .filter(s => s.company_id === form.company_id)
+              .map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+          </select>
+          <div style={{ marginTop: 4, fontSize: 11.5, color: '#64748B' }}>
+            Este vendedor só será visível para o supervisor escolhido.
+          </div>
+        </div>
+      )}
 
       {/* Status (edit only) */}
       {isEdit && (
@@ -381,6 +399,7 @@ export default function ParceirosPage() {
     { revalidateOnMount: true, dedupingInterval: 0 }
   )
 
+  const supervisors = users.filter(u => u.role === 'supervisor')
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState<ModalState>({ type: null })
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
@@ -407,6 +426,7 @@ export default function ParceirosPage() {
         role: data.role,
         password: data.password,
         company_id: data.company_id,
+        supervisor_id: data.supervisor_id || null,
       }),
     })
     const json = await res.json()
@@ -429,6 +449,7 @@ export default function ParceirosPage() {
         role: data.role,
         equipa: data.equipa || null,
         meta_ligacoes_dia: data.meta_ligacoes_dia,
+        supervisor_id: data.supervisor_id || null,
       }),
     })
     const json = await res.json()
@@ -599,14 +620,14 @@ export default function ParceirosPage() {
       {/* Create modal */}
       <Modal open={modal.type === 'create'} onClose={closeModal} title="Novo Utilizador">
         {loadingCompanies ? <PageSpinner /> : (
-          <UserForm companies={companies} onSave={handleCreate} onClose={closeModal} callerRole={profile?.role ?? 'parceiro'} isSuperAdmin={profile?.is_super_admin === true} />
+          <UserForm companies={companies} onSave={handleCreate} onClose={closeModal} callerRole={profile?.role ?? 'parceiro'} isSuperAdmin={profile?.is_super_admin === true} supervisors={supervisors} />
         )}
       </Modal>
 
       {/* Edit modal */}
       <Modal open={modal.type === 'edit'} onClose={closeModal} title="Editar Utilizador">
         {modal.type === 'edit' && (
-          <UserForm initial={modal.user} companies={companies} onSave={handleEdit} onClose={closeModal} callerRole={profile?.role ?? 'parceiro'} isSuperAdmin={profile?.is_super_admin === true} />
+          <UserForm initial={modal.user} companies={companies} onSave={handleEdit} onClose={closeModal} callerRole={profile?.role ?? 'parceiro'} isSuperAdmin={profile?.is_super_admin === true} supervisors={supervisors} />
         )}
       </Modal>
 
