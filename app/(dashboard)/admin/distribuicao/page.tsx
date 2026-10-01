@@ -15,6 +15,7 @@ export default function DistribuicaoPage() {
   const [result, setResult] = useState<{ assigned: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [campanhaFiltro, setCampanhaFiltro] = useState('')
+  const [pipelineDestino, setPipelineDestino] = useState('')
   const [quantidadeLeads, setQuantidadeLeads] = useState('')
   const [parceirosSelecionados, setParceirosSelecionados] = useState<Set<string>>(new Set())
   // Super-admin ve/distribui para qualquer empresa — mas tem de escolher UMA
@@ -34,6 +35,20 @@ export default function DistribuicaoPage() {
   const empresaAtiva = profile?.is_super_admin ? empresaFiltro : profile?.company_id
 
   const { data: campanhas = [] } = useSWR('campanhas-dist', () => campanhaService.getAll().catch(() => []))
+
+  const { data: pipelines = [] } = useSWR(
+    empresaAtiva ? ['pipelines-dist', empresaAtiva] : null,
+    async () => {
+      const sb = createClient()
+      const { data, error } = await sb
+        .from('pipelines')
+        .select('id, nome, is_default')
+        .eq('company_id', empresaAtiva!)
+        .order('nome')
+      if (error) throw error
+      return data ?? []
+    }
+  )
 
   const { data: parceiros = [], isLoading: loadingParceiros } = useSWR(
     empresaAtiva ? ['parceiros', empresaAtiva] : null,
@@ -106,13 +121,31 @@ export default function DistribuicaoPage() {
       // Vai buscar APENAS a quantidade exata pedida. Assim, escrever 100
       // distribui 100 leads — nunca toda a base por engano.
       const sb = createClient()
-      const ids: string[] = []
+
+      // Quando o admin escolhe uma pipeline de destino, todas as leads entram
+      // na primeira etapa dessa pipeline. Sem escolha, preservamos a pipeline
+      // que a lead ja tinha.
+      let pipelineEtapaDestino: string | null = null
+      if (pipelineDestino) {
+        const { data: etapa, error: etapaError } = await sb
+          .from('pipeline_etapas')
+          .select('id')
+          .eq('pipeline_id', pipelineDestino)
+          .order('ordem')
+          .limit(1)
+          .maybeSingle()
+        if (etapaError) throw etapaError
+        if (!etapa?.id) throw new Error('A pipeline escolhida não tem etapas configuradas.')
+        pipelineEtapaDestino = etapa.id
+      }
+
+      const rows: { id: string; pipeline_etapa_id: string | null }[] = []
       let from = 0
       const BATCH = 1000
-      while (ids.length < quantidadeAtribuir) {
-        const remaining = quantidadeAtribuir - ids.length
+      while (rows.length < quantidadeAtribuir) {
+        const remaining = quantidadeAtribuir - rows.length
         const take = Math.min(BATCH, remaining)
-        let q = sb.from('leads').select('id')
+        let q = sb.from('leads').select('id, pipeline_etapa_id')
           .eq('company_id', empresaAtiva!)
           .is('assigned_to', null)
           .range(from, from + take - 1)
@@ -120,15 +153,24 @@ export default function DistribuicaoPage() {
         if (campanhaFiltro) q = q.eq('campanha_id', campanhaFiltro)
         const { data, error: err } = await q
         if (err) throw err
-        const page = data ?? []
-        ids.push(...page.map(r => r.id))
+        const page = (data ?? []) as { id: string; pipeline_etapa_id: string | null }[]
+        rows.push(...page)
         if (page.length < take) break
         from += take
       }
 
-      if (ids.length !== quantidadeAtribuir) {
-        throw new Error(`Foi possível encontrar apenas ${ids.length} das ${quantidadeAtribuir} leads pedidas. Atualiza a página e tenta novamente.`)
+      if (rows.length !== quantidadeAtribuir) {
+        throw new Error(`Foi possível encontrar apenas ${rows.length} das ${quantidadeAtribuir} leads pedidas. Atualiza a página e tenta novamente.`)
       }
+
+      if (!pipelineDestino) {
+        const semPipeline = rows.filter(r => !r.pipeline_etapa_id).length
+        if (semPipeline > 0) {
+          throw new Error(`${semPipeline} das leads escolhidas ainda não têm pipeline. Escolhe uma Pipeline de destino antes de distribuir.`)
+        }
+      }
+
+      const ids = rows.map(r => r.id)
 
       // Divide a quantidade exata pelos supervisores/parceiros selecionados,
       // equilibrando a diferença para no máximo 1 lead entre destinatários.
@@ -141,7 +183,7 @@ export default function DistribuicaoPage() {
         if (!size) continue
         const batch = ids.slice(cursor, cursor + size)
         cursor += size
-        await leadService.assign(batch, parceirosAtivos[i].id)
+        await leadService.assign(batch, parceirosAtivos[i].id, pipelineEtapaDestino)
         assigned += batch.length
       }
       setResult({ assigned })
@@ -177,7 +219,7 @@ export default function DistribuicaoPage() {
             {profile?.is_super_admin && (
               <div style={{ marginBottom: 12 }}>
                 <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Empresa</label>
-                <select value={empresaFiltro} onChange={e => { setEmpresaFiltro(e.target.value); setCampanhaFiltro(''); setParceirosSelecionados(new Set()) }}
+                <select value={empresaFiltro} onChange={e => { setEmpresaFiltro(e.target.value); setCampanhaFiltro(''); setPipelineDestino(''); setParceirosSelecionados(new Set()) }}
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #FDE68A', background: '#FFFBEB', fontSize: 13, fontWeight: 600, outline: 'none' }}>
                   {empresas.map((e: any) => <option key={e.id} value={e.id}>{e.name}</option>)}
                 </select>
@@ -193,19 +235,30 @@ export default function DistribuicaoPage() {
                 </select>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Supervisores / Parceiros a incluir</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {parceiros.map(p => (
-                    <button key={p.id} onClick={() => toggleParceiro(p.id)} style={{
-                      padding: '5px 10px', borderRadius: 999, border: `1.5px solid ${parceirosSelecionados.has(p.id) ? '#2563EB' : '#E2E8F0'}`,
-                      background: parceirosSelecionados.has(p.id) ? '#EFF6FF' : '#fff',
-                      color: parceirosSelecionados.has(p.id) ? '#2563EB' : '#94A3B8',
-                      fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
-                    }}>
-                      {p.full_name.split(' ')[0]} · {p.role === 'supervisor' ? 'Supervisor' : 'Parceiro'}
-                    </button>
-                  ))}
+                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Pipeline de destino</label>
+                <select value={pipelineDestino} onChange={e => setPipelineDestino(e.target.value)}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 13, outline: 'none', background: '#fff' }}>
+                  <option value="">— Manter pipeline atual —</option>
+                  {pipelines.map((p: any) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                </select>
+                <div style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 5 }}>
+                  Se escolher uma pipeline, as leads entram na primeira etapa dessa pipeline.
                 </div>
+              </div>
+            </div>
+            <div style={{ marginTop: 14 }}>
+              <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Supervisores / Parceiros a incluir</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {parceiros.map(p => (
+                  <button key={p.id} onClick={() => toggleParceiro(p.id)} style={{
+                    padding: '5px 10px', borderRadius: 999, border: `1.5px solid ${parceirosSelecionados.has(p.id) ? '#2563EB' : '#E2E8F0'}`,
+                    background: parceirosSelecionados.has(p.id) ? '#EFF6FF' : '#fff',
+                    color: parceirosSelecionados.has(p.id) ? '#2563EB' : '#94A3B8',
+                    fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
+                  }}>
+                    {p.full_name.split(' ')[0]} · {p.role === 'supervisor' ? 'Supervisor' : 'Parceiro'}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
@@ -262,7 +315,7 @@ export default function DistribuicaoPage() {
           <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '24px', marginBottom: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <h2 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700, color: '#0F172A' }}>Distribuicao Automatica</h2>
             <p style={{ color: '#64748B', fontSize: 14, margin: '0 0 20px' }}>
-              Distribui exatamente a quantidade indicada acima pelos supervisores/parceiros selecionados, de forma equitativa.
+              Distribui exatamente a quantidade indicada acima pelos supervisores/parceiros selecionados. A pipeline atual é preservada ou, se escolher uma Pipeline de destino, as leads entram logo na primeira etapa dessa pipeline.
             </p>
             {result && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#F0FDF4', borderRadius: 8, marginBottom: 16 }}>
