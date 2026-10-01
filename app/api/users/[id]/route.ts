@@ -26,7 +26,7 @@ async function verifyCallerIsAdmin(request: NextRequest) {
 
 function canManageTarget(
   caller: { user: { id: string }; profile: { role: string; company_id: string | null; is_super_admin: boolean } },
-  target: { id: string; company_id: string | null; role: string; created_by: string | null; is_super_admin: boolean }
+  target: { id: string; company_id: string | null; role: string; created_by: string | null; supervisor_id: string | null; is_super_admin: boolean }
 ) {
   if (caller.profile.is_super_admin) return true
   if (!caller.profile.company_id || target.company_id !== caller.profile.company_id) return false
@@ -37,7 +37,7 @@ function canManageTarget(
   }
 
   if (caller.profile.role === 'supervisor') {
-    return target.role === 'parceiro' && target.created_by === caller.user.id
+    return target.role === 'parceiro' && (target.supervisor_id === caller.user.id || (!target.supervisor_id && target.created_by === caller.user.id))
   }
 
   return false
@@ -62,7 +62,7 @@ export async function PATCH(
 
   const { data: target } = await admin
     .from('usuarios')
-    .select('id, company_id, role, created_by, is_super_admin')
+    .select('id, company_id, role, created_by, supervisor_id, is_super_admin')
     .eq('id', id)
     .single()
 
@@ -82,7 +82,7 @@ export async function PATCH(
   }
 
   // ── Profile update ───────────────────────────────────────────────────────
-  const { full_name, phone, company_id, status, role, equipa, meta_ligacoes_dia } = body
+  const { full_name, phone, company_id, status, role, equipa, meta_ligacoes_dia, supervisor_id } = body
 
   if (!caller.profile.is_super_admin) {
     if (company_id !== undefined && company_id !== caller.profile.company_id) {
@@ -96,6 +96,30 @@ export async function PATCH(
     }
   }
 
+  let effectiveSupervisorId: string | null | undefined = undefined
+  if (supervisor_id !== undefined || role !== undefined) {
+    const resultingRole = role ?? target.role
+    if (resultingRole !== 'parceiro') {
+      effectiveSupervisorId = null
+    } else if (caller.profile.role === 'supervisor' && !caller.profile.is_super_admin) {
+      effectiveSupervisorId = caller.user.id
+    } else if (supervisor_id) {
+      const { data: supervisor } = await admin
+        .from('usuarios')
+        .select('id, company_id, role, status')
+        .eq('id', supervisor_id)
+        .single()
+
+      const targetCompany = company_id ?? target.company_id
+      if (!supervisor || supervisor.role !== 'supervisor' || supervisor.company_id !== targetCompany || supervisor.status !== 'active') {
+        return NextResponse.json({ error: 'Supervisor invalido para esta empresa' }, { status: 400 })
+      }
+      effectiveSupervisorId = supervisor.id
+    } else if (supervisor_id === null || supervisor_id === '') {
+      effectiveSupervisorId = null
+    }
+  }
+
   const updatePayload: Record<string, any> = {}
   if (full_name !== undefined)  updatePayload.full_name  = full_name?.trim() || null
   if (phone !== undefined)      updatePayload.phone      = phone?.trim()     || null
@@ -104,6 +128,7 @@ export async function PATCH(
   if (role !== undefined)       updatePayload.role       = role
   if (equipa !== undefined)     updatePayload.equipa     = equipa?.trim() || null
   if (meta_ligacoes_dia !== undefined) updatePayload.meta_ligacoes_dia = Number(meta_ligacoes_dia) || 150
+  if (effectiveSupervisorId !== undefined) updatePayload.supervisor_id = effectiveSupervisorId
 
   if (Object.keys(updatePayload).length === 0)
     return NextResponse.json({ error: 'Nenhum campo para actualizar' }, { status: 400 })
@@ -134,7 +159,7 @@ export async function DELETE(
   const admin = makeAdmin()
   const { data: target } = await admin
     .from('usuarios')
-    .select('id, company_id, role, created_by, is_super_admin')
+    .select('id, company_id, role, created_by, supervisor_id, is_super_admin')
     .eq('id', id)
     .single()
 
