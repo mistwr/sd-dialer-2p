@@ -1,8 +1,9 @@
 'use client'
 import useSWR from 'swr'
+import Link from 'next/link'
 import {
   PhoneCall, Users, TrendingUp, Clock, CheckCircle2,
-  PhoneOff, PhoneMissed, BarChart2,
+  PhoneOff, PhoneMissed, BarChart2, PhoneIncoming,
 } from 'lucide-react'
 import { StatCard } from '@/components/ui/StatCard'
 import { Spinner } from '@/components/ui/Spinner'
@@ -38,8 +39,9 @@ export default function SupervisorPage() {
   const sales      = calls.filter((c: {result: string}) => c.result === 'venda').length
   const conversion = calls.length > 0 ? ((sales / calls.length) * 100).toFixed(1) : '0.0'
 
-  // Per-parceiro stats
-  const parceiroStats = parceiros.filter(p => p.role === 'parceiro').map(p => {
+  // Supervisores também podem trabalhar leads e fazer chamadas como comerciais.
+  // Inclui parceiro + supervisor no acompanhamento de produção.
+  const parceiroStats = parceiros.filter(p => p.role === 'parceiro' || p.role === 'supervisor').map(p => {
     const pCalls = calls.filter((c: {parceiro_id: string}) => c.parceiro_id === p.id)
     const pSales = pCalls.filter((c: {result: string}) => c.result === 'venda').length
     const pDur   = pCalls.reduce((s: number, c: {duration_sec: number}) => s + c.duration_sec, 0)
@@ -55,11 +57,24 @@ export default function SupervisorPage() {
 
   return (
     <div className="anim-fade-in">
-        <div style={{ marginBottom: 24 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', margin: 0 }}>Supervisao</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748B' }}>
-            Monitorizacao em tempo real da equipa
-          </p>
+        <div style={{ marginBottom: 24, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', margin: 0 }}>Supervisao</h1>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748B' }}>
+              Monitorizacao em tempo real da equipa
+            </p>
+          </div>
+          <Link
+            href="/parceiro"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 7,
+              padding: '10px 14px', borderRadius: 10, textDecoration: 'none',
+              background: '#2563EB', color: '#fff', fontSize: 13, fontWeight: 700,
+              boxShadow: '0 4px 12px rgba(37,99,235,0.18)',
+            }}
+          >
+            <PhoneIncoming size={16} /> Minhas Leads / Fazer Chamadas
+          </Link>
         </div>
 
         {loading ? (
@@ -76,7 +91,7 @@ export default function SupervisorPage() {
               <StatCard icon={Clock}       label="Tempo Total"      value={fmt(totalDur)}           color="#0891B2" />
               <StatCard icon={CheckCircle2}label="Vendas"           value={sales}                   color="#16A34A" />
               <StatCard icon={TrendingUp}  label="Conversao"        value={`${conversion}%`}        color="#16A34A" />
-              <StatCard icon={Users}       label="Parceiros"        value={parceiroStats.length}     color="#D97706" />
+              <StatCard icon={Users}       label="Comerciais"       value={parceiroStats.length}     color="#D97706" />
             </div>
 
             {/* Ranking Table */}
@@ -87,14 +102,14 @@ export default function SupervisorPage() {
 
               {parceiroStats.length === 0 ? (
                 <div style={{ padding: 40, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>
-                  Nenhum parceiro com chamadas ainda
+                  Nenhum comercial com chamadas ainda
                 </div>
               ) : (
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: '#F8FAFC' }}>
-                        {['#', 'Parceiro', 'Chamadas', 'Vendas', 'Conversao', 'Tempo Total'].map(h => (
+                        {['#', 'Comercial', 'Chamadas', 'Vendas', 'Conversao', 'Tempo Total'].map(h => (
                           <th key={h} style={{
                             padding: '11px 16px', textAlign: 'left',
                             fontSize: 11, fontWeight: 600, color: '#64748B',
