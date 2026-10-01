@@ -15,6 +15,7 @@ export default function DistribuicaoPage() {
   const [result, setResult] = useState<{ assigned: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [campanhaFiltro, setCampanhaFiltro] = useState('')
+  const [origemLeads, setOrigemLeads] = useState('unassigned')
   const [pipelineDestino, setPipelineDestino] = useState('')
   const [quantidadeLeads, setQuantidadeLeads] = useState('')
   const [parceirosSelecionados, setParceirosSelecionados] = useState<Set<string>>(new Set())
@@ -50,27 +51,40 @@ export default function DistribuicaoPage() {
     }
   )
 
+  const { data: utilizadoresOrigem = [] } = useSWR(
+    empresaAtiva ? ['utilizadores-origem', empresaAtiva] : null,
+    () => usuarioService.getByCompany(empresaAtiva!).then(u => u.filter(x => x.status === 'active'))
+  )
+
   const { data: parceiros = [], isLoading: loadingParceiros } = useSWR(
     empresaAtiva ? ['parceiros', empresaAtiva] : null,
     () => usuarioService.getByCompany(empresaAtiva!).then(u => u.filter(x => (x.role === 'parceiro' || x.role === 'supervisor') && x.status === 'active'))
   )
 
-  // So o numero de leads por atribuir (nao a lista toda — com dezenas de milhares
-  // de leads, carregar tudo so para saber "quantas ha" trava a pagina).
+  // Conta apenas as leads disponíveis na origem escolhida. Para "Não atribuídas"
+  // usa a RPC otimizada; para um utilizador concreto conta as leads desse responsável.
   const { data: unassignedCount = 0, isLoading: loadingLeads, mutate, error: unassignedError } = useSWR(
-    empresaAtiva ? ['unassigned-count', empresaAtiva, campanhaFiltro] : null,
+    empresaAtiva ? ['available-count', empresaAtiva, campanhaFiltro, origemLeads] : null,
     async () => {
       const sb = createClient()
-      // RPC dedicada — a contagem normal (select + count:exact) demorava ~4s
-      // e por vezes falhava, porque a RLS tinha de correr a verificacao de
-      // permissao (get_is_super_admin) uma vez por cada uma das 66 mil
-      // leads. Esta funcao verifica a permissao UMA vez so.
-      const { data, error } = await sb.rpc('count_unassigned_leads', {
-        p_company_id: empresaAtiva!,
-        p_campanha_id: campanhaFiltro || null,
-      })
+      if (origemLeads === 'unassigned') {
+        const { data, error } = await sb.rpc('count_unassigned_leads', {
+          p_company_id: empresaAtiva!,
+          p_campanha_id: campanhaFiltro || null,
+        })
+        if (error) throw error
+        return data ?? 0
+      }
+
+      let q = sb
+        .from('leads')
+        .select('id', { count: 'exact', head: true })
+        .eq('company_id', empresaAtiva!)
+        .eq('assigned_to', origemLeads)
+      if (campanhaFiltro) q = q.eq('campanha_id', campanhaFiltro)
+      const { count, error } = await q
       if (error) throw error
-      return data ?? 0
+      return count ?? 0
     }
   )
 
@@ -97,7 +111,20 @@ export default function DistribuicaoPage() {
     }
   }, [parceiros])
 
-  const parceirosAtivos = parceiros.filter(p => parceirosSelecionados.has(p.id))
+  useEffect(() => {
+    if (origemLeads === 'unassigned') return
+    setParceirosSelecionados(prev => {
+      if (!prev.has(origemLeads)) return prev
+      const next = new Set(prev)
+      next.delete(origemLeads)
+      return next
+    })
+  }, [origemLeads])
+
+  const parceirosDisponiveis = parceiros.filter(p => origemLeads === 'unassigned' || p.id !== origemLeads)
+  const parceirosAtivos = parceirosDisponiveis.filter(p => parceirosSelecionados.has(p.id))
+  const origemSelecionada = utilizadoresOrigem.find(u => u.id === origemLeads)
+  const origemLabel = origemLeads === 'unassigned' ? 'Não atribuídas' : (origemSelecionada?.full_name ?? 'Utilizador')
   const quantidadePedida = Number.parseInt(quantidadeLeads, 10)
   const quantidadeValida = Number.isInteger(quantidadePedida) && quantidadePedida > 0
   const quantidadeAtribuir = quantidadeValida ? quantidadePedida : 0
@@ -147,8 +174,10 @@ export default function DistribuicaoPage() {
         const take = Math.min(BATCH, remaining)
         let q = sb.from('leads').select('id, pipeline_etapa_id')
           .eq('company_id', empresaAtiva!)
-          .is('assigned_to', null)
           .range(from, from + take - 1)
+        q = origemLeads === 'unassigned'
+          ? q.is('assigned_to', null)
+          : q.eq('assigned_to', origemLeads)
         // A RLS ja restringe isto sozinha para um admin restrito.
         if (campanhaFiltro) q = q.eq('campanha_id', campanhaFiltro)
         const { data, error: err } = await q
@@ -219,12 +248,30 @@ export default function DistribuicaoPage() {
             {profile?.is_super_admin && (
               <div style={{ marginBottom: 12 }}>
                 <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Empresa</label>
-                <select value={empresaFiltro} onChange={e => { setEmpresaFiltro(e.target.value); setCampanhaFiltro(''); setPipelineDestino(''); setParceirosSelecionados(new Set()) }}
+                <select value={empresaFiltro} onChange={e => { setEmpresaFiltro(e.target.value); setCampanhaFiltro(''); setOrigemLeads('unassigned'); setPipelineDestino(''); setQuantidadeLeads(''); setParceirosSelecionados(new Set()) }}
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #FDE68A', background: '#FFFBEB', fontSize: 13, fontWeight: 600, outline: 'none' }}>
                   {empresas.map((e: any) => <option key={e.id} value={e.id}>{e.name}</option>)}
                 </select>
               </div>
             )}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: '#374151', marginBottom: 5 }}>De onde retirar as leads?</label>
+              <select
+                value={origemLeads}
+                onChange={e => { setOrigemLeads(e.target.value); setQuantidadeLeads(''); setResult(null); setError(null) }}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #93C5FD', background: '#EFF6FF', fontSize: 13, fontWeight: 600, outline: 'none' }}
+              >
+                <option value="unassigned">— Não atribuídas —</option>
+                {utilizadoresOrigem.map((u: any) => (
+                  <option key={u.id} value={u.id}>
+                    {u.full_name} · {u.role === 'admin' ? 'Admin' : u.role === 'supervisor' ? 'Supervisor' : 'Parceiro'}
+                  </option>
+                ))}
+              </select>
+              <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 5 }}>
+                Pode retirar apenas uma quantidade específica das leads já atribuídas a uma pessoa.
+              </div>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Campanha</label>
@@ -249,7 +296,7 @@ export default function DistribuicaoPage() {
             <div style={{ marginTop: 14 }}>
               <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Supervisores / Parceiros a incluir</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {parceiros.map(p => (
+                {parceirosDisponiveis.map(p => (
                   <button key={p.id} onClick={() => toggleParceiro(p.id)} style={{
                     padding: '5px 10px', borderRadius: 999, border: `1.5px solid ${parceirosSelecionados.has(p.id) ? '#2563EB' : '#E2E8F0'}`,
                     background: parceirosSelecionados.has(p.id) ? '#EFF6FF' : '#fff',
@@ -299,7 +346,7 @@ export default function DistribuicaoPage() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 16, marginBottom: 28 }}>
             {[
-              { label: 'Leads por Atribuir', value: unassignedCount, color: '#D97706', bg: '#FFFBEB' },
+              { label: `Disponíveis · ${origemLabel}`, value: unassignedCount, color: '#D97706', bg: '#FFFBEB' },
               { label: 'Destinatários Selecionados', value: parceirosAtivos.length, color: '#2563EB', bg: '#EFF6FF' },
               { label: 'Leads a Distribuir', value: quantidadeValida ? quantidadeAtribuir : 0, color: '#7C3AED', bg: '#F5F3FF' },
               { label: 'Média por Destinatário', value: parceirosAtivos.length && quantidadeValida ? Math.ceil(quantidadeAtribuir / parceirosAtivos.length) : 0, color: '#16A34A', bg: '#F0FDF4' },
@@ -315,7 +362,7 @@ export default function DistribuicaoPage() {
           <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '24px', marginBottom: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <h2 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700, color: '#0F172A' }}>Distribuicao Automatica</h2>
             <p style={{ color: '#64748B', fontSize: 14, margin: '0 0 20px' }}>
-              Distribui exatamente a quantidade indicada acima pelos supervisores/parceiros selecionados. A pipeline atual é preservada ou, se escolher uma Pipeline de destino, as leads entram logo na primeira etapa dessa pipeline.
+              Retira exatamente a quantidade indicada da origem escolhida e distribui-a pelos supervisores/parceiros selecionados. A pipeline atual é preservada ou, se escolher uma Pipeline de destino, as leads entram logo na primeira etapa dessa pipeline.
             </p>
             {result && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#F0FDF4', borderRadius: 8, marginBottom: 16 }}>
