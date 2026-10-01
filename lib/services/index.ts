@@ -194,14 +194,17 @@ export const leadService = {
     }
     return results
   },
-  async assign(leadIds: string[], userId: string) {
+  async assign(leadIds: string[], userId: string, pipelineEtapaId?: string | null) {
     const sb = createClient()
     const CHUNK = 200
+    const payload = pipelineEtapaId
+      ? { assigned_to: userId, pipeline_etapa_id: pipelineEtapaId }
+      : { assigned_to: userId }
     for (let i = 0; i < leadIds.length; i += CHUNK) {
       const chunk = leadIds.slice(i, i + CHUNK)
       const { error } = await sb
         .from('leads')
-        .update({ assigned_to: userId })
+        .update(payload)
         .in('id', chunk)
       if (error) throw error
     }
