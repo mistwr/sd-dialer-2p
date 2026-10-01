@@ -193,10 +193,17 @@ function ParceiroDashboardInner() {
   const [filterCampanha, setFilterCampanha] = useState<string>(searchParams.get('campanha') ?? 'all')
   const [filterLocalidade, setFilterLocalidade] = useState('')
   const [mostrarAgendadas, setMostrarAgendadas] = useState(false)
+  const [loadLimit, setLoadLimit] = useState(1000)
 
   const { data: leads = [], isLoading, mutate: mutateLeads } = useSWR(
-    user ? ['parceiro-leads', user.id] : null,
-    () => leadService.getAssigned(user!.id),
+    user ? ['parceiro-leads', user.id, loadLimit] : null,
+    () => leadService.getAssigned(user!.id, loadLimit),
+    { revalidateOnFocus: true }
+  )
+
+  const { data: assignedStats, mutate: mutateAssignedStats } = useSWR(
+    user ? ['parceiro-lead-stats', user.id] : null,
+    () => leadService.getAssignedStats(user!.id),
     { revalidateOnFocus: true }
   )
 
@@ -295,12 +302,16 @@ function ParceiroDashboardInner() {
     return acc
   }, {} as Record<string, number>)
 
+  const totalAssigned = assignedStats?.total ?? leads.length
+  const statusCount = (key: keyof NonNullable<typeof assignedStats>, fallback: number) =>
+    assignedStats?.[key] ?? fallback
+
   const statuses: { key: LeadStatus | 'all'; label: string }[] = [
-    { key: 'all', label: `Todas (${leads.length})` },
-    { key: 'novo', label: `Novas (${counts['novo'] ?? 0})` },
-    { key: 'ligar_depois', label: `Follow-up (${counts['ligar_depois'] ?? 0})` },
-    { key: 'contactado', label: `Contactadas (${counts['contactado'] ?? 0})` },
-    { key: 'vendido', label: `Vendidas (${counts['vendido'] ?? 0})` },
+    { key: 'all', label: `Todas (${totalAssigned})` },
+    { key: 'novo', label: `Novas (${statusCount('novo', counts['novo'] ?? 0)})` },
+    { key: 'ligar_depois', label: `Follow-up (${statusCount('ligar_depois', counts['ligar_depois'] ?? 0)})` },
+    { key: 'contactado', label: `Contactadas (${statusCount('contactado', counts['contactado'] ?? 0)})` },
+    { key: 'vendido', label: `Vendidas (${statusCount('vendido', counts['vendido'] ?? 0)})` },
   ]
 
   return (
@@ -312,7 +323,7 @@ function ParceiroDashboardInner() {
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', margin: 0 }}>Minhas Leads</h1>
             <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748B' }}>
-              {leads.length} leads atribuidas
+              {assignedStats?.total ?? leads.length} leads atribuídas · {leads.length} carregadas
             </p>
           </div>
           <button
@@ -372,10 +383,10 @@ function ParceiroDashboardInner() {
         {/* Stats row */}
         <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
           {[
-            { label: 'Total', value: leads.length, color: '#2563EB' },
-            { label: 'Vendas', value: counts['vendido'] ?? 0, color: '#16A34A' },
-            { label: 'Pendentes', value: (counts['novo'] ?? 0) + (counts['ligar_depois'] ?? 0), color: '#D97706' },
-            { label: 'Nao Atende', value: counts['nao_atende'] ?? 0, color: '#6B7280' },
+            { label: 'Total', value: totalAssigned, color: '#2563EB' },
+            { label: 'Vendas', value: statusCount('vendido', counts['vendido'] ?? 0), color: '#16A34A' },
+            { label: 'Pendentes', value: statusCount('novo', counts['novo'] ?? 0) + statusCount('ligar_depois', counts['ligar_depois'] ?? 0), color: '#D97706' },
+            { label: 'Nao Atende', value: statusCount('nao_atende', counts['nao_atende'] ?? 0), color: '#6B7280' },
           ].map(s => (
             <div key={s.label} style={{
               flex: '1 1 80px', background: '#fff', borderRadius: 10,
@@ -552,6 +563,21 @@ function ParceiroDashboardInner() {
           </div>
         )}
 
+        {totalAssigned > leads.length && (
+          <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 10, background: '#EFF6FF', border: '1px solid #BFDBFE', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12.5, color: '#1E40AF' }}>
+              A mostrar <strong>{leads.length}</strong> de <strong>{totalAssigned}</strong> leads. Carrega mais apenas quando precisares para manter a página rápida.
+            </span>
+            <button
+              type="button"
+              onClick={() => setLoadLimit(v => Math.min(v + 1000, totalAssigned))}
+              style={{ padding: '7px 12px', borderRadius: 8, border: '1px solid #93C5FD', background: '#fff', color: '#1D4ED8', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
+            >
+              Carregar mais 1000
+            </button>
+          </div>
+        )}
+
         {/* Leads list */}
         {isLoading ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
@@ -636,7 +662,7 @@ function ParceiroDashboardInner() {
           companyId={profile.company_id}
           userId={user.id}
           onClose={() => setShowNovaLead(false)}
-          onCreated={() => mutateLeads()}
+          onCreated={() => { mutateLeads(); mutateAssignedStats() }}
         />
       )}
     </>
