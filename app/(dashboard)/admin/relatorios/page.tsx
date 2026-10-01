@@ -59,7 +59,7 @@ export default function RelatoriosPage() {
             .gte('called_at', from + 'T00:00:00')
             .lte('called_at', to + 'T23:59:59')
             .order('called_at', { ascending: false }),
-          sb.from('usuarios').select('id, full_name, email, equipa, meta_ligacoes_dia').eq('company_id', profile.company_id!).eq('role', 'parceiro'),
+          sb.from('usuarios').select('id, full_name, email, equipa, meta_ligacoes_dia').eq('company_id', profile.company_id!).in('role', ['parceiro', 'supervisor']),
           fetch(`${CRM_REPORT_URL}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, { cache: 'no-store' })
             .then(async r => ({ ok: r.ok, data: r.ok ? await r.json() : null }))
             .catch(() => ({ ok: false, data: null })),
