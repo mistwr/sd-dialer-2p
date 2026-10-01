@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/client'
-import type { Company, Usuario, Campanha, Lead, CallHistory, FollowUp } from '@/lib/types'
+import type { Company, Usuario, Campanha, Lead, CallHistory, FollowUp, CompanyTrainingMaterial } from '@/lib/types'
 
 // -------------------------------------------------------
 // COMPANIES
@@ -867,5 +867,56 @@ export const doorCaptureService = {
       motivosRecusa,
       porOrigem,
     }
+  },
+}
+
+
+// -------------------------------------------------------
+// FORMAÇÃO POR EMPRESA
+// -------------------------------------------------------
+export const formacaoService = {
+  async getByCompany(companyId: string, includeInactive = false) {
+    const sb = createClient()
+    let query = sb
+      .from('company_training_materials')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true })
+
+    if (!includeInactive) query = query.eq('is_active', true)
+
+    const { data, error } = await query
+    if (error) throw error
+    return (data ?? []) as CompanyTrainingMaterial[]
+  },
+
+  async create(payload: Partial<CompanyTrainingMaterial>) {
+    const sb = createClient()
+    const { data, error } = await sb
+      .from('company_training_materials')
+      .insert(payload)
+      .select()
+      .single()
+    if (error) throw error
+    return data as CompanyTrainingMaterial
+  },
+
+  async update(id: string, payload: Partial<CompanyTrainingMaterial>) {
+    const sb = createClient()
+    const { data, error } = await sb
+      .from('company_training_materials')
+      .update({ ...payload, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) throw error
+    return data as CompanyTrainingMaterial
+  },
+
+  async delete(id: string) {
+    const sb = createClient()
+    const { error } = await sb.from('company_training_materials').delete().eq('id', id)
+    if (error) throw error
   },
 }
