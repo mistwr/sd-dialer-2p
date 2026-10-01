@@ -86,6 +86,10 @@ export interface Usuario {
   tabela_comissoes_url: string | null
   onboarding_completo: boolean
   is_super_admin?: boolean
+  created_by?: string | null
+  supervisor_id?: string | null
+  equipa?: string | null
+  meta_ligacoes_dia?: number
 }
 
 export interface Campanha {
