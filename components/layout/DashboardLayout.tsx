@@ -22,6 +22,8 @@ interface NavItem {
   roles: string[]
 }
 
+const AI_CALLS_MENU_USER_ID = '8c43ee2a-9c99-4493-a215-abcb0849b8bf'
+
 const NAV: NavItem[] = [
   { label: 'Dashboard',    href: '/admin',               icon: LayoutDashboard, roles: ['admin', 'supervisor'] },
   { label: 'Chat',         href: '/chat',                 icon: MessageCircle,   roles: ['admin', 'supervisor', 'parceiro'] },
@@ -101,7 +103,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   const effectiveRole = canSwitchView ? viewRole : role
-  const visibleNav = NAV.filter(n => n.roles.includes(effectiveRole))
+  const visibleNav = NAV.filter(n =>
+    n.roles.includes(effectiveRole) &&
+    (n.href !== '/parceiro/chamadas-ia' || user?.id === AI_CALLS_MENU_USER_ID)
+  )
   const activeNavItem = visibleNav.find(item => pathname === item.href || (item.href !== '/admin' && item.href !== '/parceiro' && pathname.startsWith(item.href)))
 
   const avatarInitials = profile?.full_name
