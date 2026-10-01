@@ -15,6 +15,7 @@ export default function DistribuicaoPage() {
   const [result, setResult] = useState<{ assigned: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [campanhaFiltro, setCampanhaFiltro] = useState('')
+  const [quantidadeLeads, setQuantidadeLeads] = useState('')
   const [parceirosSelecionados, setParceirosSelecionados] = useState<Set<string>>(new Set())
   // Super-admin ve/distribui para qualquer empresa — mas tem de escolher UMA
   // de cada vez, para nunca misturar leads de uma empresa com parceiros de
@@ -36,7 +37,7 @@ export default function DistribuicaoPage() {
 
   const { data: parceiros = [], isLoading: loadingParceiros } = useSWR(
     empresaAtiva ? ['parceiros', empresaAtiva] : null,
-    () => usuarioService.getByCompany(empresaAtiva!).then(u => u.filter(x => x.role === 'parceiro' && x.status === 'active'))
+    () => usuarioService.getByCompany(empresaAtiva!).then(u => u.filter(x => (x.role === 'parceiro' || x.role === 'supervisor') && x.status === 'active'))
   )
 
   // So o numero de leads por atribuir (nao a lista toda — com dezenas de milhares
@@ -82,6 +83,9 @@ export default function DistribuicaoPage() {
   }, [parceiros])
 
   const parceirosAtivos = parceiros.filter(p => parceirosSelecionados.has(p.id))
+  const quantidadePedida = Number.parseInt(quantidadeLeads, 10)
+  const quantidadeValida = Number.isInteger(quantidadePedida) && quantidadePedida > 0
+  const quantidadeAtribuir = quantidadeValida ? quantidadePedida : 0
 
   const toggleParceiro = (id: string) => {
     setParceirosSelecionados(prev => {
@@ -92,41 +96,56 @@ export default function DistribuicaoPage() {
   }
 
   const handleAutoDistribute = async () => {
-    if (!parceirosAtivos.length || !unassignedCount) return
+    if (!parceirosAtivos.length || !unassignedCount || !quantidadeValida) return
     setDistributing(true); setError(null); setResult(null)
     try {
-      // So agora, ao distribuir de facto, vai buscar os IDs das leads por
-      // atribuir — em blocos, e so os IDs (nao a lead toda), para nao pesar.
+      if (quantidadeAtribuir > unassignedCount) {
+        throw new Error(`Só existem ${unassignedCount} leads disponíveis com os filtros atuais.`)
+      }
+
+      // Vai buscar APENAS a quantidade exata pedida. Assim, escrever 100
+      // distribui 100 leads — nunca toda a base por engano.
       const sb = createClient()
       const ids: string[] = []
       let from = 0
       const BATCH = 1000
-      while (true) {
+      while (ids.length < quantidadeAtribuir) {
+        const remaining = quantidadeAtribuir - ids.length
+        const take = Math.min(BATCH, remaining)
         let q = sb.from('leads').select('id')
           .eq('company_id', empresaAtiva!)
           .is('assigned_to', null)
-          .range(from, from + BATCH - 1)
-        // A RLS ja restringe isto sozinha para um admin restrito (so ve as
-        // que ele importou) — nao e preciso filtro extra aqui.
+          .range(from, from + take - 1)
+        // A RLS ja restringe isto sozinha para um admin restrito.
         if (campanhaFiltro) q = q.eq('campanha_id', campanhaFiltro)
         const { data, error: err } = await q
         if (err) throw err
         const page = data ?? []
         ids.push(...page.map(r => r.id))
-        if (page.length < BATCH) break
-        from += BATCH
+        if (page.length < take) break
+        from += take
       }
 
-      // Round-robin distribution
+      if (ids.length !== quantidadeAtribuir) {
+        throw new Error(`Foi possível encontrar apenas ${ids.length} das ${quantidadeAtribuir} leads pedidas. Atualiza a página e tenta novamente.`)
+      }
+
+      // Divide a quantidade exata pelos supervisores/parceiros selecionados,
+      // equilibrando a diferença para no máximo 1 lead entre destinatários.
       let assigned = 0
-      const batchSize = Math.ceil(ids.length / parceirosAtivos.length)
+      const base = Math.floor(ids.length / parceirosAtivos.length)
+      const extra = ids.length % parceirosAtivos.length
+      let cursor = 0
       for (let i = 0; i < parceirosAtivos.length; i++) {
-        const batch = ids.slice(i * batchSize, (i + 1) * batchSize)
-        if (!batch.length) break
+        const size = base + (i < extra ? 1 : 0)
+        if (!size) continue
+        const batch = ids.slice(cursor, cursor + size)
+        cursor += size
         await leadService.assign(batch, parceirosAtivos[i].id)
         assigned += batch.length
       }
       setResult({ assigned })
+      setQuantidadeLeads('')
       mutate(); mutateCounts()
     } catch (err: any) {
       setError(err?.message || err?.error_description || (err instanceof Error ? err.message : 'Erro ao distribuir'))
@@ -141,7 +160,7 @@ export default function DistribuicaoPage() {
     <div className="anim-fade-in" style={{ maxWidth: 900 }}>
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: 0 }}>Distribuicao de Leads</h1>
-        <p style={{ color: '#64748B', fontSize: 14, margin: '4px 0 0' }}>Atribua leads automaticamente aos parceiros ativos</p>
+        <p style={{ color: '#64748B', fontSize: 14, margin: '4px 0 0' }}>Escolha a quantidade exata e atribua-a a supervisores ou parceiros ativos</p>
       </div>
 
       {isLoading ? <PageSpinner /> : (
@@ -174,7 +193,7 @@ export default function DistribuicaoPage() {
                 </select>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Parceiros a incluir</label>
+                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Supervisores / Parceiros a incluir</label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {parceiros.map(p => (
                     <button key={p.id} onClick={() => toggleParceiro(p.id)} style={{
@@ -183,7 +202,7 @@ export default function DistribuicaoPage() {
                       color: parceirosSelecionados.has(p.id) ? '#2563EB' : '#94A3B8',
                       fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
                     }}>
-                      {p.full_name.split(' ')[0]}
+                      {p.full_name.split(' ')[0]} · {p.role === 'supervisor' ? 'Supervisor' : 'Parceiro'}
                     </button>
                   ))}
                 </div>
@@ -191,12 +210,46 @@ export default function DistribuicaoPage() {
             </div>
           </div>
 
-          {/* Stats */}
+          {/* Quantidade exata + Stats */}
+          <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 24px', marginBottom: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <h2 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700, color: '#0F172A' }}>Quantas leads quer distribuir?</h2>
+            <p style={{ color: '#64748B', fontSize: 13, margin: '0 0 12px' }}>
+              Escreva um número exato. Exemplo: 100 distribui exatamente 100 leads pelos destinatários selecionados.
+            </p>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={unassignedCount || undefined}
+                step={1}
+                value={quantidadeLeads}
+                onChange={e => setQuantidadeLeads(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="Ex.: 100"
+                style={{ width: 180, maxWidth: '100%', padding: '11px 13px', borderRadius: 10, border: `1.5px solid ${quantidadeValida && quantidadeAtribuir > unassignedCount ? '#EF4444' : '#CBD5E1'}`, fontSize: 16, fontWeight: 700, outline: 'none' }}
+              />
+              <button
+                type="button"
+                onClick={() => setQuantidadeLeads(String(unassignedCount))}
+                disabled={!unassignedCount}
+                style={{ padding: '10px 13px', borderRadius: 9, border: '1px solid #CBD5E1', background: '#F8FAFC', color: '#475569', fontSize: 12.5, fontWeight: 700, cursor: unassignedCount ? 'pointer' : 'not-allowed' }}
+              >
+                Usar todas ({unassignedCount})
+              </button>
+            </div>
+            {quantidadeValida && quantidadeAtribuir > unassignedCount && (
+              <p style={{ margin: '8px 0 0', fontSize: 12.5, color: '#DC2626', fontWeight: 600 }}>
+                A quantidade pedida é superior às {unassignedCount} leads disponíveis.
+              </p>
+            )}
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 16, marginBottom: 28 }}>
             {[
               { label: 'Leads por Atribuir', value: unassignedCount, color: '#D97706', bg: '#FFFBEB' },
-              { label: 'Parceiros Selecionados', value: parceirosAtivos.length, color: '#2563EB', bg: '#EFF6FF' },
-              { label: 'Por Parceiro', value: parceirosAtivos.length ? Math.ceil(unassignedCount / parceirosAtivos.length) : 0, color: '#16A34A', bg: '#F0FDF4' },
+              { label: 'Destinatários Selecionados', value: parceirosAtivos.length, color: '#2563EB', bg: '#EFF6FF' },
+              { label: 'Leads a Distribuir', value: quantidadeValida ? quantidadeAtribuir : 0, color: '#7C3AED', bg: '#F5F3FF' },
+              { label: 'Média por Destinatário', value: parceirosAtivos.length && quantidadeValida ? Math.ceil(quantidadeAtribuir / parceirosAtivos.length) : 0, color: '#16A34A', bg: '#F0FDF4' },
             ].map(s => (
               <div key={s.label} style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                 <div style={{ fontSize: 30, fontWeight: 800, color: s.color, marginBottom: 4 }}>{s.value}</div>
@@ -209,7 +262,7 @@ export default function DistribuicaoPage() {
           <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '24px', marginBottom: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <h2 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700, color: '#0F172A' }}>Distribuicao Automatica</h2>
             <p style={{ color: '#64748B', fontSize: 14, margin: '0 0 20px' }}>
-              Distribui as leads filtradas acima pelos parceiros selecionados, de forma equitativa (round-robin).
+              Distribui exatamente a quantidade indicada acima pelos supervisores/parceiros selecionados, de forma equitativa.
             </p>
             {result && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#F0FDF4', borderRadius: 8, marginBottom: 16 }}>
@@ -225,20 +278,20 @@ export default function DistribuicaoPage() {
             )}
             <button
               onClick={handleAutoDistribute}
-              disabled={distributing || !unassignedCount || !parceirosAtivos.length}
+              disabled={distributing || !unassignedCount || !parceirosAtivos.length || !quantidadeValida || quantidadeAtribuir > unassignedCount}
               style={{
                 display: 'flex', alignItems: 'center', gap: 9,
                 padding: '12px 24px', borderRadius: 10, border: 'none',
-                background: (!unassignedCount || !parceirosAtivos.length) ? '#94A3B8' : '#2563EB',
-                color: '#fff', fontWeight: 700, fontSize: 15, cursor: (!unassignedCount || !parceirosAtivos.length) ? 'not-allowed' : 'pointer',
+                background: (!unassignedCount || !parceirosAtivos.length || !quantidadeValida || quantidadeAtribuir > unassignedCount) ? '#94A3B8' : '#2563EB',
+                color: '#fff', fontWeight: 700, fontSize: 15, cursor: (!unassignedCount || !parceirosAtivos.length || !quantidadeValida || quantidadeAtribuir > unassignedCount) ? 'not-allowed' : 'pointer',
                 transition: 'background 0.15s',
               }}
             >
               <Shuffle size={18} />
-              {distributing ? 'A distribuir...' : `Distribuir ${unassignedCount} Leads`}
+              {distributing ? 'A distribuir...' : `Distribuir ${quantidadeValida ? quantidadeAtribuir : 0} Leads`}
             </button>
             {!parceirosAtivos.length && (
-              <p style={{ margin: '12px 0 0', fontSize: 13, color: '#94A3B8' }}>Seleciona pelo menos um parceiro acima.</p>
+              <p style={{ margin: '12px 0 0', fontSize: 13, color: '#94A3B8' }}>Seleciona pelo menos um supervisor ou parceiro acima.</p>
             )}
           </div>
 
@@ -246,8 +299,8 @@ export default function DistribuicaoPage() {
           {parceiros.length > 0 && (
             <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
               <div style={{ padding: '16px 20px', borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0F172A' }}>Parceiros Ativos</h2>
-                <span style={{ fontSize: 12, color: '#64748B' }}>{parceiros.length} parceiro{parceiros.length !== 1 ? 's' : ''}</span>
+                <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0F172A' }}>Supervisores e Parceiros Ativos</h2>
+                <span style={{ fontSize: 12, color: '#64748B' }}>{parceiros.length} utilizador{parceiros.length !== 1 ? 'es' : ''}</span>
               </div>
               {parceiros.map((p, i) => {
                 const pCounts = parceiroCounts[p.id] ?? { leads: 0, vendidas: 0 }
@@ -261,7 +314,7 @@ export default function DistribuicaoPage() {
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>{p.full_name}</div>
-                      <div style={{ fontSize: 12, color: '#94A3B8' }}>{p.email}</div>
+                      <div style={{ fontSize: 12, color: '#94A3B8' }}>{p.email} · {p.role === 'supervisor' ? 'Supervisor' : 'Parceiro'}</div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                       <div style={{ textAlign: 'right' }}>
