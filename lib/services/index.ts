@@ -135,46 +135,64 @@ export const leadService = {
     if (error) throw error
     return data as Lead
   },
-  async getAssigned(userId: string) {
+  async getAssigned(userId: string, maxTotal = 1000) {
     const sb = createClient()
     const PAGE = 1000
-    // Com dezenas de milhares de leads atribuidas (ex: toda uma base fria),
-    // trazer tudo para o browser em memoria trava a pagina — por isso ha
-    // um teto de seguranca. Os leads com trabalho real (status != 'novo')
-    // vem sempre todos primeiro (sao poucos e sao os que importam no dia a
-    // dia); a base fria ("novo") e limitada, e quem precisar de mais usa a
-    // pesquisa por nome/telefone/NIF que consulta a base de dados diretamente.
-    const MAX_TOTAL = 8000
+    // Não descarrega 10k/50k leads de uma vez para o browser. As leads já
+    // trabalhadas vêm primeiro e o resto é carregado por blocos a pedido.
+    const listFields = 'id,company_id,campanha_id,assigned_to,nome,telefone,email,morada,codigo_postal,localidade,operador,status,origem,priority,custom_fields,created_at,updated_at,campanhas(id,name)'
 
     const { data: trabalhadas, error: errT } = await sb
       .from('leads')
-      .select('*, campanhas(id,name)')
+      .select(listFields)
       .eq('assigned_to', userId)
       .neq('status', 'novo')
       .order('priority', { ascending: false })
       .order('created_at', { ascending: true })
+      .limit(maxTotal)
     if (errT) throw errT
-    let all: Lead[] = (trabalhadas ?? []) as Lead[]
+    let all: Lead[] = (trabalhadas ?? []) as unknown as Lead[]
 
-    let restante = MAX_TOTAL - all.length
+    let restante = Math.max(0, maxTotal - all.length)
     let from = 0
     while (restante > 0) {
       const take = Math.min(PAGE, restante)
       const { data, error } = await sb
         .from('leads')
-        .select('*, campanhas(id,name)')
+        .select(listFields)
         .eq('assigned_to', userId)
         .eq('status', 'novo')
+        .order('priority', { ascending: false })
         .order('created_at', { ascending: true })
         .range(from, from + take - 1)
       if (error) throw error
-      const page = (data ?? []) as Lead[]
+      const page = (data ?? []) as unknown as Lead[]
       all = all.concat(page)
       restante -= page.length
       if (page.length < take) break
       from += take
     }
     return all
+  },
+
+  async getAssignedStats(userId: string) {
+    const sb = createClient()
+    const countStatus = async (status?: string) => {
+      let q = sb.from('leads').select('id', { count: 'exact', head: true }).eq('assigned_to', userId)
+      if (status) q = q.eq('status', status)
+      const { count, error } = await q
+      if (error) throw error
+      return count ?? 0
+    }
+    const [total, novo, ligar_depois, contactado, vendido, nao_atende] = await Promise.all([
+      countStatus(),
+      countStatus('novo'),
+      countStatus('ligar_depois'),
+      countStatus('contactado'),
+      countStatus('vendido'),
+      countStatus('nao_atende'),
+    ])
+    return { total, novo, ligar_depois, contactado, vendido, nao_atende }
   },
   async update(id: string, payload: Partial<Lead>) {
     const sb = createClient()
