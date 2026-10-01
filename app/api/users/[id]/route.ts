@@ -15,9 +15,32 @@ async function verifyCallerIsAdmin(request: NextRequest) {
   const admin = makeAdmin()
   const { data, error } = await admin.auth.getUser(jwt)
   if (error || !data.user) return null
-  const { data: profile } = await admin.from('usuarios').select('role').eq('id', data.user.id).single()
+  const { data: profile } = await admin
+    .from('usuarios')
+    .select('role, company_id, is_super_admin')
+    .eq('id', data.user.id)
+    .single()
   if (!profile || (profile.role !== 'admin' && profile.role !== 'supervisor')) return null
-  return data.user
+  return { user: data.user, profile }
+}
+
+function canManageTarget(
+  caller: { user: { id: string }; profile: { role: string; company_id: string | null; is_super_admin: boolean } },
+  target: { id: string; company_id: string | null; role: string; created_by: string | null; is_super_admin: boolean }
+) {
+  if (caller.profile.is_super_admin) return true
+  if (!caller.profile.company_id || target.company_id !== caller.profile.company_id) return false
+  if (target.is_super_admin) return false
+
+  if (caller.profile.role === 'admin') {
+    return target.role === 'supervisor' || target.role === 'parceiro'
+  }
+
+  if (caller.profile.role === 'supervisor') {
+    return target.role === 'parceiro' && target.created_by === caller.user.id
+  }
+
+  return false
 }
 
 // PATCH /api/users/[id] — update profile data OR change password
@@ -37,6 +60,16 @@ export async function PATCH(
   const body = await request.json()
   const admin = makeAdmin()
 
+  const { data: target } = await admin
+    .from('usuarios')
+    .select('id, company_id, role, created_by, is_super_admin')
+    .eq('id', id)
+    .single()
+
+  if (!target || !canManageTarget(caller as any, target as any)) {
+    return NextResponse.json({ error: 'Sem permissao para gerir este utilizador' }, { status: 403 })
+  }
+
   // ── Password change ──────────────────────────────────────────────────────
   if (body.password !== undefined) {
     const { password } = body
@@ -50,6 +83,18 @@ export async function PATCH(
 
   // ── Profile update ───────────────────────────────────────────────────────
   const { full_name, phone, company_id, status, role, equipa, meta_ligacoes_dia } = body
+
+  if (!caller.profile.is_super_admin) {
+    if (company_id !== undefined && company_id !== caller.profile.company_id) {
+      return NextResponse.json({ error: 'Nao pode mover utilizadores para outra empresa' }, { status: 403 })
+    }
+    if (caller.profile.role === 'supervisor' && role !== undefined && role !== 'parceiro') {
+      return NextResponse.json({ error: 'Supervisor so pode gerir parceiros da sua equipa' }, { status: 403 })
+    }
+    if (caller.profile.role === 'admin' && role !== undefined && !['supervisor', 'parceiro'].includes(role)) {
+      return NextResponse.json({ error: 'Admin da empresa so pode gerir supervisores ou parceiros' }, { status: 403 })
+    }
+  }
 
   const updatePayload: Record<string, any> = {}
   if (full_name !== undefined)  updatePayload.full_name  = full_name?.trim() || null
@@ -82,11 +127,20 @@ export async function DELETE(
   const { id } = await params
 
   // Prevent self-deletion
-  if (caller.id === id) {
+  if (caller.user.id === id) {
     return NextResponse.json({ error: 'Nao pode apagar a sua propria conta' }, { status: 400 })
   }
 
   const admin = makeAdmin()
+  const { data: target } = await admin
+    .from('usuarios')
+    .select('id, company_id, role, created_by, is_super_admin')
+    .eq('id', id)
+    .single()
+
+  if (!target || !canManageTarget(caller as any, target as any)) {
+    return NextResponse.json({ error: 'Sem permissao para apagar este utilizador' }, { status: 403 })
+  }
 
   // Delete profile row first (FK constraint)
   await admin.from('usuarios').delete().eq('id', id)
