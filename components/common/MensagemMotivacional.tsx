@@ -6,9 +6,12 @@ interface MensagemMotivacionalProps {
 }
 
 const mensagens = [
-  'Cada contacto é uma oportunidade para ajudar alguém a poupar.',
+  'Cada contacto é uma oportunidade para criar valor.',
   'Método + acompanhamento + ação = resultados.',
-  'Vamos vender MEO e Energia. Juntos Somos +',
+  'Consistência todos os dias transforma esforço em resultados.',
+  'Uma boa conversa pode abrir a próxima oportunidade.',
+  'Foco no cliente, clareza na proposta e atitude no fecho.',
+  'Juntos Somos +',
 ]
 
 export default function MensagemMotivacional({ userId, companyId }: MensagemMotivacionalProps) {
