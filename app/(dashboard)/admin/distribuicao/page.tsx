@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import useSWR from 'swr'
 import { Users, PhoneCall, Shuffle, CheckCircle2, AlertCircle, UserCheck } from 'lucide-react'
-import { leadService, usuarioService, campanhaService, companyService } from '@/lib/services'
+import { leadService, usuarioService, companyService } from '@/lib/services'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { PageSpinner } from '@/components/ui/Spinner'
@@ -35,7 +35,19 @@ export default function DistribuicaoPage() {
 
   const empresaAtiva = profile?.is_super_admin ? empresaFiltro : profile?.company_id
 
-  const { data: campanhas = [] } = useSWR('campanhas-dist', () => campanhaService.getAll().catch(() => []))
+  const { data: campanhas = [] } = useSWR(
+    empresaAtiva ? ['campanhas-dist', empresaAtiva] : null,
+    async () => {
+      const sb = createClient()
+      const { data, error } = await sb
+        .from('campanhas')
+        .select('id, name, status')
+        .eq('company_id', empresaAtiva!)
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return data ?? []
+    }
+  )
 
   const { data: pipelines = [] } = useSWR(
     empresaAtiva ? ['pipelines-dist', empresaAtiva] : null,
