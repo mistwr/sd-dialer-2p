@@ -48,6 +48,22 @@ export interface Company {
   updated_at: string
 }
 
+export interface CompanyTrainingMaterial {
+  id: string
+  company_id: string
+  title: string
+  description: string | null
+  operator: string
+  category: string
+  content: string | null
+  url: string | null
+  sort_order: number
+  is_active: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface Usuario {
   id: string
   company_id: string | null
