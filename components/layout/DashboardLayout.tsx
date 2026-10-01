@@ -202,29 +202,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           })}
         </nav>
 
-        <div style={{ padding: '4px 16px 12px' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
-            Ferramentas Externas
-          </div>
-          <a
-            href="https://apolo.meo.pt/login.php"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '9px 12px', borderRadius: 8,
-              textDecoration: 'none', background: '#1E293B',
-              color: '#94A3B8', fontSize: 13.5, fontWeight: 500,
-              border: '1px solid #334155',
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#F1F5F9' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#94A3B8' }}
-          >
-            <ArrowRight size={16} style={{ flexShrink: 0 }} />
-            <span style={{ flex: 1 }}>Apolo MEO</span>
-          </a>
-        </div>
-
         <div style={{ padding: '12px 16px', borderTop: '1px solid #1E293B' }}>
           {loading ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
