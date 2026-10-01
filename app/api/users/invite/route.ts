@@ -45,12 +45,32 @@ export async function POST(request: NextRequest) {
 
   const { data: callerProfile } = await supabaseAdmin
     .from('usuarios')
-    .select('role')
+    .select('role, company_id, is_super_admin')
     .eq('id', callerData.user.id)
     .single()
 
   if (!callerProfile || (callerProfile.role !== 'admin' && callerProfile.role !== 'supervisor')) {
-    return NextResponse.json({ error: 'Apenas administradores podem criar utilizadores' }, { status: 403 })
+    return NextResponse.json({ error: 'Sem permissao para criar utilizadores' }, { status: 403 })
+  }
+
+  const isSuperAdmin = callerProfile.is_super_admin === true
+  const callerCompanyId = callerProfile.company_id as string | null
+
+  // Só o super-admin global pode escolher outra empresa ou criar admins.
+  // Admin normal: apenas supervisor/parceiro da própria empresa.
+  // Supervisor: apenas parceiro da própria empresa.
+  if (!isSuperAdmin) {
+    if (!callerCompanyId || company_id !== callerCompanyId) {
+      return NextResponse.json({ error: 'So pode criar utilizadores na sua propria empresa' }, { status: 403 })
+    }
+
+    if (callerProfile.role === 'supervisor' && role !== 'parceiro') {
+      return NextResponse.json({ error: 'Supervisor so pode criar parceiros da sua equipa' }, { status: 403 })
+    }
+
+    if (callerProfile.role === 'admin' && !['supervisor', 'parceiro'].includes(role)) {
+      return NextResponse.json({ error: 'Admin da empresa so pode criar supervisores ou parceiros' }, { status: 403 })
+    }
   }
 
   // Create the auth user with email_confirm: true (no email required)
