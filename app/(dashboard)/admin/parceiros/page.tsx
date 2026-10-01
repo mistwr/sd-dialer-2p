@@ -6,6 +6,7 @@ import {
   Trash2, KeyRound, ShieldCheck, MoreVertical, X, FileText
 } from 'lucide-react'
 import { usuarioService } from '@/lib/services'
+import { useAuth } from '@/lib/hooks/useAuth'
 import { createClient } from '@/lib/supabase/client'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
@@ -53,11 +54,15 @@ function UserForm({
   companies,
   onSave,
   onClose,
+  callerRole,
+  isSuperAdmin,
 }: {
   initial?: Partial<Usuario>
   companies: { id: string; name: string }[]
   onSave: (data: any) => Promise<void>
   onClose: () => void
+  callerRole: string
+  isSuperAdmin: boolean
 }) {
   const isEdit = !!initial?.id
   const defaultCompany = companies[0]?.id ?? ''
@@ -175,8 +180,8 @@ function UserForm({
           <label style={labelStyle}>Funcao *</label>
           <select value={form.role} onChange={e => set('role', e.target.value)} style={selectStyle}>
             <option value="parceiro">Parceiro</option>
-            <option value="supervisor">Supervisor</option>
-            <option value="admin">Admin</option>
+            {callerRole !== 'supervisor' && <option value="supervisor">Supervisor</option>}
+            {isSuperAdmin && <option value="admin">Admin</option>}
           </select>
         </div>
       </div>
@@ -357,6 +362,7 @@ type ModalState =
   | { type: 'documents'; user: Usuario }
 
 export default function ParceirosPage() {
+  const { profile } = useAuth()
   const { data: users = [], isLoading, mutate } = useSWR(
     'usuarios-list-v2',
     () => usuarioService.getAll(),
@@ -593,14 +599,14 @@ export default function ParceirosPage() {
       {/* Create modal */}
       <Modal open={modal.type === 'create'} onClose={closeModal} title="Novo Utilizador">
         {loadingCompanies ? <PageSpinner /> : (
-          <UserForm companies={companies} onSave={handleCreate} onClose={closeModal} />
+          <UserForm companies={companies} onSave={handleCreate} onClose={closeModal} callerRole={profile?.role ?? 'parceiro'} isSuperAdmin={profile?.is_super_admin === true} />
         )}
       </Modal>
 
       {/* Edit modal */}
       <Modal open={modal.type === 'edit'} onClose={closeModal} title="Editar Utilizador">
         {modal.type === 'edit' && (
-          <UserForm initial={modal.user} companies={companies} onSave={handleEdit} onClose={closeModal} />
+          <UserForm initial={modal.user} companies={companies} onSave={handleEdit} onClose={closeModal} callerRole={profile?.role ?? 'parceiro'} isSuperAdmin={profile?.is_super_admin === true} />
         )}
       </Modal>
 
