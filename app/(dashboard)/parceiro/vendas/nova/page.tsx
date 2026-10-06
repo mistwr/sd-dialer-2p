@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ShoppingBag, Upload, CheckCircle2, AlertCircle, FileText } from 'lucide-react'
+import { ShoppingBag, Upload, CheckCircle2, AlertCircle, FileText, Copy, MessageCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { PageSpinner } from '@/components/ui/Spinner'
@@ -37,6 +37,12 @@ function NovaVendaContent() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [savedVendaId, setSavedVendaId] = useState<string | null>(null)
+  const [generateSignatureLink, setGenerateSignatureLink] = useState(false)
+  const [shareLink, setShareLink] = useState<string | null>(null)
+  const [shareError, setShareError] = useState<string | null>(null)
+  const [sharing, setSharing] = useState(false)
+  const [copiedLink, setCopiedLink] = useState(false)
 
   useEffect(() => {
     if (!leadId) return
@@ -51,6 +57,32 @@ function NovaVendaContent() {
   }, [leadId])
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  const requestSignatureLink = async (vendaId: string) => {
+    setShareError(null)
+    const response = await fetch('/api/vendas/signature-requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sale_id: vendaId }),
+    })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error || 'Não foi possível gerar o link de assinatura.')
+    setShareLink(window.location.origin + '/venda/assinar#' + data.token)
+    setCopiedLink(false)
+  }
+
+  const handleCreateSignatureLink = async () => {
+    if (!savedVendaId) return
+    setSharing(true)
+    setShareError(null)
+    try {
+      await requestSignatureLink(savedVendaId)
+    } catch (err: any) {
+      setShareError(err?.message || 'A venda foi registada, mas não foi possível gerar o link.')
+    } finally {
+      setSharing(false)
+    }
+  }
 
   if (authLoading) return <PageSpinner />
 
@@ -134,8 +166,18 @@ function NovaVendaContent() {
         await sb.from('leads').update({ status: 'vendido' }).eq('id', leadId)
       }
 
+      setSavedVendaId(venda.id)
       setSuccess(true)
-      setTimeout(() => router.push('/parceiro/vendas'), 1200)
+      if (generateSignatureLink) {
+        setSharing(true)
+        try {
+          await requestSignatureLink(venda.id)
+        } catch (shareErr: any) {
+          setShareError(shareErr?.message || 'A venda foi registada, mas não foi possível gerar o link.')
+        } finally {
+          setSharing(false)
+        }
+      }
     } catch (err: any) {
       setError(err?.message || 'Erro ao registar a venda.')
     } finally {
@@ -145,9 +187,40 @@ function NovaVendaContent() {
 
   if (success) {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+      <div style={{ maxWidth: 520, margin: '0 auto', textAlign: 'center', padding: '36px 18px', background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0' }}>
         <CheckCircle2 size={48} color="#22C55E" style={{ margin: '0 auto 14px' }} />
-        <p style={{ fontSize: 16, fontWeight: 700, color: '#0F172A' }}>Venda registada com sucesso!</p>
+        <p style={{ fontSize: 17, fontWeight: 800, color: '#0F172A', margin: '0 0 6px' }}>Venda registada com sucesso!</p>
+        <p style={{ fontSize: 13, color: '#64748B', margin: '0 0 18px' }}>A venda foi enviada para o CRM Mãe e ficou associada ao SD Dialer.</p>
+        {shareError && <div style={{ marginBottom: 14, background: '#FEF2F2', color: '#991B1B', padding: 11, borderRadius: 9, fontSize: 13 }}>{shareError}</div>}
+        {shareLink ? (
+          <div style={{ textAlign: 'left', padding: 14, borderRadius: 12, border: '1px solid #BFDBFE', background: '#EFF6FF' }}>
+            <p style={{ fontSize: 13, color: '#1E3A8A', fontWeight: 800, margin: '0 0 8px' }}>Link seguro para o cliente</p>
+            <input readOnly value={shareLink} style={{ ...fieldStyle, fontSize: 12, background: '#fff' }} />
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+              <button type="button" onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(shareLink)
+                  setCopiedLink(true)
+                } catch {
+                  setShareError('Não foi possível copiar. Seleciona o link e copia-o manualmente.')
+                }
+              }} style={{ flex: 1, minWidth: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: 10, border: 0, borderRadius: 8, color: '#fff', background: '#2563EB', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                <Copy size={14} /> {copiedLink ? 'Copiado' : 'Copiar link'}
+              </button>
+              <a href={'https://wa.me/?text=' + encodeURIComponent('Olá! Podes confirmar e assinar o teu pedido neste link: ' + shareLink)} target="_blank" rel="noopener noreferrer" style={{ flex: 1, minWidth: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: 10, borderRadius: 8, color: '#fff', background: '#16A34A', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
+                <MessageCircle size={14} /> Enviar por WhatsApp
+              </a>
+            </div>
+            <p style={{ fontSize: 11, color: '#64748B', margin: '9px 0 0' }}>O link expira ao fim de sete dias e só pode ser concluído uma vez.</p>
+          </div>
+        ) : (
+          <button type="button" onClick={handleCreateSignatureLink} disabled={!savedVendaId || sharing} style={{ width: '100%', padding: 12, border: 0, borderRadius: 9, background: '#2563EB', color: '#fff', fontSize: 13, fontWeight: 700, cursor: sharing ? 'wait' : 'pointer', opacity: sharing ? 0.7 : 1 }}>
+            {sharing ? 'A gerar link seguro…' : 'Gerar link de assinatura para o cliente'}
+          </button>
+        )}
+        <button type="button" onClick={() => router.push('/parceiro/vendas')} style={{ marginTop: 14, width: '100%', padding: 11, border: '1px solid #E2E8F0', borderRadius: 9, background: '#fff', color: '#334155', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+          Voltar às vendas
+        </button>
       </div>
     )
   }
@@ -218,6 +291,16 @@ function NovaVendaContent() {
         <div>
           <label style={labelStyle}>Notas</label>
           <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={3} style={{ ...fieldStyle, resize: 'vertical' }} />
+        </div>
+
+        <div style={{ padding: '12px 14px', borderRadius: 10, background: '#EFF6FF', border: '1px solid #BFDBFE' }}>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, color: '#1E3A8A', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+            <input type="checkbox" checked={generateSignatureLink} onChange={e => setGenerateSignatureLink(e.target.checked)} style={{ marginTop: 2 }} />
+            <span>Gerar automaticamente um link seguro para o cliente assinar e anexar documentos</span>
+          </label>
+          <p style={{ margin: '6px 0 0 24px', color: '#475569', fontSize: 12, lineHeight: 1.5 }}>
+            O link fica válido durante sete dias. Também podes gerá-lo depois de registar a venda.
+          </p>
         </div>
 
         <div>
