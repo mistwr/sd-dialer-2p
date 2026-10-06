@@ -84,7 +84,7 @@ function NovaVendaContent() {
           },
         },
       })
-      if (crmError || !crmData?.ok || !crmData?.sale_id) {
+      if (crmError || !crmData?.ok || (!crmData?.sale_id && crmData?.crm_sync !== 'skipped')) {
         throw new Error(crmData?.error || crmError?.message || 'A venda não entrou no CRM Mãe. Tenta novamente.')
       }
 
@@ -92,8 +92,8 @@ function NovaVendaContent() {
       // O número e estado oficiais vêm sempre do CRM Mãe.
       const localNotes = [
         form.notes.trim() || null,
-        `CRM_MAE_ID:${crmData.sale_id}`,
-        'Espelho local — fonte oficial: CRM Mãe',
+        crmData.sale_id ? `CRM_MAE_ID:${crmData.sale_id}` : null,
+        crmData.sale_id ? 'Espelho local — fonte oficial: CRM Mãe' : 'Venda local — empresa sem integração com CRM Mãe',
       ].filter(Boolean).join('\n')
 
       const { data: venda, error: e1 } = await sb.from('vendas').insert({
@@ -113,7 +113,7 @@ function NovaVendaContent() {
         notes: localNotes,
         status: 'pendente',
       }).select().single()
-      if (e1) throw new Error(`Venda já registada no CRM Mãe, mas o espelho local falhou: ${e1.message}`)
+      if (e1) throw new Error(crmData.sale_id ? `Venda já registada no CRM Mãe, mas o espelho local falhou: ${e1.message}` : `Erro ao registar venda local: ${e1.message}`)
 
       if (doc1) {
         const ext = doc1.name.split('.').pop()
@@ -147,7 +147,7 @@ function NovaVendaContent() {
     return (
       <div style={{ textAlign: 'center', padding: '60px 20px' }}>
         <CheckCircle2 size={48} color="#22C55E" style={{ margin: '0 auto 14px' }} />
-        <p style={{ fontSize: 16, fontWeight: 700, color: '#0F172A' }}>Venda registada no CRM Mãe com sucesso!</p>
+        <p style={{ fontSize: 16, fontWeight: 700, color: '#0F172A' }}>Venda registada com sucesso!</p>
       </div>
     )
   }
