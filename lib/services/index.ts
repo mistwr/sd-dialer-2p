@@ -202,13 +202,39 @@ export const leadService = {
   },
   async bulkInsert(leads: Partial<Lead>[]) {
     const sb = createClient()
-    const CHUNK = 200
+    // Blocos maiores + retry com espera: importacoes grandes (100k+) caiam com
+    // "Failed to fetch" por uma falha de rede pontual. So pedimos as linhas de
+    // volta (.select) quando ha poucas leads, porque so servem para criar follow-ups.
+    const CHUNK = leads.length > 2000 ? 1000 : 200
+    const wantRows = leads.length <= 2000
     const results: Lead[] = []
     for (let i = 0; i < leads.length; i += CHUNK) {
       const chunk = leads.slice(i, i + CHUNK)
-      const { data, error } = await sb.from('leads').insert(chunk).select()
-      if (error) throw error
-      results.push(...((data ?? []) as Lead[]))
+      let lastErr: unknown = null
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try {
+          if (wantRows) {
+            const { data, error } = await sb.from('leads').insert(chunk).select()
+            if (error) throw error
+            results.push(...((data ?? []) as Lead[]))
+          } else {
+            const { error } = await sb.from('leads').insert(chunk)
+            if (error) throw error
+          }
+          lastErr = null
+          break
+        } catch (e: any) {
+          lastErr = e
+          // erro de dados (constraint etc.) nao adianta repetir; so falhas de rede
+          const msg = String(e?.message ?? '')
+          if (!/fetch|network|timeout|load failed/i.test(msg)) throw e
+          await new Promise(r => setTimeout(r, 1500 * (attempt + 1)))
+        }
+      }
+      if (lastErr) {
+        const msg = (lastErr as any)?.message ?? 'falha de rede'
+        throw new Error(`${msg} (importadas ${i} de ${leads.length} antes da falha)`)
+      }
     }
     return results
   },
