@@ -74,7 +74,7 @@ const COLUMN_MAP: Record<string, keyof ImportedRow> = {
   'codigo postal': 'codigo_postal', 'cod postal': 'codigo_postal',
   'zip': 'codigo_postal', 'zip code': 'codigo_postal',
   'postal code': 'codigo_postal', 'postcode': 'codigo_postal',
-  'c p': 'codigo_postal', 'cod  postal': 'codigo_postal',
+  'c p': 'codigo_postal', 'cod  postal': 'codigo_postal', 'cp7': 'codigo_postal',
   // NOTE: 'cp' alone is NOT mapped — ambiguous (could be "cp" of a person's name)
 
   // localidade
@@ -139,18 +139,48 @@ function looksLikePhone(val: string): boolean {
 
 // Headers that are address sub-parts to merge into morada
 // Returns the original header keys that should be merged
-function getAddressPartHeaders(headers: string[]): { streetCols: string[]; doorCols: string[] } {
+function getAddressPartHeaders(
+  headers: string[],
+  rawRows: Record<string, any>[] = []
+): { streetCols: string[]; doorCols: string[] } {
   const streetCols: string[] = []
   const doorCols: string[] = []
+  const sample = rawRows.slice(0, 8)
   for (const h of headers) {
     const norm = normalizeHeader(h)
     if (ADDRESS_PARTS.some(p => norm === p || norm.startsWith(p + ' ') || norm.endsWith(' ' + p))) {
       streetCols.push(h)
     } else if (DOOR_NUMBER_PARTS.some(p => norm === p || norm.startsWith(p + ' ') || norm.endsWith(' ' + p))) {
+      // "numero" / "n porta" etc. sao ambiguos: muitos ficheiros usam "numero" para o
+      // telefone. Se o conteudo da coluna parece telefones, NAO e numero de porta.
+      const vals = sample.map(r => String(r[h] ?? '').trim()).filter(Boolean)
+      if (vals.length > 0 && vals.every(looksLikePhone)) continue
       doorCols.push(h)
     }
   }
   return { streetCols, doorCols }
+}
+
+// Canonical PT phone: 9 digits, without +351 / 00351 / 351 prefix.
+function normalizePhone(raw: string): string {
+  const digits = String(raw ?? '').replace(/[^\d]/g, '')
+  if (digits.startsWith('00351') && digits.length === 14) return digits.slice(5)
+  if (digits.startsWith('351') && digits.length === 12) return digits.slice(3)
+  return digits.length ? digits : String(raw ?? '').trim()
+}
+
+// "NOS Home", "MEO Fibra", "Vodafone TV+Net" ... -> NOS / MEO / Vodafone / DIGI
+function inferOperador(produto: string): string | undefined {
+  const p = stripAccents(produto.toLowerCase())
+  if (/\bnos\b/.test(p)) return 'NOS'
+  if (/\bmeo\b/.test(p)) return 'MEO'
+  if (/vodafone/.test(p)) return 'Vodafone'
+  if (/\bdigi\b/.test(p)) return 'DIGI'
+  return undefined
+}
+
+function hasLetters(s: string): boolean {
+  return /[A-Za-zÀ-ÿ]{2,}/.test(s)
 }
 
 function buildFieldMap(
@@ -180,7 +210,8 @@ function buildFieldMap(
 
   // Identify address sub-part columns not yet mapped
   const { streetCols, doorCols } = getAddressPartHeaders(
-    headers.filter(h => !fieldMap[h])
+    headers.filter(h => !fieldMap[h]),
+    rawRows
   )
   // These will be merged into morada during row mapping
   const mergeAddressCols = [...streetCols, ...doorCols]
@@ -197,17 +228,17 @@ function buildFieldMap(
       const colIdx = headers.indexOf(h)
       if (!mappedFields.has('telefone') && allPhone) {
         fieldMap[h] = 'telefone'; mappedFields.add('telefone')
-      } else if (!mappedFields.has('nome') && !allPhone && colIdx <= 1) {
+      } else if (!mappedFields.has('nome') && !allPhone && colIdx <= 1 && sampleVals.every(hasLetters)) {
         fieldMap[h] = 'nome'; mappedFields.add('nome')
       }
     }
-    // Last resort: first non-phone, non-mapped col → nome
+    // Last resort: first non-phone, non-mapped col → nome (tem de ter letras: evita CP4/numeros)
     if (!mappedFields.has('nome')) {
       const sample = rawRows.slice(0, 8)
       for (const h of headers) {
         if (fieldMap[h] || mergeAddressCols.includes(h)) continue
         const sampleVals = sample.map(r => String(r[h] ?? '').trim()).filter(Boolean)
-        if (!sampleVals.every(looksLikePhone) && sampleVals.length > 0) {
+        if (!sampleVals.every(looksLikePhone) && sampleVals.length > 0 && sampleVals.every(hasLetters)) {
           fieldMap[h] = 'nome'; mappedFields.add('nome'); break
         }
       }
@@ -270,7 +301,10 @@ export function parseFile(file: File, customDefs: CustomFieldDefLite[] = []): Pr
             const hdrs2 = Object.keys(rawRows2[0])
             const result2 = buildFieldMap(hdrs2, rawRows2)
             const mapped2 = new Set(Object.values(result2.fieldMap))
-            if (mapped2.has('nome') || mapped2.has('telefone')) {
+            // So troca de linha de cabecalho se a 2a tentativa mapear nome E telefone.
+            // Antes bastava um deles, o que fazia descartar um cabecalho valido e usar
+            // a 1a linha de dados como cabecalho (perdia um cliente e baralhava colunas).
+            if (mapped2.has('nome') && mapped2.has('telefone')) {
               originalHeaders = hdrs2
               workingRows = rawRows2
               fieldMap = result2.fieldMap
@@ -287,6 +321,18 @@ export function parseFile(file: File, customDefs: CustomFieldDefLite[] = []): Pr
           for (const [origHeader, field] of Object.entries(fieldMap)) {
             const val = String(r[origHeader] ?? '').trim()
             if (val) (row as any)[field] = val
+          }
+
+          // Telefone canonico (9 digitos, sem 351) — igual aos leads ja existentes na BD
+          if (row.telefone) row.telefone = normalizePhone(row.telefone)
+
+          // Sem coluna "Operador": deduz pelo "Produto" (ex.: "NOS Home" -> NOS)
+          if (!row.operador) {
+            const prodHeader = originalHeaders.find(h => normalizeHeader(h) === 'produto')
+            if (prodHeader) {
+              const op = inferOperador(String(r[prodHeader] ?? ''))
+              if (op) row.operador = op
+            }
           }
 
           // Merge address sub-part columns into morada (if morada not already set)
