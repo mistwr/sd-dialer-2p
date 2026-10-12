@@ -10,25 +10,11 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Badge } from '@/components/ui/Badge'
 import { StatCard } from '@/components/ui/StatCard'
 
-const CRM_REPORT_URL = 'https://lblnhttwadvofhkhkbsv.supabase.co/functions/v1/sd-sales-report'
-
-async function fetchVendas(userId: string) {
-  const sb = createClient()
-  const { data, error } = await sb
-    .from('vendas')
-    .select('*')
-    .eq('seller_id', userId)
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return data ?? []
-}
-
-async function fetchCrmResumo(email: string) {
-  const url = new URL(CRM_REPORT_URL)
-  url.searchParams.set('seller_email', email)
-  const res = await fetch(url.toString(), { cache: 'no-store' })
-  if (!res.ok) throw new Error('Nao foi possivel consultar o CRM Mae')
-  return res.json()
+async function fetchVendas() {
+  const response = await fetch('/api/vendas', {cache:'no-store'})
+  const data = await response.json()
+  if (!response.ok) throw new Error(data.error)
+  return data.vendas || []
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -194,31 +180,22 @@ function SignaturePanel({ saleId }: { saleId: string }) {
 }
 
 export default function VendasPage() {
-  const { user, loading: authLoading } = useAuth()
-  const { data: vendas = [], isLoading } = useSWR(user?.id ? ['vendas', user.id] : null, () => fetchVendas(user!.id))
-  const { data: crmResumo, isLoading: crmLoading } = useSWR(
-    user?.email ? ['crm-mae-vendas', user.email] : null,
-    () => fetchCrmResumo(user!.email!),
-    { refreshInterval: 30000 }
-  )
-
-  if (authLoading || isLoading || crmLoading) return <PageSpinner />
-
-  const byStatus = crmResumo?.by_status ?? {}
-  const totalOficial = crmResumo?.total_sales ?? vendas.length
-  const validadas = (byStatus.validado ?? 0) + (byStatus.validada ?? 0) + (byStatus.aprovado ?? 0) + (byStatus.ativo ?? 0)
-  const pendentes = byStatus.pendente ?? 0
-  const canceladas = (byStatus.cancelado ?? 0) + (byStatus.cancelada ?? 0)
-
+  const { user, profile, loading: authLoading } = useAuth()
+  const { data: vendas = [], isLoading, error, mutate } = useSWR(user?.id ? ['vendas', user.id] : null, fetchVendas)
+  if (authLoading || isLoading) return <PageSpinner />
+  const totalOficial = vendas.length
+  const validadas = vendas.filter((v:any)=>['validado','validada','aprovado','ativo'].includes(v.status)).length
+  const pendentes = vendas.filter((v:any)=>v.status==='pendente').length
+  const canceladas = vendas.filter((v:any)=>['cancelado','cancelada'].includes(v.status)).length
   return (
     <div className="anim-fade-in" style={{ maxWidth: 900 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 800, color: '#0F172A', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <ShoppingBag size={20} /> As Minhas Vendas
+            <ShoppingBag size={20} /> {profile?.role === 'parceiro' ? 'As Minhas Vendas' : 'Vendas da Empresa'}
           </h1>
           <p style={{ fontSize: 13, color: '#64748B', margin: '4px 0 0' }}>
-            {totalOficial} venda{totalOficial !== 1 ? 's' : ''} no CRM Mae · fonte oficial
+            {totalOficial} venda{totalOficial !== 1 ? 's' : ''} no SD Dialer
           </p>
         </div>
         <Link href="/parceiro/vendas/nova" style={{
@@ -230,18 +207,19 @@ export default function VendasPage() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12, marginBottom: 22 }}>
-        <StatCard label="Vendas CRM Mae" value={totalOficial} icon={ShoppingBag} color="#2563EB" />
+        <StatCard label="Vendas SD Dialer" value={totalOficial} icon={ShoppingBag} color="#2563EB" />
         <StatCard label="Validadas/Ativas" value={validadas} icon={CheckCircle} color="#16A34A" />
         <StatCard label="Pendentes" value={pendentes} icon={Hourglass} color="#D97706" />
         <StatCard label="Canceladas" value={canceladas} icon={XCircle} color="#DC2626" />
       </div>
 
       <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 10, background: '#EFF6FF', color: '#1D4ED8', fontSize: 12, border: '1px solid #BFDBFE' }}>
-        O total acima vem diretamente do CRM Mae. Os cartoes abaixo sao apenas os registos detalhados que ainda existem no SD Dialer.
+        Vendas registadas no SD Dialer. A assinatura e os documentos estão associados a cada venda.
       </div>
 
+      {error && <p role="alert" style={{color:'#991B1B'}}>Não foi possível carregar as vendas. Tenta atualizar a página.</p>}
       {vendas.length === 0 ? (
-        <EmptyState icon={ShoppingBag} title="Sem registos locais no SD Dialer" description="A tua producao oficial continua a ser contabilizada no CRM Mae acima." />
+        <EmptyState icon={ShoppingBag} title="Sem registos locais no SD Dialer" description="Regista a primeira venda para gerar o link de adesão." />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {vendas.map((v: any) => (
@@ -253,9 +231,9 @@ export default function VendasPage() {
                     {v.service_type || '—'} {v.operator ? `· ${v.operator}` : ''} {v.plano ? `· ${v.plano}` : ''}
                   </div>
                 </div>
-                <Badge style={{ background: `${STATUS_COLOR[v.status] ?? '#94A3B8'}18`, color: STATUS_COLOR[v.status] ?? '#64748B' }}>
+                <span style={{ background: `${STATUS_COLOR[v.status] ?? '#94A3B8'}18`, color: STATUS_COLOR[v.status] ?? '#64748B' }}>
                   {STATUS_LABEL[v.status] ?? v.status}
-                </Badge>
+                </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 10, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 11, color: '#94A3B8', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -264,6 +242,12 @@ export default function VendasPage() {
                 <DocLink path={v.documento_url} label="Contrato" />
                 <DocLink path={v.documento_extra_url} label="Comprovativo" />
               </div>
+              <p style={{fontSize:12,color:'#64748B'}}>CC: {v.cc_status || 'pendente'}{v.fidelizacao_fim ? ' · Fim da fidelização: ' + new Date(v.fidelizacao_fim+'T12:00:00').toLocaleDateString('pt-PT') : ''}</p>
+              {profile?.role === 'admin' && <label style={{fontSize:12}}>Verificação de CC <select aria-label={'Estado do CC de '+v.client_name} value={v.cc_status||'pendente'} onChange={async e => {
+                const r = await fetch('/api/vendas',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:v.id,cc_status:e.target.value})})
+                if (!r.ok) {const d=await r.json(); alert(d.error); return}
+                await mutate()
+              }}><option value="pendente">Pendente</option><option value="recebido">Recebido</option><option value="validado">Validado</option></select></label>}
               <SignaturePanel saleId={v.id} />
             </div>
           ))}

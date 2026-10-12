@@ -3,6 +3,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ShoppingBag, Upload, CheckCircle2, AlertCircle, FileText, Copy, MessageCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { validNif, contractEnd } from '@/lib/utils/sales-rules'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { PageSpinner } from '@/components/ui/Spinner'
 
@@ -30,7 +31,11 @@ function NovaVendaContent() {
   const [form, setForm] = useState({
     client_name: '', client_nif: '', client_phone: '', client_email: '', client_address: '',
     service_type: '', operator: '', plano: '', amount: '', contract_type: '', notes: '',
+    seller_id: '', fidelizacao_inicio: '', fidelizacao_meses: '', cc_status: 'pendente',
   })
+  const [saleId, setSaleId] = useState('')
+  const [sellers, setSellers] = useState<{id:string;full_name:string}[]>([])
+  const [nifMessage, setNifMessage] = useState('')
   const [leadNome, setLeadNome] = useState<string | null>(null)
   const [doc1, setDoc1] = useState<File | null>(null)
   const [doc2, setDoc2] = useState<File | null>(null)
@@ -55,6 +60,26 @@ function NovaVendaContent() {
         }
       })
   }, [leadId])
+
+  useEffect(() => {
+    setSaleId(crypto.randomUUID())
+    fetch('/api/vendas?sellers=1').then(r => r.json()).then(d => setSellers(d.sellers || [])).catch(() => {})
+  }, [])
+  useEffect(() => {
+    setNifMessage('')
+    const nif = form.client_nif.replace(/\s/g, '')
+    if (!nif) return
+    if (!validNif(nif)) { setNifMessage('NIF inválido — verifica os nove dígitos.'); return }
+    const abort = new AbortController()
+    const timer = setTimeout(() => {
+      fetch('/api/vendas?nif=' + encodeURIComponent(nif), {signal: abort.signal}).then(async r => {
+        const d = await r.json()
+        if (!r.ok) throw new Error(d.error)
+        setNifMessage(d.vendas?.length ? 'Este NIF já tem vendas registadas. Confirma que este é um novo serviço antes de guardar.' : 'NIF válido. Sem vendas anteriores nos registos acessíveis.')
+      }).catch(e => {if (e.name !== 'AbortError') setNifMessage('Não foi possível verificar a existência do NIF.');})
+    }, 400)
+    return () => { clearTimeout(timer); abort.abort() }
+  }, [form.client_nif])
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
@@ -97,69 +122,30 @@ function NovaVendaContent() {
     try {
       const sb = createClient()
 
-      // 1) O CRM Mãe é a fonte oficial. A venda só continua se entrar lá primeiro.
-      const { data: crmData, error: crmError } = await sb.functions.invoke('register-crm-sale', {
-        body: {
-          direct_sale: {
-            lead_id: leadId || null,
-            client_name: form.client_name.trim(),
-            client_nif: form.client_nif.trim() || null,
-            client_phone: form.client_phone.trim(),
-            client_email: form.client_email.trim() || null,
-            client_address: form.client_address.trim() || null,
-            service_type: form.service_type.trim() || null,
-            operator: form.operator.trim() || null,
-            plano: form.plano.trim() || null,
-            amount: form.amount ? parseFloat(form.amount) : null,
-            contract_type: form.contract_type.trim() || null,
-            notes: form.notes.trim() || null,
-          },
-        },
+      const response = await fetch('/api/vendas', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({...form, id: saleId, lead_id: leadId}),
       })
-      if (crmError || !crmData?.ok || (!crmData?.sale_id && crmData?.crm_sync !== 'skipped')) {
-        throw new Error(crmData?.error || crmError?.message || 'A venda não entrou no CRM Mãe. Tenta novamente.')
-      }
-
-      // 2) Mantemos apenas um espelho local para documentos/compatibilidade da interface.
-      // O número e estado oficiais vêm sempre do CRM Mãe.
-      const localNotes = [
-        form.notes.trim() || null,
-        crmData.sale_id ? `CRM_MAE_ID:${crmData.sale_id}` : null,
-        crmData.sale_id ? 'Espelho local — fonte oficial: CRM Mãe' : 'Venda local — empresa sem integração com CRM Mãe',
-      ].filter(Boolean).join('\n')
-
-      const { data: venda, error: e1 } = await sb.from('vendas').insert({
-        company_id: profile!.company_id,
-        lead_id: leadId || null,
-        seller_id: user!.id,
-        client_name: form.client_name.trim(),
-        client_nif: form.client_nif.trim() || null,
-        client_phone: form.client_phone.trim(),
-        client_email: form.client_email.trim() || null,
-        client_address: form.client_address.trim() || null,
-        service_type: form.service_type.trim() || null,
-        operator: form.operator.trim() || null,
-        plano: form.plano.trim() || null,
-        amount: form.amount ? parseFloat(form.amount) : null,
-        contract_type: form.contract_type.trim() || null,
-        notes: localNotes,
-        status: 'pendente',
-      }).select().single()
-      if (e1) throw new Error(crmData.sale_id ? `Venda já registada no CRM Mãe, mas o espelho local falhou: ${e1.message}` : `Erro ao registar venda local: ${e1.message}`)
-
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Não foi possível guardar a venda.')
+      const venda = result.venda
+      // Preserve the saved ID on attachment failures so retry never creates a duplicate sale.
+      setSavedVendaId(venda.id)
       if (doc1) {
         const ext = doc1.name.split('.').pop()
         const path = `${venda.id}/contrato.${ext}`
-        const { error: eu1 } = await sb.storage.from('documentos-vendas').upload(path, doc1)
+        const { error: eu1 } = await sb.storage.from('documentos-vendas').upload(path, doc1, {upsert: true})
         if (eu1) throw eu1
-        await sb.from('vendas').update({ documento_url: path }).eq('id', venda.id)
+        const {error: updateError} = await sb.from('vendas').update({ documento_url: path }).eq('id', venda.id)
+        if (updateError) throw updateError
       }
       if (doc2) {
         const ext = doc2.name.split('.').pop()
         const path = `${venda.id}/comprovativo.${ext}`
-        const { error: eu2 } = await sb.storage.from('documentos-vendas').upload(path, doc2)
+        const { error: eu2 } = await sb.storage.from('documentos-vendas').upload(path, doc2, {upsert: true})
         if (eu2) throw eu2
-        await sb.from('vendas').update({ documento_extra_url: path }).eq('id', venda.id)
+        const {error: updateError} = await sb.from('vendas').update({ documento_extra_url: path }).eq('id', venda.id)
+        if (updateError) throw updateError
       }
 
       if (leadId) {
@@ -190,7 +176,7 @@ function NovaVendaContent() {
       <div style={{ maxWidth: 520, margin: '0 auto', textAlign: 'center', padding: '36px 18px', background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0' }}>
         <CheckCircle2 size={48} color="#22C55E" style={{ margin: '0 auto 14px' }} />
         <p style={{ fontSize: 17, fontWeight: 800, color: '#0F172A', margin: '0 0 6px' }}>Venda registada com sucesso!</p>
-        <p style={{ fontSize: 13, color: '#64748B', margin: '0 0 18px' }}>A venda foi enviada para o CRM Mãe e ficou associada ao SD Dialer.</p>
+        <p style={{ fontSize: 13, color: '#64748B', margin: '0 0 18px' }}>A venda ficou guardada no SD Dialer e associada à tua empresa.</p>
         {shareError && <div style={{ marginBottom: 14, background: '#FEF2F2', color: '#991B1B', padding: 11, borderRadius: 9, fontSize: 13 }}>{shareError}</div>}
         {shareLink ? (
           <div style={{ textAlign: 'left', padding: 14, borderRadius: 12, border: '1px solid #BFDBFE', background: '#EFF6FF' }}>
@@ -231,7 +217,7 @@ function NovaVendaContent() {
         <h1 style={{ fontSize: 20, fontWeight: 800, color: '#0F172A', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
           <ShoppingBag size={20} /> Registar Venda
         </h1>
-        <p style={{ fontSize: 12, color: '#16A34A', margin: '5px 0 0', fontWeight: 600 }}>Fonte oficial: CRM Mãe</p>
+        <p style={{ fontSize: 12, color: '#16A34A', margin: '5px 0 0', fontWeight: 600 }}>Registo de vendas da empresa no SD Dialer</p>
         {leadNome && <p style={{ fontSize: 13, color: '#64748B', margin: '4px 0 0' }}>A partir da lead: <strong>{leadNome}</strong></p>}
       </div>
 
@@ -242,6 +228,17 @@ function NovaVendaContent() {
       )}
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {profile?.role !== 'parceiro' && <div><label style={labelStyle}>Vendedor responsável</label><select value={form.seller_id} onChange={e => set('seller_id',e.target.value)} style={fieldStyle}><option value="">Eu próprio</option>{sellers.filter(s => s.id !== user?.id).map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}</select></div>}
+        <div style={{padding:14,background:'#F8FAFC',borderRadius:10}}>
+          <label style={labelStyle}>Fidelização (opcional)</label>
+          <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+            <label style={{flex:1}}>Início<input type="date" value={form.fidelizacao_inicio} onChange={e => set('fidelizacao_inicio',e.target.value)} style={fieldStyle}/></label>
+            <label style={{flex:1}}>Duração (meses)<input type="number" min="1" max="60" value={form.fidelizacao_meses} onChange={e => set('fidelizacao_meses',e.target.value)} style={fieldStyle}/></label>
+          </div>
+          {form.fidelizacao_inicio && Number(form.fidelizacao_meses)>0 && Number(form.fidelizacao_meses)<=60 && <p style={{fontSize:12}}>Fim: {contractEnd(form.fidelizacao_inicio,Number(form.fidelizacao_meses))} · Alerta dois meses antes</p>}
+          <label style={labelStyle}>Cartão de Cidadão</label>
+          <select value={form.cc_status} onChange={e => set('cc_status',e.target.value)} style={fieldStyle}><option value="pendente">Pendente</option><option value="recebido">Recebido (a verificar)</option>{profile?.role==='admin' && <option value="validado">Validado pelo administrador</option>}</select>
+        </div>
         <div>
           <label style={labelStyle}>Nome do Cliente *</label>
           <input required value={form.client_name} onChange={e => set('client_name', e.target.value)} style={fieldStyle} />
@@ -253,9 +250,10 @@ function NovaVendaContent() {
           </div>
           <div>
             <label style={labelStyle}>NIF</label>
-            <input value={form.client_nif} onChange={e => set('client_nif', e.target.value)} style={fieldStyle} />
+            <input maxLength={11} value={form.client_nif} onChange={e => set('client_nif', e.target.value)} style={fieldStyle} />
           </div>
         </div>
+        {nifMessage && <p role="status" style={{fontSize:12,color:'#92400E',margin:0}}>{nifMessage}</p>}
         <div>
           <label style={labelStyle}>Email</label>
           <input type="email" value={form.client_email} onChange={e => set('client_email', e.target.value)} style={fieldStyle} />
@@ -329,7 +327,7 @@ function NovaVendaContent() {
             cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1,
           }}
         >
-          {saving ? 'A guardar no CRM Mãe...' : 'Registar Venda'}
+          {saving ? 'A guardar venda...' : 'Registar Venda'}
         </button>
       </form>
     </div>

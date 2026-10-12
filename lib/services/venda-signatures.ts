@@ -50,18 +50,20 @@ export async function canManageSignatureSale(
   userId: string,
   sale: { seller_id: string; company_id: string | null },
 ) {
-  if (sale.seller_id === userId) return true
 
   const { data: actor, error } = await admin
     .from('usuarios')
-    .select('role, company_id, is_super_admin')
+    .select('role, company_id, is_super_admin, status, restricted_admin')
     .eq('id', userId)
     .maybeSingle()
 
-  if (error || !actor) return false
+  if (error || !actor || actor.status !== 'active') return false
+  if (sale.seller_id === userId && actor.company_id === sale.company_id) return true
   if (actor.is_super_admin) return true
-  return actor.company_id === sale.company_id &&
-    (actor.role === 'admin' || actor.role === 'supervisor')
+  if (actor.company_id !== sale.company_id || !['admin','supervisor'].includes(actor.role)) return false
+  if (!actor.restricted_admin) return true
+  const {data: seller} = await admin.from('usuarios').select('supervisor_id,created_by').eq('id',sale.seller_id).maybeSingle()
+  return !!seller && (seller.supervisor_id === userId || (!seller.supervisor_id && seller.created_by === userId))
 }
 
 export function sanitizeSignatureFileName(value: unknown) {
