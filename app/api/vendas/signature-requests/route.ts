@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
     const { data: sale, error: saleError } = await admin
       .from('vendas')
       .select('id, company_id, seller_id')
+      .is('deleted_at', null)
       .eq('id', saleId)
       .maybeSingle()
 
@@ -96,6 +97,7 @@ export async function GET(request: NextRequest) {
     const { data: sale, error: saleError } = await admin
       .from('vendas')
       .select('id, company_id, seller_id')
+      .is('deleted_at', null)
       .eq('id', saleId)
       .maybeSingle()
 

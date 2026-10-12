@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getSignatureAdminClient, privateNoStoreHeaders } from '@/lib/services/venda-signatures'
-import { validNif, contractEnd, canAssignSeller } from '@/lib/utils/sales-rules'
+import { validNif, contractEnd, canAssignSeller, saleRemovalUpdate } from '@/lib/utils/sales-rules'
 
 const reply = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: privateNoStoreHeaders() })
 async function context() {
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     }
     const nif = req.nextUrl.searchParams.get('nif')
     if (nif && !validNif(nif)) return reply({ error: 'NIF inválido.' }, 400)
-    let query = db.from('vendas').select('*').eq('company_id', actor.company_id).order('created_at', { ascending: false })
+    let query = db.from('vendas').select('*').eq('company_id', actor.company_id).is('deleted_at',null).order('created_at', { ascending: false })
     if (nif) query = query.eq('client_nif', nif.replace(/\s/g,''))
     if (actor.role === 'parceiro') query = query.eq('seller_id', actor.id)
     const { data, error } = await query.limit(nif ? 10 : 1000)
@@ -61,8 +61,9 @@ export async function POST(req: NextRequest) {
     const id = text('id')
     if (!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) return reply({error:'Identificador de venda inválido.'},400)
     const admin = getSignatureAdminClient()
-    const {data: existing,error: existingError} = await admin.from('vendas').select('id,seller_id,company_id').eq('id',id).maybeSingle()
+    const {data: existing,error: existingError} = await admin.from('vendas').select('id,seller_id,company_id,deleted_at').eq('id',id).maybeSingle()
     if (existingError) throw existingError
+    if (existing?.deleted_at) return reply({error:'Esta venda foi apagada.'},409)
     if (existing) return existing.company_id === actor.company_id && existing.seller_id === sellerId ? reply({ venda:existing }) : reply({error:'Identificador já utilizado.'},409)
     const {data:venda,error} = await admin.from('vendas').insert({
       id,company_id:actor.company_id,seller_id:sellerId,lead_id:leadId,
@@ -94,4 +95,31 @@ export async function PATCH(req: NextRequest) {
     if (error) throw error
     return reply({ok:true})
   } catch {return reply({error:'Não foi possível atualizar o CC.'},500)}
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const ctx=await context()
+    if(!ctx)return reply({error:'Sessão inválida.'},401)
+    if(ctx.actor.role!=='admin')return reply({error:'Apenas administradores podem apagar registos.'},403)
+    const body=await req.json()
+    if(typeof body.id!=='string'|| !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(body.id))return reply({error:'Venda inválida.'},400)
+    let update:ReturnType<typeof saleRemovalUpdate>
+    try {update=saleRemovalUpdate(body.scope)}catch{return reply({error:'Tipo de eliminação inválido.'},400)}
+    // Session client enforces company and restricted-admin visibility before privileged mutation.
+    const {data:sale,error:lookupError}=await ctx.db.from('vendas').select('id').eq('id',body.id).eq('company_id',ctx.actor.company_id).maybeSingle()
+    if(lookupError||!sale)return reply({error:'Venda não disponível.'},404)
+    const admin=getSignatureAdminClient()
+    const {data:changed,error}=await admin.from('vendas').update(update).eq('id',sale.id).eq('company_id',ctx.actor.company_id).select('id').maybeSingle()
+    if(error||!changed)throw error||new Error('Venda não atualizada.')
+    if(body.scope==='venda') {
+      const {error:revokeError}=await admin.from('venda_signature_requests').update({status:'revoked'}).eq('venda_id',sale.id).in('status',['pending','processing'])
+      if(revokeError)throw revokeError
+    }
+    let cleanup=admin.from('notificacoes').delete().eq('data->>venda_id',sale.id)
+    if(body.scope==='fidelizacao')cleanup=cleanup.like('event_key','renewal:'+sale.id+':%')
+    const {error:cleanupError}=await cleanup
+    if(cleanupError)throw cleanupError
+    return reply({ok:true})
+  }catch(error){console.error('[vendas:delete]',error);return reply({error:'Não foi possível concluir a eliminação. Tenta novamente.'},500)}
 }

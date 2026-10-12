@@ -3,6 +3,7 @@ import useSWR from 'swr'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { ShoppingBag, Plus, Download, Clock, CheckCircle, Hourglass, XCircle, ShieldCheck, Copy, MessageCircle } from 'lucide-react'
+import { DeleteSaleButton } from '@/components/vendas/DeleteSaleButton'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { PageSpinner } from '@/components/ui/Spinner'
@@ -249,6 +250,7 @@ export default function VendasPage() {
                 await mutate()
               }}><option value="pendente">Pendente</option><option value="recebido">Recebido</option><option value="validado">Validado</option></select></label>}
               <SignaturePanel saleId={v.id} />
+              {profile?.role==='admin' && <div style={{marginTop:12}}><DeleteSaleButton saleId={v.id} clientName={v.client_name} scope="venda"/></div>}
             </div>
           ))}
         </div>

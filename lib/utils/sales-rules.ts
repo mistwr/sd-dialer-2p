@@ -33,3 +33,9 @@ export function canAssignSeller(actor: Actor, seller: Seller) {
   if (actor.role !== 'admin' && actor.role !== 'supervisor') return false
   return !actor.restricted_admin || seller.supervisor_id === actor.id || (!seller.supervisor_id && seller.created_by === actor.id)
 }
+
+export function saleRemovalUpdate(scope: string): {deleted_at?:string;fidelizacao_inicio?:null;fidelizacao_meses?:null;fidelizacao_fim?:null} {
+  if (scope === 'fidelizacao') return {fidelizacao_inicio:null,fidelizacao_meses:null,fidelizacao_fim:null}
+  if (scope === 'venda') return {deleted_at:new Date().toISOString()}
+  throw new Error('Tipo de eliminação inválido.')
+}

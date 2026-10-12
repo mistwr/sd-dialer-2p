@@ -27,6 +27,7 @@ async function fetchInstalacoes(userId: string) {
   const { data, error } = await sb
     .from('vendas')
     .select('*')
+    .is('deleted_at', null)
     .eq('seller_id', userId)
     .not('data_instalacao', 'is', null)
     .neq('instalacao_status', 'concluida')

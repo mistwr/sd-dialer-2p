@@ -26,7 +26,10 @@ async function findRequest(admin: ReturnType<typeof getSignatureAdminClient>, to
     .eq('token_hash', hashSignatureToken(tokenValue))
     .maybeSingle()
   if (error) throw error
-  return data
+  if (!data) return null
+  const {data: activeSale,error: saleError} = await admin.from('vendas').select('id').eq('id',data.venda_id).is('deleted_at',null).maybeSingle()
+  if (saleError) throw saleError
+  return activeSale ? data : null
 }
 
 export async function POST(request: NextRequest) {
@@ -60,6 +63,7 @@ export async function POST(request: NextRequest) {
       const { data: sale, error } = await admin
         .from('vendas')
         .select('client_name, service_type, operator, plano, amount, contract_type')
+        .is('deleted_at', null)
         .eq('id', signatureRequest.venda_id)
         .maybeSingle()
       if (error) throw error

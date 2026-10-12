@@ -2,6 +2,7 @@
 import useSWR from 'swr'
 import { useState } from 'react'
 import { ShoppingBag, Download, Clock, ShieldCheck, Filter } from 'lucide-react'
+import { DeleteSaleButton } from '@/components/vendas/DeleteSaleButton'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { PageSpinner } from '@/components/ui/Spinner'
@@ -13,6 +14,7 @@ async function fetchAllVendas() {
   const { data, error } = await sb
     .from('vendas')
     .select('*, vendedor:seller_id(full_name, email)')
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
   if (error) throw error
   return data ?? []
@@ -132,6 +134,7 @@ export default function AdminVendasPage() {
                 </span>
                 <DocLink path={v.documento_url} label="Contrato" />
                 <DocLink path={v.documento_extra_url} label="Comprovativo" />
+                {profile?.role==='admin' && <DeleteSaleButton saleId={v.id} clientName={v.client_name} scope="venda"/>}
               </div>
             </div>
           ))}

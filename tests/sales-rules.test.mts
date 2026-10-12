@@ -21,3 +21,11 @@ test('seller assignment is company scoped and restricted admins cannot assign ou
   assert.equal(canAssignSeller({...actor,restricted_admin:true}, {id:'b',company_id:'one'}), false)
   assert.equal(canAssignSeller({...actor,role:'parceiro'}, {id:'b',company_id:'one'}), false)
 })
+
+test('removing retention preserves the sale while removing a sale archives it', async () => {
+  const rules = await import('../lib/utils/sales-rules.ts')
+  assert.deepEqual(rules.saleRemovalUpdate('fidelizacao'), {fidelizacao_inicio:null,fidelizacao_meses:null,fidelizacao_fim:null})
+  const removed = rules.saleRemovalUpdate('venda')
+  assert.equal(typeof removed.deleted_at, 'string')
+  assert.throws(() => rules.saleRemovalUpdate('empresa'))
+})
