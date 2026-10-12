@@ -3,13 +3,14 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
-  LayoutDashboard, Users, Building2, Megaphone,
+  LayoutDashboard, Users, Building2, Megaphone, Volume2, VolumeX,
   PhoneCall, BarChart2, LogOut, Menu, X, Bell,
   ChevronRight, PhoneIncoming, History, UserCircle,
   Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag, MessageSquare, Users2, ArrowLeft, ArrowRight, GraduationCap, TrendingUp,
 } from 'lucide-react'
 import useSWR from 'swr'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { useNotificationSound } from '@/lib/hooks/useNotificationSound'
 import { notificacaoService } from '@/lib/services'
 import { Spinner } from '@/components/ui/Spinner'
 import { formatDateTimeShort } from '@/lib/utils/formatters'
@@ -73,11 +74,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [bellOpen, setBellOpen] = useState(false)
   const bellRef = useRef<HTMLDivElement>(null)
 
-  const { data: notifications = [], mutate: mutateNotifs } = useSWR(
+  const { data: notifications = [], mutate: mutateNotifs, isLoading: notificationsLoading } = useSWR(
     user?.id ? ['notifs', user.id] : null,
     () => notificacaoService.getByUser(user!.id),
     { refreshInterval: 30000 }
   )
+  const notificationSound = useNotificationSound(user?.id ?? null, notifications, !!user?.id && !notificationsLoading)
   const unread = notifications.filter(n => !n.read).length
 
   useEffect(() => {
@@ -287,6 +289,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {activeNavItem?.label ?? 'SD Dialer'}
           </div>
           <div style={{ flex: 1 }} />
+          <button type="button" onClick={()=>{setBellOpen(true);void notificationSound.testSound()}} aria-label={notificationSound.enabled&&notificationSound.ready?'Testar som das notificações':'Ativar som das notificações'} title={notificationSound.enabled&&notificationSound.ready?'Som ligado · Testar':'Ativar som das notificações'} style={{background:'none',border:'none',cursor:'pointer',padding:6,color:notificationSound.enabled&&notificationSound.ready?'#16A34A':'#64748B'}}>
+            {notificationSound.enabled?<Volume2 size={18}/>:<VolumeX size={18}/>}
+          </button>
           <div ref={bellRef} style={{ position: 'relative' }}>
             <button
               onClick={() => {
@@ -327,6 +332,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       {unread} novas
                     </span>
                   )}
+                </div>
+                <div style={{padding:'10px 16px',background:'#F8FAFC',borderBottom:'1px solid #E2E8F0'}}>
+                  <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                    <button type="button" onClick={()=>void notificationSound.testSound()} style={{border:'1px solid #BFDBFE',borderRadius:7,padding:'7px 10px',background:'#EFF6FF',color:'#1D4ED8',fontSize:12,cursor:'pointer'}}>{notificationSound.enabled&&notificationSound.ready?'Testar som':'Ativar som'}</button>
+                    {notificationSound.enabled&&<button type="button" onClick={notificationSound.mute} style={{border:0,background:'none',fontSize:12,color:'#64748B',cursor:'pointer'}}>Silenciar</button>}
+                  </div>
+                  <p role="status" style={{fontSize:11,color:'#64748B',margin:'7px 0 0'}}>{notificationSound.message||'O som avisa de novas notificações com o SD Dialer aberto.'}</p>
                 </div>
                 <div style={{ maxHeight: 380, overflowY: 'auto' }}>
                   {notifications.length === 0 ? (
