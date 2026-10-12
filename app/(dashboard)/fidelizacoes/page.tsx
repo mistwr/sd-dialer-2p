@@ -4,18 +4,20 @@ import useSWR from 'swr'
 import Link from 'next/link'
 import { Calendar } from 'lucide-react'
 import { renewalState } from '@/lib/utils/sales-rules'
+import { useAuth } from '@/lib/hooks/useAuth'
 import { PageSpinner } from '@/components/ui/Spinner'
 
 export default function FidelizacoesPage() {
+  const {user, loading:authLoading} = useAuth()
   const [filter,setFilter] = useState('todas')
   const [search,setSearch] = useState('')
-  const {data,error,isLoading} = useSWR('local-fidelizacoes', async () => {
+  const {data,error,isLoading} = useSWR(user?.id ? ['local-fidelizacoes',user.id] : null, async () => {
     const r = await fetch('/api/vendas',{cache:'no-store'})
     const d = await r.json()
     if (!r.ok) throw new Error(d.error)
     return d.vendas as Array<{id:string;client_name:string;client_phone:string;operator:string;fidelizacao_inicio:string;fidelizacao_meses:number;fidelizacao_fim:string;cc_status:string;status:string}>
   },{refreshInterval:60000})
-  if (isLoading) return <PageSpinner/>
+  if (authLoading || isLoading) return <PageSpinner/>
   const rows = (data||[]).filter(v=>v.fidelizacao_fim && !['cancelado','cancelada'].includes(v.status))
   const labels:Record<string,string> = {todas:'Todas',ativa:'Ativas',a_terminar:'A terminar',expirada:'Expiradas'}
   const visible = rows.filter(v=>(filter==='todas'||renewalState(v.fidelizacao_fim)===filter) && (v.client_name+' '+v.operator).toLowerCase().includes(search.toLowerCase()))
