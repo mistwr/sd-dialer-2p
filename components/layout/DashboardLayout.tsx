@@ -22,7 +22,11 @@ interface NavItem {
   roles: string[]
 }
 
-const AI_CALLS_MENU_USER_ID = '8c43ee2a-9c99-4493-a215-abcb0849b8bf'
+// Utilizadores com acesso ao menu "Chamadas IA" (Miguel + Soluções Diferentes)
+const AI_CALLS_MENU_USER_IDS = [
+  '8c43ee2a-9c99-4493-a215-abcb0849b8bf',
+  'efff74d7-b3f6-4336-8daa-0d7d13bc2a10',
+]
 
 const NAV: NavItem[] = [
   { label: 'Dashboard',    href: '/admin',               icon: LayoutDashboard, roles: ['admin', 'supervisor'] },
@@ -105,7 +109,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const effectiveRole = canSwitchView ? viewRole : role
   const visibleNav = NAV.filter(n =>
     n.roles.includes(effectiveRole) &&
-    (n.href !== '/parceiro/chamadas-ia' || user?.id === AI_CALLS_MENU_USER_ID)
+    (n.href !== '/parceiro/chamadas-ia' || (!!user?.id && AI_CALLS_MENU_USER_IDS.includes(user.id)))
   )
   const activeNavItem = visibleNav.find(item => pathname === item.href || (item.href !== '/admin' && item.href !== '/parceiro' && pathname.startsWith(item.href)))
 
