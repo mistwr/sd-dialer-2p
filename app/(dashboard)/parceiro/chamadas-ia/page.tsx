@@ -239,12 +239,44 @@ const VOICE_AGENTS = [
   { id: 'lumin-ai', label: 'Lumin AI Comercial', detail: 'Vende a plataforma LUMIN AI de forma consultiva.' },
 ] as const
 
+type VoiceStyle = 'natural' | 'clear' | 'commercial'
+type VoiceEngine = 'piper' | 'xai'
+type VoiceCustomization = {
+  name: string
+  company: string
+  objective: string
+  product: string
+  opening: string
+  voice: VoiceStyle
+  voiceEngine: VoiceEngine
+}
+
+const DEFAULT_VOICE_CUSTOMIZATION: VoiceCustomization = {
+  name: 'João',
+  company: 'Soluções Diferentes',
+  objective: 'Quero que faças um questionário para vender energias no primeiro dia.',
+  product: '',
+  opening: 'Olá! Sou o João, assistente de voz da Soluções Diferentes.',
+  voice: 'natural',
+  voiceEngine: 'xai',
+}
+
+const VOICE_STYLES: Array<{ id: VoiceStyle; label: string; detail: string; tone: string }> = [
+  { id: 'natural', label: 'Natural', detail: 'Próxima e equilibrada', tone: 'Natural, profissional e direto.' },
+  { id: 'clear', label: 'Clara', detail: 'Calma e objetiva', tone: 'Clara, calma e objetiva.' },
+  { id: 'commercial', label: 'Comercial', detail: 'Enérgica e cordial', tone: 'Comercial, enérgica e cordial.' },
+]
+
 function LuminCallPanel() {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<VoiceLead[]>([])
   const [selected, setSelected] = useState<VoiceLead | null>(null)
   const [searching, setSearching] = useState(false)
-  const [agentId, setAgentId] = useState<(typeof VOICE_AGENTS)[number]['id']>('lumin-telecom')
+  const [agentId, setAgentId] = useState<(typeof VOICE_AGENTS)[number]['id']>('lumin-energia')
+  const [voiceSettings, setVoiceSettings] = useState<VoiceCustomization>(DEFAULT_VOICE_CUSTOMIZATION)
+  const [settingsKey, setSettingsKey] = useState('')
+  const [settingsReady, setSettingsReady] = useState(false)
+  const [accountCompany, setAccountCompany] = useState('')
   const [callStatus, setCallStatus] = useState<'idle' | 'queued' | 'preparing' | 'ringing' | 'answered' | 'connected' | 'failed'>('idle')
   const [callMessage, setCallMessage] = useState('Escolhe uma lead e o Lumin liga.')
   const [error, setError] = useState('')
@@ -253,6 +285,105 @@ function LuminCallPanel() {
   useEffect(() => () => {
     if (pollTimer.current) clearTimeout(pollTimer.current)
   }, [])
+
+  useEffect(() => {
+    let active = true
+    async function loadCustomization() {
+      const sb = createClient()
+      const { data: { user } } = await sb.auth.getUser()
+      if (!user) {
+        if (active) setSettingsReady(true)
+        return
+      }
+
+      const key = 'sd-dialer-voice-profile-v1:' + user.id
+      const { data: account } = await sb
+        .from('usuarios')
+        .select('company_id')
+        .eq('id', user.id)
+        .single()
+
+      let company = ''
+      if (account?.company_id) {
+        const { data: companyRow } = await sb
+          .from('companies')
+          .select('name')
+          .eq('id', account.company_id)
+          .single()
+        company = companyRow?.name || ''
+      }
+
+      let saved: Partial<VoiceCustomization> | null = null
+      try {
+        const raw = window.localStorage.getItem(key)
+        const parsed = raw ? JSON.parse(raw) : null
+        if (parsed && typeof parsed === 'object') saved = parsed
+      } catch {}
+
+      if (!active) return
+      setAccountCompany(company)
+      setSettingsKey(key)
+      setVoiceSettings({
+        ...DEFAULT_VOICE_CUSTOMIZATION,
+        ...(saved || {}),
+        company: saved && Object.prototype.hasOwnProperty.call(saved, 'company') ? (saved.company || '') : company,
+        voice: saved?.voice && ['natural', 'clear', 'commercial'].includes(saved.voice) ? saved.voice : 'natural',
+        voiceEngine: saved?.voiceEngine === 'xai' || !saved?.voiceEngine ? 'xai' : 'piper',
+      })
+      setSettingsReady(true)
+    }
+
+    loadCustomization().catch(() => {
+      if (active) setSettingsReady(true)
+    })
+    return () => { active = false }
+  }, [])
+
+  useEffect(() => {
+    if (!settingsReady || !settingsKey) return
+    try {
+      window.localStorage.setItem(settingsKey, JSON.stringify(voiceSettings))
+    } catch {}
+  }, [settingsReady, settingsKey, voiceSettings])
+
+  function updateVoiceSetting<K extends keyof VoiceCustomization>(key: K, value: VoiceCustomization[K]) {
+    setVoiceSettings(current => ({ ...current, [key]: value }))
+  }
+
+  function buildAgentOverride() {
+    const style = VOICE_STYLES.find(item => item.id === voiceSettings.voice)!
+    const profile: Record<string, string> = {
+      voice: voiceSettings.voice,
+      voiceEngine: voiceSettings.voiceEngine,
+      tone: '[VOICE:' + voiceSettings.voice + '] ' + style.tone,
+    }
+    for (const key of ['name', 'company', 'objective', 'product', 'opening'] as const) {
+      const value = voiceSettings[key].trim()
+      if (value) profile[key] = value
+    }
+    return profile
+  }
+
+  function playVoiceSample() {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      setError('Este browser não suporta a amostra de voz.')
+      return
+    }
+    const speech = window.speechSynthesis
+    speech.cancel()
+    const agentName = voiceSettings.name.trim() || agent.label
+    const companyName = voiceSettings.company.trim() || accountCompany || 'a empresa'
+    const sample = voiceSettings.opening.trim() || ('Olá, sou ' + agentName + ', assistente de voz da ' + companyName + '.')
+    const utterance = new SpeechSynthesisUtterance(sample)
+    utterance.lang = 'pt-PT'
+    utterance.rate = voiceSettings.voice === 'commercial' ? 1.05 : voiceSettings.voice === 'clear' ? 0.94 : 1
+    speech.speak(utterance)
+  }
+
+  function resetVoiceSettings() {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
+    setVoiceSettings({ ...DEFAULT_VOICE_CUSTOMIZATION, company: accountCompany })
+  }
 
   async function getSessionToken() {
     const sb = createClient()
@@ -366,6 +497,7 @@ function LuminCallPanel() {
         body: JSON.stringify({
           lead_id: selected.id,
           agent_id: agentId,
+          agent: buildAgentOverride(),
         }),
       })
       const json = await res.json()
@@ -480,6 +612,75 @@ function LuminCallPanel() {
           </select>
           <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 5 }}>{agent.detail}</div>
         </div>
+
+        <section style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid #E2E8F0' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A' }}>Personaliza o agente</div>
+              <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 3 }}>As alterações ficam guardadas neste dispositivo.</div>
+            </div>
+            <button type="button" onClick={resetVoiceSettings} style={{ border: 0, background: 'transparent', color: '#64748B', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>Repor exemplo</button>
+          </div>
+
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 6 }}>Qualidade de voz</label>
+          <select
+            value={voiceSettings.voiceEngine}
+            onChange={e => updateVoiceSetting('voiceEngine', e.target.value as VoiceEngine)}
+            style={{ width: '100%', padding: '9px 10px', borderRadius: 9, border: '1.5px solid #E2E8F0', background: '#fff', color: '#0F172A', fontSize: 12.5 }}
+          >
+            <option value="piper">Local · económica (Piper)</option>
+            <option value="xai">Neural PT-PT · mais natural (LiveKit)</option>
+          </select>
+          <div style={{ fontSize: 10.5, lineHeight: 1.4, color: '#64748B', marginTop: 5 }}>A opção neural pode gerar custos LiveKit, também nas chamadas.</div>
+
+          <div style={{ marginTop: 13 }}>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 6 }}>Estilo de voz</label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
+              {VOICE_STYLES.map(style => {
+                const active = voiceSettings.voice === style.id
+                return (
+                  <button
+                    type="button"
+                    key={style.id}
+                    aria-pressed={active}
+                    onClick={() => updateVoiceSetting('voice', style.id)}
+                    style={{ textAlign: 'left', minWidth: 0, padding: '9px 8px', borderRadius: 9, cursor: 'pointer', border: active ? '1px solid #2563EB' : '1px solid #E2E8F0', background: active ? '#EFF6FF' : '#fff', color: '#0F172A', fontSize: 11.5, fontWeight: 700 }}
+                  >
+                    {style.label}
+                    <span style={{ display: 'block', fontSize: 9.5, lineHeight: 1.25, color: '#64748B', fontWeight: 400, marginTop: 3 }}>{style.detail}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginTop: 13 }}>
+            <label style={{ display: 'block', minWidth: 0, fontSize: 11, fontWeight: 700, color: '#64748B' }}>
+              Nome do agente
+              <input value={voiceSettings.name} maxLength={48} onChange={e => updateVoiceSetting('name', e.target.value)} placeholder={agent.label} style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 5, padding: '9px 10px', borderRadius: 9, border: '1.5px solid #E2E8F0', color: '#0F172A', fontSize: 12.5 }} />
+            </label>
+            <label style={{ display: 'block', minWidth: 0, fontSize: 11, fontWeight: 700, color: '#64748B' }}>
+              Empresa
+              <input value={voiceSettings.company} maxLength={64} onChange={e => updateVoiceSetting('company', e.target.value)} placeholder={accountCompany || 'Nome da empresa'} style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 5, padding: '9px 10px', borderRadius: 9, border: '1.5px solid #E2E8F0', color: '#0F172A', fontSize: 12.5 }} />
+            </label>
+          </div>
+
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginTop: 12 }}>
+            Objetivo da conversa
+            <input value={voiceSettings.objective} maxLength={180} onChange={e => updateVoiceSetting('objective', e.target.value)} placeholder="O que o agente deve alcançar nesta chamada?" style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 5, padding: '9px 10px', borderRadius: 9, border: '1.5px solid #E2E8F0', color: '#0F172A', fontSize: 12.5 }} />
+          </label>
+
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginTop: 12 }}>
+            Contexto, produto ou serviço
+            <textarea value={voiceSettings.product} maxLength={500} rows={2} onChange={e => updateVoiceSetting('product', e.target.value)} placeholder="O que deve saber para responder melhor?" style={{ display: 'block', width: '100%', boxSizing: 'border-box', resize: 'vertical', minHeight: 58, marginTop: 5, padding: '9px 10px', borderRadius: 9, border: '1.5px solid #E2E8F0', color: '#0F172A', fontSize: 12.5 }} />
+          </label>
+
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginTop: 12 }}>
+            Frase de abertura
+            <input value={voiceSettings.opening} maxLength={180} onChange={e => updateVoiceSetting('opening', e.target.value)} placeholder="Ex.: Olá, sou o Lumin da sua empresa..." style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 5, padding: '9px 10px', borderRadius: 9, border: '1.5px solid #E2E8F0', color: '#0F172A', fontSize: 12.5 }} />
+          </label>
+          <div style={{ fontSize: 10.5, lineHeight: 1.4, color: '#64748B', marginTop: 9 }}>Os campos vazios mantêm as instruções do agente selecionado.</div>
+        </section>
       </div>
 
       <div className="lumin-call-status" style={{
@@ -490,6 +691,21 @@ function LuminCallPanel() {
         <div style={{ fontSize: 11, color: '#A5B4FC', fontWeight: 800, letterSpacing: '.08em' }}>LUMIN VOICE</div>
         <div style={{ fontSize: 20, fontWeight: 800, marginTop: 8 }}>{selected?.nome || 'Escolhe uma lead'}</div>
         <div style={{ fontSize: 13, color: '#CBD5E1', marginTop: 3 }}>{selected?.telefone || 'A chamada sai pelo número autorizado do Lumin.'}</div>
+
+        <div style={{ marginTop: 15, padding: '11px 12px', borderRadius: 10, background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.08)' }}>
+          <div style={{ fontSize: 10, color: '#94A3B8', marginBottom: 4 }}>AGENTE CONFIGURADO</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{voiceSettings.name.trim() || agent.label}</div>
+          <div style={{ fontSize: 11, color: '#CBD5E1', marginTop: 3 }}>{voiceSettings.company.trim() || accountCompany || 'Empresa por definir'} · {voiceSettings.voice.toUpperCase()} · {voiceSettings.voiceEngine === 'xai' ? 'NEURAL PT-PT' : 'PIPER PT-PT'}</div>
+        </div>
+
+        <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button type="button" onClick={playVoiceSample} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 10px', border: '1px solid rgba(255,255,255,.18)', borderRadius: 9, background: 'rgba(255,255,255,.08)', color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            <Play size={13} /> Ouvir amostra
+          </button>
+          <span style={{ fontSize: 10, lineHeight: 1.35, color: '#94A3B8' }}>A amostra usa a voz deste dispositivo; a chamada usa o motor selecionado.</span>
+        </div>
+
+        {error && <div role="alert" style={{ fontSize: 11, color: '#FCA5A5', marginTop: 8 }}>{error}</div>}
 
         <div style={{ marginTop: 24, padding: '12px 14px', borderRadius: 10, background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.08)' }}>
           <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 5 }}>ESTADO</div>
