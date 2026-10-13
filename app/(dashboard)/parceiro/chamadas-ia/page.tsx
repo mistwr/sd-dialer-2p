@@ -271,6 +271,10 @@ function LuminCallPanel() {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<VoiceLead[]>([])
   const [selected, setSelected] = useState<VoiceLead | null>(null)
+  const [callMode, setCallMode] = useState<'lead' | 'manual'>('lead')
+  const [manualPhone, setManualPhone] = useState('')
+  const [manualName, setManualName] = useState('')
+  const [manualConsent, setManualConsent] = useState(false)
   const [searching, setSearching] = useState(false)
   const [agentId, setAgentId] = useState<(typeof VOICE_AGENTS)[number]['id']>('lumin-energia')
   const [voiceSettings, setVoiceSettings] = useState<VoiceCustomization>(DEFAULT_VOICE_CUSTOMIZATION)
@@ -278,7 +282,7 @@ function LuminCallPanel() {
   const [settingsReady, setSettingsReady] = useState(false)
   const [accountCompany, setAccountCompany] = useState('')
   const [callStatus, setCallStatus] = useState<'idle' | 'queued' | 'preparing' | 'ringing' | 'answered' | 'connected' | 'failed'>('idle')
-  const [callMessage, setCallMessage] = useState('Escolhe uma lead e o Lumin liga.')
+  const [callMessage, setCallMessage] = useState('Escolhe uma lead ou introduz um número autorizado para contacto.')
   const [error, setError] = useState('')
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -393,7 +397,7 @@ function LuminCallPanel() {
   }
 
   async function searchLeads() {
-    const term = query.trim()
+    const term = query.trim().replace(/[%,_\\]/g, '').slice(0, 80)
     if (term.length < 2) {
       setError('Escreve pelo menos 2 caracteres.')
       return
@@ -401,47 +405,21 @@ function LuminCallPanel() {
 
     setSearching(true)
     setError('')
+    setSelected(null)
     try {
       const sb = createClient()
       const { data: { user } } = await sb.auth.getUser()
       if (!user) throw new Error('Sessão expirada.')
 
-      const { data: profile } = await sb
-        .from('usuarios')
-        .select('role,company_id')
-        .eq('id', user.id)
-        .single()
-
-      if (!profile?.company_id) throw new Error('Perfil sem empresa associada.')
-
-      const buildQuery = (field: 'nome' | 'telefone') => {
-        let q = sb
-          .from('leads')
-          .select('id,nome,telefone,status,assigned_to')
-          .eq('company_id', profile.company_id)
-          .not('telefone', 'is', null)
-          .ilike(field, `%${term.replace(/[%_,()]/g, '')}%`)
-          .limit(12)
-
-        if (profile.role === 'parceiro') q = q.eq('assigned_to', user.id)
-        return q
+      const { data, error: searchError } = await sb.rpc('search_voice_leads', { p_query: term })
+      if (searchError) {
+        if (searchError.code === '57014') throw new Error('A pesquisa demorou demasiado. Acrescenta mais letras.')
+        throw searchError
       }
 
-      const [nameRes, phoneRes] = await Promise.all([
-        buildQuery('nome'),
-        buildQuery('telefone'),
-      ])
-
-      if (nameRes.error) throw nameRes.error
-      if (phoneRes.error) throw phoneRes.error
-
-      const merged = new Map<string, VoiceLead>()
-      ;[...(nameRes.data ?? []), ...(phoneRes.data ?? [])].forEach((lead: any) => {
-        if (lead?.id && lead?.telefone) merged.set(lead.id, lead as VoiceLead)
-      })
-
-      setResults(Array.from(merged.values()).slice(0, 15))
-      if (merged.size === 0) setError('Nenhuma lead encontrada.')
+      const matches = (data ?? []).filter((lead: any) => lead?.id && lead?.telefone).slice(0, 15) as VoiceLead[]
+      setResults(matches)
+      if (matches.length === 0) setError('Nenhuma lead encontrada na tua empresa.')
     } catch (err: any) {
       setError(err?.message || 'Erro ao pesquisar leads.')
     } finally {
@@ -480,25 +458,35 @@ function LuminCallPanel() {
     }
   }
 
+  const callIsBusy = ['queued', 'preparing', 'ringing', 'answered'].includes(callStatus)
+  const canStartCall = callMode === 'lead'
+    ? Boolean(selected)
+    : Boolean(manualPhone.trim() && manualConsent && manualPhone.replace(/\D/g, '').length >= 9)
+
   async function startCall() {
-    if (!selected || ['queued', 'preparing', 'ringing', 'answered'].includes(callStatus)) return
+    if (!canStartCall || callIsBusy) return
     setError('')
     setCallStatus('queued')
     setCallMessage('A iniciar chamada...')
 
     try {
       const token = await getSessionToken()
+      const requestBody = callMode === 'lead' && selected
+        ? { lead_id: selected.id, agent_id: agentId, agent: buildAgentOverride() }
+        : {
+            phone: manualPhone.trim(),
+            name: manualName.trim() || 'Contacto manual',
+            consent_confirmed: manualConsent,
+            agent_id: agentId,
+            agent: buildAgentOverride(),
+          }
       const res = await fetch(`${LUMIN_GATEWAY}/api/sd-dialer/call`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          lead_id: selected.id,
-          agent_id: agentId,
-          agent: buildAgentOverride(),
-        }),
+        body: JSON.stringify(requestBody),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.detail || 'Não foi possível iniciar a chamada.')
@@ -603,27 +591,71 @@ function LuminCallPanel() {
           </div>
           <div>
             <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A' }}>Ligar com Lumin</div>
-            <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>A IA liga à lead escolhida e conversa por voz.</div>
+            <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>Escolhe uma lead da empresa ou marca um número manualmente.</div>
           </div>
         </div>
 
         <div style={{ marginTop: 18 }}>
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 6, textTransform: 'uppercase' }}>1. Procurar lead</label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <div style={{ flex: 1, position: 'relative' }}>
-              <Search size={14} color="#94A3B8" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)' }} />
-              <input
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') searchLeads() }}
-                placeholder="Nome ou telefone..."
-                style={{ width: '100%', padding: '10px 12px 10px 34px', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-              />
-            </div>
-            <button onClick={searchLeads} disabled={searching} style={{ padding: '0 14px', borderRadius: 9, border: 'none', background: '#0F172A', color: '#fff', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', opacity: searching ? .65 : 1 }}>
-              {searching ? 'A procurar...' : 'Procurar'}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: 4, borderRadius: 10, background: '#F1F5F9', marginBottom: 14 }}>
+            <button
+              type="button"
+              onClick={() => { setCallMode('lead'); setError(''); setCallStatus('idle') }}
+              style={{ padding: '9px 8px', border: 0, borderRadius: 8, background: callMode === 'lead' ? '#0F172A' : 'transparent', color: callMode === 'lead' ? '#fff' : '#475569', fontSize: 12, fontWeight: 800 }}
+            >
+              Lead existente
+            </button>
+            <button
+              type="button"
+              onClick={() => { setCallMode('manual'); setSelected(null); setResults([]); setError(''); setCallStatus('idle') }}
+              style={{ padding: '9px 8px', border: 0, borderRadius: 8, background: callMode === 'manual' ? '#0F172A' : 'transparent', color: callMode === 'manual' ? '#fff' : '#475569', fontSize: 12, fontWeight: 800 }}
+            >
+              Número manual
             </button>
           </div>
+
+          {callMode === 'lead' ? (
+            <>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 6, textTransform: 'uppercase' }}>1. Procurar lead da empresa</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ flex: 1, position: 'relative' }}>
+                  <Search size={14} color="#94A3B8" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)' }} />
+                  <input
+                    value={query}
+                    onChange={e => { setQuery(e.target.value); setSelected(null); setResults([]) }}
+                    onKeyDown={e => { if (e.key === 'Enter') searchLeads() }}
+                    placeholder="Nome ou telefone..."
+                    style={{ width: '100%', padding: '10px 12px 10px 34px', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <button onClick={searchLeads} disabled={searching} style={{ padding: '0 14px', borderRadius: 9, border: 'none', background: '#0F172A', color: '#fff', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', opacity: searching ? .65 : 1 }}>
+                  {searching ? 'A procurar...' : 'Procurar'}
+                </button>
+              </div>
+              <div style={{ fontSize: 10.5, color: '#64748B', marginTop: 5 }}>2 letras procuram pelo início do nome; 3 ou mais pesquisam também dentro do nome e telefone.</div>
+            </>
+          ) : (
+            <>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 6, textTransform: 'uppercase' }}>1. Marcar número</label>
+              <input
+                type="tel"
+                autoComplete="tel"
+                value={manualPhone}
+                onChange={e => setManualPhone(e.target.value)}
+                placeholder="+351 912 345 678"
+                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+              />
+              <input
+                value={manualName}
+                onChange={e => setManualName(e.target.value)}
+                placeholder="Nome (opcional)"
+                style={{ width: '100%', marginTop: 8, padding: '10px 12px', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+              />
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 10, fontSize: 11.5, lineHeight: 1.45, color: '#64748B', cursor: 'pointer' }}>
+                <input type="checkbox" checked={manualConsent} onChange={e => setManualConsent(e.target.checked)} style={{ marginTop: 2 }} />
+                <span>Confirmo que tenho autorização para contactar este número. Números de leads com contacto bloqueado continuam sem poder ser chamados.</span>
+              </label>
+            </>
+          )}
         </div>
 
         {error && (
@@ -773,19 +805,19 @@ function LuminCallPanel() {
 
         <button
           onClick={startCall}
-          disabled={!selected || ['queued','preparing','ringing','answered'].includes(callStatus)}
+          disabled={!canStartCall || callIsBusy}
           style={{
             width: '100%', marginTop: 18, minHeight: 48, borderRadius: 11, border: 'none',
-            background: selected ? 'linear-gradient(135deg,#C4B5FD,#818CF8)' : '#334155',
-            color: selected ? '#111827' : '#94A3B8', fontSize: 14, fontWeight: 900,
-            cursor: selected ? 'pointer' : 'not-allowed',
+            background: canStartCall ? 'linear-gradient(135deg,#C4B5FD,#818CF8)' : '#334155',
+            color: canStartCall ? '#111827' : '#94A3B8', fontSize: 14, fontWeight: 900,
+            cursor: canStartCall ? 'pointer' : 'not-allowed',
           }}
         >
           {['queued','preparing','ringing','answered'].includes(callStatus) ? 'A LIGAR...' : '📞 LIGAR COM LUMIN'}
         </button>
 
         <div style={{ fontSize: 10.5, lineHeight: 1.5, color: '#94A3B8', marginTop: 12 }}>
-          O Lumin identifica-se como assistente virtual de IA. Leads marcadas como não interessadas, desligadas ou com número inválido ficam bloqueadas para nova chamada.
+          O Lumin identifica-se como assistente virtual de IA. Leads marcadas como não interessadas, desligadas ou com número inválido ficam bloqueadas; números manuais exigem confirmação de autorização.
         </div>
       </div>
     </div>
