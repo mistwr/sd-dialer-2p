@@ -48,16 +48,20 @@ function phoneVariants(e164: string) {
   return [...new Set(variants)]
 }
 
+function consentTimestamp(value: unknown) {
+  const parsed = Date.parse(clean(value, 64))
+  const now = Date.now()
+  if (!Number.isFinite(parsed) || parsed > now + 5 * 60 * 1000) {
+    return new Date(now).toISOString()
+  }
+  return new Date(parsed).toISOString()
+}
+
 function asCustomFields(value: unknown): Record<string, unknown> {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     return value as Record<string, unknown>
   }
   return {}
-}
-
-function hasCallId(fields: Record<string, unknown>, callId: string) {
-  const callIds = fields.voice_call_ids
-  return Array.isArray(callIds) && callIds.includes(callId)
 }
 
 function appendNotes(existing: string | null, additions: string[]) {
@@ -125,21 +129,27 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (callLookupError) throw callLookupError
-
-    let existing = callMatch as LeadRow | null
-    if (!existing) {
-      const { data: phoneMatch, error: phoneLookupError } = await supabase
-        .from('leads')
-        .select('id,nome,email,telefone,status,observacoes,custom_fields')
-        .eq('company_id', companyId)
-        .in('telefone', phoneVariants(phone))
-        .limit(1)
-        .maybeSingle()
-      if (phoneLookupError) throw phoneLookupError
-      existing = phoneMatch as LeadRow | null
+    if (callMatch) {
+      return NextResponse.json({
+        ok: true,
+        lead_id: callMatch.id,
+        created: false,
+        deduplicated: true,
+        status: callMatch.status || 'novo',
+      })
     }
 
-    const consentAt = new Date().toISOString()
+    const { data: phoneMatch, error: phoneLookupError } = await supabase
+      .from('leads')
+      .select('id,nome,email,telefone,status,observacoes,custom_fields')
+      .eq('company_id', companyId)
+      .in('telefone', phoneVariants(phone))
+      .limit(1)
+      .maybeSingle()
+    if (phoneLookupError) throw phoneLookupError
+    const existing = phoneMatch as LeadRow | null
+
+    const consentAt = consentTimestamp(body.consent_at)
     const previousFields = asCustomFields(existing?.custom_fields)
     const previousCallIds = Array.isArray(previousFields.voice_call_ids)
       ? previousFields.voice_call_ids.filter((id): id is string => typeof id === 'string')
