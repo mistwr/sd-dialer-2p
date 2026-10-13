@@ -276,6 +276,7 @@ function LuminCallPanel() {
   const [manualName, setManualName] = useState('')
   const [manualConsent, setManualConsent] = useState(false)
   const [searching, setSearching] = useState(false)
+  const [previewing, setPreviewing] = useState(false)
   const [agentId, setAgentId] = useState<(typeof VOICE_AGENTS)[number]['id']>('lumin-energia')
   const [voiceSettings, setVoiceSettings] = useState<VoiceCustomization>(DEFAULT_VOICE_CUSTOMIZATION)
   const [settingsKey, setSettingsKey] = useState('')
@@ -285,9 +286,13 @@ function LuminCallPanel() {
   const [callMessage, setCallMessage] = useState('Escolhe uma lead ou introduz um número autorizado para contacto.')
   const [error, setError] = useState('')
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null)
+  const previewUrlRef = useRef<string | null>(null)
 
   useEffect(() => () => {
     if (pollTimer.current) clearTimeout(pollTimer.current)
+    previewAudioRef.current?.pause()
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current)
   }, [])
 
   useEffect(() => {
@@ -368,24 +373,64 @@ function LuminCallPanel() {
     return profile
   }
 
-  function playVoiceSample() {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      setError('Este browser não suporta a amostra de voz.')
-      return
+  function stopVoiceSample() {
+    previewAudioRef.current?.pause()
+    if (previewAudioRef.current) {
+      previewAudioRef.current.removeAttribute('src')
+      previewAudioRef.current.load()
+      previewAudioRef.current = null
     }
-    const speech = window.speechSynthesis
-    speech.cancel()
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current)
+      previewUrlRef.current = null
+    }
+  }
+
+  async function playVoiceSample() {
     const agentName = voiceSettings.name.trim() || agent.label
     const companyName = voiceSettings.company.trim() || accountCompany || 'a empresa'
-    const sample = voiceSettings.opening.trim() || ('Olá, sou ' + agentName + ', assistente de voz da ' + companyName + '.')
-    const utterance = new SpeechSynthesisUtterance(sample)
-    utterance.lang = 'pt-PT'
-    utterance.rate = voiceSettings.voice === 'commercial' ? 1.05 : voiceSettings.voice === 'clear' ? 0.94 : 1
-    speech.speak(utterance)
+    const sample = (voiceSettings.opening.trim() || ('Olá, sou ' + agentName + ', assistente de voz da ' + companyName + '.')).slice(0, 800)
+    setError('')
+    setPreviewing(true)
+    stopVoiceSample()
+    try {
+      const token = await getSessionToken()
+      const response = await fetch(`${LUMIN_GATEWAY}/api/sd-dialer/voice-preview`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          voice: voiceSettings.voice,
+          voiceEngine: voiceSettings.voiceEngine,
+          text: sample,
+        }),
+      })
+      if (!response.ok) {
+        const body = await response.json().catch(() => null)
+        throw new Error(body?.detail || 'Não foi possível gerar a amostra de voz.')
+      }
+      const audioUrl = URL.createObjectURL(await response.blob())
+      const audio = new Audio(audioUrl)
+      previewAudioRef.current = audio
+      previewUrlRef.current = audioUrl
+      audio.onended = () => {
+        if (previewAudioRef.current === audio) previewAudioRef.current = null
+        if (previewUrlRef.current === audioUrl) previewUrlRef.current = null
+        URL.revokeObjectURL(audioUrl)
+      }
+      await audio.play()
+    } catch (err: any) {
+      setError(err?.message || 'Erro ao reproduzir a amostra de voz.')
+      stopVoiceSample()
+    } finally {
+      setPreviewing(false)
+    }
   }
 
   function resetVoiceSettings() {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
+    stopVoiceSample()
     setVoiceSettings({ ...DEFAULT_VOICE_CUSTOMIZATION, company: accountCompany })
   }
 
@@ -788,10 +833,10 @@ function LuminCallPanel() {
         </div>
 
         <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button type="button" onClick={playVoiceSample} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 10px', border: '1px solid rgba(255,255,255,.18)', borderRadius: 9, background: 'rgba(255,255,255,.08)', color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            <Play size={13} /> Ouvir amostra
+          <button type="button" onClick={playVoiceSample} disabled={previewing} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 10px', border: '1px solid rgba(255,255,255,.18)', borderRadius: 9, background: 'rgba(255,255,255,.08)', color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            {previewing ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />} {previewing ? 'A gerar amostra…' : 'Ouvir amostra'}
           </button>
-          <span style={{ fontSize: 10, lineHeight: 1.35, color: '#94A3B8' }}>A amostra usa a voz deste dispositivo; a chamada usa o motor selecionado.</span>
+          <span style={{ fontSize: 10, lineHeight: 1.35, color: '#94A3B8' }}>A amostra usa o motor e o estilo configurados para a chamada; o áudio pode soar ligeiramente diferente no telefone.</span>
         </div>
 
         {error && <div role="alert" style={{ fontSize: 11, color: '#FCA5A5', marginTop: 8 }}>{error}</div>}
