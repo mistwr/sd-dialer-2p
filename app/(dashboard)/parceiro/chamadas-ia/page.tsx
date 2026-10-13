@@ -530,6 +530,62 @@ function LuminCallPanel() {
         width: 100%;
         box-sizing: border-box;
       }
+      .lumin-call-card {
+        background: #0B0A08 !important;
+        border-color: #332C21 !important;
+        border-radius: 17px !important;
+        color: #F7F0E2 !important;
+        box-shadow: 0 18px 42px rgba(0,0,0,.2) !important;
+      }
+      .lumin-call-card div:not([role="alert"]):not([style*="background"]) {
+        color: #D8CEBA !important;
+      }
+      .lumin-call-card label {
+        color: #CDBFA3 !important;
+      }
+      .lumin-call-card input,
+      .lumin-call-card select,
+      .lumin-call-card textarea {
+        color-scheme: dark;
+        background: #13110D !important;
+        color: #F5EEDC !important;
+        border-color: #383228 !important;
+      }
+      .lumin-call-card input::placeholder,
+      .lumin-call-card textarea::placeholder {
+        color: #847968 !important;
+      }
+      .lumin-call-card section {
+        border-color: #352F24 !important;
+      }
+      .lumin-call-card button:not([aria-pressed]) {
+        background: #18150F !important;
+        color: #F1E7D1 !important;
+        border: 1px solid #3B3327 !important;
+      }
+      .lumin-call-card button[aria-pressed="false"] {
+        background: #171510 !important;
+        color: #E8DDC7 !important;
+        border-color: #393329 !important;
+      }
+      .lumin-call-card button[aria-pressed="true"] {
+        background: #2A2114 !important;
+        color: #FFE6B0 !important;
+        border-color: #D5AA56 !important;
+      }
+      .lumin-call-status {
+        background: linear-gradient(155deg,#0C0B09,#17130D 66%,#342315) !important;
+        border: 1px solid #382E20 !important;
+        box-shadow: 0 18px 42px rgba(0,0,0,.24) !important;
+      }
+      .lumin-call-status > button:last-of-type:not(:disabled) {
+        background: linear-gradient(100deg,#FFE2AB,#D9A849) !important;
+        color: #211807 !important;
+      }
+      .lumin-call-status > button:last-of-type:disabled {
+        background: #33302B !important;
+        color: #938976 !important;
+      }
       @media (max-width: 760px) {
         .lumin-call-grid {
           grid-template-columns: 1fr;
@@ -583,6 +639,7 @@ function LuminCallPanel() {
               return (
                 <button
                   key={lead.id}
+                  aria-pressed={active}
                   onClick={() => { setSelected(lead); setCallStatus('idle'); setCallMessage('Pronto para ligar.') }}
                   style={{
                     textAlign: 'left', padding: '10px 12px', borderRadius: 9, cursor: 'pointer',
