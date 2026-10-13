@@ -673,7 +673,7 @@ function LuminCallPanel() {
         <section style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid #E2E8F0' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A' }}>Personaliza o agente</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A' }}>3. Personaliza o agente</div>
               <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 3 }}>As alterações ficam guardadas neste dispositivo.</div>
             </div>
             <button type="button" onClick={resetVoiceSettings} style={{ border: 0, background: 'transparent', color: '#64748B', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>Repor exemplo</button>
