@@ -2,17 +2,12 @@ import { timingSafeEqual } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-type LeadRow = {
-  id: string
-  nome: string | null
-  email: string | null
-  telefone: string
-  status: string | null
-  observacoes: string | null
-  custom_fields: unknown
+type VoiceLeadResult = {
+  lead_id: string
+  created: boolean
+  deduplicated: boolean
+  status: string
 }
-
-const INTERESTS = new Set(['telecomunicacoes', 'energia', 'ambos'])
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -41,13 +36,6 @@ function normalizePhone(value: string): string | null {
   return '+' + digits
 }
 
-function phoneVariants(e164: string) {
-  const digits = e164.slice(1)
-  const variants = [e164, digits, '00' + digits]
-  if (digits.startsWith('351') && digits.length === 12) variants.push(digits.slice(3))
-  return [...new Set(variants)]
-}
-
 function consentTimestamp(value: unknown) {
   const parsed = Date.parse(clean(value, 64))
   const now = Date.now()
@@ -55,17 +43,6 @@ function consentTimestamp(value: unknown) {
     return new Date(now).toISOString()
   }
   return new Date(parsed).toISOString()
-}
-
-function asCustomFields(value: unknown): Record<string, unknown> {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    return value as Record<string, unknown>
-  }
-  return {}
-}
-
-function appendNotes(existing: string | null, additions: string[]) {
-  return [clean(existing, 8000), ...additions.filter(Boolean)].filter(Boolean).join('\n')
 }
 
 export async function POST(request: NextRequest) {
@@ -91,19 +68,19 @@ export async function POST(request: NextRequest) {
   }
 
   const callId = clean(body.call_id, 80)
-  const phoneInput = clean(body.phone, 40)
-  const phone = normalizePhone(phoneInput)
+  const phone = normalizePhone(clean(body.phone, 40))
   const name = clean(body.name, 120)
   const email = clean(body.email, 180).toLowerCase()
   const interest = clean(body.interest, 40).toLowerCase()
   const currentOperator = clean(body.current_operator, 120)
   const summary = clean(body.summary, 1000)
   const nextAction = clean(body.next_action, 500)
+  const consentAt = consentTimestamp(body.consent_at)
 
   if (body.consent_to_contact !== true) {
     return NextResponse.json({ error: 'explicit contact consent required' }, { status: 400 })
   }
-  if (!callId || !phone || !name || !INTERESTS.has(interest)) {
+  if (!callId || !phone || !name || !['telecomunicacoes', 'energia', 'ambos'].includes(interest)) {
     return NextResponse.json({ error: 'call_id, valid phone, name and valid interest are required' }, { status: 400 })
   }
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -114,114 +91,37 @@ export async function POST(request: NextRequest) {
     process.env.LUMIN_VOICE_DEFAULT_COMPANY_ID ||
     process.env.LUMIN_DEFAULT_COMPANY_ID ||
     process.env.REBORN_DEFAULT_COMPANY_ID
-  if (!companyId) {
-    return NextResponse.json({ error: 'voice lead company is not configured' }, { status: 503 })
+  if (!companyId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(companyId)) {
+    return NextResponse.json({ error: 'voice lead company is not configured with a valid ID' }, { status: 503 })
   }
 
   try {
     const supabase = adminClient()
-    const { data: callMatch, error: callLookupError } = await supabase
-      .from('leads')
-      .select('id,nome,email,telefone,status,observacoes,custom_fields')
-      .eq('company_id', companyId)
-      .contains('custom_fields', { voice_call_ids: [callId] })
-      .limit(1)
-      .maybeSingle()
+    const { data, error } = await supabase.rpc('lumin_voice_register_lead', {
+      p_company_id: companyId,
+      p_call_id: callId,
+      p_phone: phone,
+      p_name: name,
+      p_email: email || null,
+      p_interest: interest,
+      p_current_operator: currentOperator || null,
+      p_summary: summary || null,
+      p_next_action: nextAction || null,
+      p_consent_at: consentAt,
+      p_consent_to_contact: true,
+    })
+    if (error) throw error
 
-    if (callLookupError) throw callLookupError
-    if (callMatch) {
-      return NextResponse.json({
-        ok: true,
-        lead_id: callMatch.id,
-        created: false,
-        deduplicated: true,
-        status: callMatch.status || 'novo',
-      })
-    }
+    const result = (Array.isArray(data) ? data[0] : data) as VoiceLeadResult | null
+    if (!result?.lead_id) throw new Error('Lead registration returned no lead ID')
 
-    const { data: phoneMatch, error: phoneLookupError } = await supabase
-      .from('leads')
-      .select('id,nome,email,telefone,status,observacoes,custom_fields')
-      .eq('company_id', companyId)
-      .in('telefone', phoneVariants(phone))
-      .limit(1)
-      .maybeSingle()
-    if (phoneLookupError) throw phoneLookupError
-    const existing = phoneMatch as LeadRow | null
-
-    const consentAt = consentTimestamp(body.consent_at)
-    const previousFields = asCustomFields(existing?.custom_fields)
-    const previousCallIds = Array.isArray(previousFields.voice_call_ids)
-      ? previousFields.voice_call_ids.filter((id): id is string => typeof id === 'string')
-      : []
-    const voiceCallIds = [...new Set([...previousCallIds, callId])].slice(-20)
-    const customFields = {
-      ...previousFields,
-      source: existing ? previousFields.source || 'lumin_voice_agent' : 'lumin_voice_agent',
-      temperature: existing ? previousFields.temperature : 'warm',
-      voice_call_id: callId,
-      voice_call_ids: voiceCallIds,
-      voice_interest: interest,
-      voice_current_operator: currentOperator || null,
-      voice_summary: summary || null,
-      voice_next_action: nextAction || null,
-      voice_contact_consent: true,
-      voice_contact_consent_at: consentAt,
-    }
-
-    const notes = appendNotes(existing?.observacoes ?? null, [
-      'Lead de chamada telefónica — Lumin AI',
-      'Chamada: ' + callId,
-      'Interesse: ' + interest,
-      currentOperator ? 'Operador atual: ' + currentOperator : '',
-      summary ? 'Resumo: ' + summary : '',
-      nextAction ? 'Próxima ação: ' + nextAction : '',
-      'Autorização de contacto confirmada em ' + consentAt,
-    ])
-
-    let leadId: string
-    let status: string
-    let created = false
-
-    if (existing) {
-      const existingName = clean(existing.nome, 120)
-      const placeholderName = /^(lead|contacto|cliente)\b/i.test(existingName)
-      const { error } = await supabase
-        .from('leads')
-        .update({
-          nome: !existingName || placeholderName ? name : existingName,
-          email: existing.email || email || null,
-          observacoes: notes,
-          custom_fields: customFields,
-        })
-        .eq('id', existing.id)
-        .eq('company_id', companyId)
-      if (error) throw error
-      leadId = existing.id
-      status = existing.status || 'novo'
-    } else {
-      const { data, error } = await supabase
-        .from('leads')
-        .insert({
-          nome: name,
-          telefone: phone,
-          email: email || null,
-          company_id: companyId,
-          status: 'novo',
-          origem: 'outro',
-          imported_at: consentAt,
-          observacoes: notes,
-          custom_fields: customFields,
-        })
-        .select('id')
-        .single()
-      if (error) throw error
-      leadId = data.id
-      status = 'novo'
-      created = true
-    }
-
-    return NextResponse.json({ ok: true, lead_id: leadId, created, status })
+    return NextResponse.json({
+      ok: true,
+      lead_id: result.lead_id,
+      created: result.created,
+      deduplicated: result.deduplicated,
+      status: result.status,
+    })
   } catch (error) {
     console.error('Lumin voice lead capture failed', error)
     return NextResponse.json({ error: 'voice lead capture failed' }, { status: 500 })
