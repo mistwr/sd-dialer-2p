@@ -89,7 +89,7 @@ BEGIN
   IF v_phone IS NULL OR COALESCE(BTRIM(p_name), '') = '' THEN
     RAISE EXCEPTION 'valid phone and name are required';
   END IF;
-  IF p_interest NOT IN ('telecomunicacoes', 'energia', 'ambos') THEN
+  IF p_interest IS NULL OR p_interest NOT IN ('telecomunicacoes', 'energia', 'ambos') THEN
     RAISE EXCEPTION 'valid interest is required';
   END IF;
   IF p_consent_to_contact IS DISTINCT FROM true THEN
