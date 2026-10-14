@@ -305,13 +305,14 @@ function LuminCallPanel() {
   const [selectedCallerId, setSelectedCallerId] = useState('')
   const [defaultCallerId, setDefaultCallerId] = useState('')
   const [callerIdsLoading, setCallerIdsLoading] = useState(false)
-  const [callerIdMethod, setCallerIdMethod] = useState<'sms' | 'call'>('sms')
+  const [callerIdMethod, setCallerIdMethod] = useState<'sms' | 'call' | 'existing'>('sms')
   const [callerIdPhone, setCallerIdPhone] = useState('')
   const [callerIdName, setCallerIdName] = useState('')
   const [callerIdAction, setCallerIdAction] = useState(false)
   const [callerIdMessage, setCallerIdMessage] = useState('')
   const [callerIdError, setCallerIdError] = useState('')
   const [callerIdVerificationCode, setCallerIdVerificationCode] = useState('')
+  const [callerIdConsoleUrl, setCallerIdConsoleUrl] = useState('')
   const [error, setError] = useState('')
   const pollTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const previewAudioRef = useRef<HTMLAudioElement | null>(null)
@@ -497,17 +498,9 @@ function LuminCallPanel() {
     setCallerIdError('')
     setCallerIdMessage('')
     setCallerIdVerificationCode('')
-    if (callerIdMethod === 'sms') {
-      if (callerIdPhone.replace(/\D/g, '').length < 8) {
-        setCallerIdError('Introduz o número que vais verificar antes de abrir o Console Twilio.')
-        return
-      }
-      window.open(
-        'https://console.twilio.com/us1/develop/phone-numbers/manage/verified-caller-ids',
-        '_blank',
-        'noopener,noreferrer',
-      )
-      setCallerIdMessage('Conclui a verificação por SMS no Console Twilio e depois atualiza a lista.')
+    setCallerIdConsoleUrl('')
+    if (callerIdPhone.replace(/\D/g, '').length < 8) {
+      setCallerIdError('Introduz um número válido antes de continuar.')
       return
     }
 
@@ -521,17 +514,54 @@ function LuminCallPanel() {
           Authorization: 'Bearer ' + token,
         },
         body: JSON.stringify({
+          action: callerIdMethod === 'existing' ? 'associate_existing' : 'begin',
           phone_number: callerIdPhone,
           friendly_name: callerIdName,
-          method: 'call',
+          ...(callerIdMethod !== 'existing' ? { method: callerIdMethod } : {}),
         }),
       })
       const json = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(json.error || 'Não foi possível iniciar a verificação.')
-      setCallerIdVerificationCode(json.validationCode || '')
-      setCallerIdMessage('Atende à chamada da Twilio e introduz o código abaixo no teclado do telefone.')
+      if (callerIdMethod === 'existing') {
+        await loadCallerIds(false, true)
+        setCallerIdMessage('Número verificado associado a esta empresa.')
+      } else if (callerIdMethod === 'sms') {
+        setCallerIdConsoleUrl(json.consoleUrl || '')
+        setCallerIdMessage(json.alreadyLinked
+          ? 'Este número já está associado a esta empresa.'
+          : 'Abre o Console Twilio pelo botão abaixo e termina a verificação por SMS.')
+      } else {
+        setCallerIdVerificationCode(json.validationCode || '')
+        setCallerIdMessage('Atende à chamada da Twilio e introduz o código abaixo no teclado do telefone.')
+      }
     } catch (err: any) {
       setCallerIdError(err?.message || 'Erro ao verificar o número.')
+    } finally {
+      setCallerIdAction(false)
+    }
+  }
+
+  async function completeCallerIdVerification() {
+    setCallerIdAction(true)
+    setCallerIdError('')
+    setCallerIdMessage('')
+    try {
+      const token = await getSessionToken()
+      const response = await fetch('/api/reborn/caller-ids', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + token,
+        },
+        body: JSON.stringify({ action: 'complete', phone_number: callerIdPhone }),
+      })
+      const json = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(json.error || 'Ainda não foi possível confirmar o número.')
+      setCallerIdConsoleUrl('')
+      await loadCallerIds(false, true)
+      setCallerIdMessage('Número confirmado e associado a esta empresa.')
+    } catch (err: any) {
+      setCallerIdError(err?.message || 'Erro ao confirmar a verificação.')
     } finally {
       setCallerIdAction(false)
     }
@@ -860,11 +890,11 @@ function LuminCallPanel() {
           <details style={{ marginTop: 9 }}>
             <summary style={{ fontSize: 11.5, color: '#334155', fontWeight: 700, cursor: 'pointer' }}>Adicionar ou verificar um número</summary>
             <div style={{ marginTop: 9 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: 4, borderRadius: 9, background: '#E2E8F0' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4, padding: 4, borderRadius: 9, background: '#E2E8F0' }}>
                 <button
                   type="button"
                   aria-pressed={callerIdMethod === 'sms'}
-                  onClick={() => { setCallerIdMethod('sms'); setCallerIdMessage(''); setCallerIdError('') }}
+                  onClick={() => { setCallerIdMethod('sms'); setCallerIdMessage(''); setCallerIdError(''); setCallerIdConsoleUrl(''); setCallerIdVerificationCode('') }}
                   style={{ padding: '8px 6px', border: 0, borderRadius: 7, background: callerIdMethod === 'sms' ? '#0F172A' : 'transparent', color: callerIdMethod === 'sms' ? '#fff' : '#475569', fontSize: 11, fontWeight: 800 }}
                 >
                   SMS
@@ -872,10 +902,18 @@ function LuminCallPanel() {
                 <button
                   type="button"
                   aria-pressed={callerIdMethod === 'call'}
-                  onClick={() => { setCallerIdMethod('call'); setCallerIdMessage(''); setCallerIdError('') }}
+                  onClick={() => { setCallerIdMethod('call'); setCallerIdMessage(''); setCallerIdError(''); setCallerIdConsoleUrl(''); setCallerIdVerificationCode('') }}
                   style={{ padding: '8px 6px', border: 0, borderRadius: 7, background: callerIdMethod === 'call' ? '#0F172A' : 'transparent', color: callerIdMethod === 'call' ? '#fff' : '#475569', fontSize: 11, fontWeight: 800 }}
                 >
                   Chamada
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={callerIdMethod === 'existing'}
+                  onClick={() => { setCallerIdMethod('existing'); setCallerIdMessage(''); setCallerIdError(''); setCallerIdConsoleUrl(''); setCallerIdVerificationCode('') }}
+                  style={{ padding: '8px 6px', border: 0, borderRadius: 7, background: callerIdMethod === 'existing' ? '#0F172A' : 'transparent', color: callerIdMethod === 'existing' ? '#fff' : '#475569', fontSize: 10.5, fontWeight: 800 }}
+                >
+                  Já verificado
                 </button>
               </div>
 
@@ -885,7 +923,7 @@ function LuminCallPanel() {
                   type="tel"
                   autoComplete="tel"
                   value={callerIdPhone}
-                  onChange={e => { setCallerIdPhone(e.target.value); setCallerIdVerificationCode('') }}
+                  onChange={e => { setCallerIdPhone(e.target.value); setCallerIdVerificationCode(''); setCallerIdConsoleUrl('') }}
                   placeholder="+351 912 345 678"
                   style={{ width: '100%', boxSizing: 'border-box', marginTop: 5, padding: '9px 10px', border: '1px solid #CBD5E1', borderRadius: 8, fontSize: 12 }}
                 />
@@ -894,17 +932,36 @@ function LuminCallPanel() {
               {callerIdMethod === 'sms' ? (
                 <div style={{ marginTop: 9 }}>
                   <div style={{ fontSize: 11, lineHeight: 1.5, color: '#475569', marginBottom: 8 }}>
-                    A verificação por SMS é iniciada no Console Twilio. Depois de confirmares o código, volta aqui e atualiza a lista.
+                    Regista primeiro o número nesta empresa. A validação por SMS acontece no Console Twilio; depois regressa aqui para confirmar a associação.
                   </div>
                   <button
                     type="button"
                     onClick={startCallerIdVerification}
-                    style={{ width: '100%', padding: '9px 10px', border: '1px solid #CBD5E1', borderRadius: 8, background: '#fff', color: '#0F172A', fontSize: 11.5, fontWeight: 800, cursor: 'pointer' }}
+                    disabled={callerIdAction || callerIdPhone.replace(/\D/g, '').length < 8}
+                    style={{ width: '100%', padding: '9px 10px', border: '1px solid #CBD5E1', borderRadius: 8, background: '#fff', color: '#0F172A', fontSize: 11.5, fontWeight: 800, cursor: callerIdAction ? 'wait' : 'pointer', opacity: callerIdAction ? .65 : 1 }}
                   >
-                    Abrir validação SMS da Twilio
+                    {callerIdAction ? 'A iniciar…' : 'Iniciar validação SMS'}
+                  </button>
+                  {callerIdConsoleUrl && (
+                    <a
+                      href={callerIdConsoleUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ display: 'block', marginTop: 7, padding: '9px 10px', borderRadius: 8, background: '#0F172A', color: '#fff', textAlign: 'center', textDecoration: 'none', fontSize: 11.5, fontWeight: 800 }}
+                    >
+                      Abrir Console Twilio
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    onClick={completeCallerIdVerification}
+                    disabled={callerIdAction || callerIdPhone.replace(/\D/g, '').length < 8}
+                    style={{ width: '100%', marginTop: 7, padding: '9px 10px', border: 0, borderRadius: 8, background: '#E2E8F0', color: '#0F172A', fontSize: 11, fontWeight: 800, cursor: callerIdAction ? 'wait' : 'pointer', opacity: callerIdAction ? .65 : 1 }}
+                  >
+                    Já confirmei o SMS — validar número
                   </button>
                 </div>
-              ) : (
+              ) : callerIdMethod === 'call' ? (
                 <div style={{ marginTop: 9 }}>
                   <input
                     value={callerIdName}
@@ -920,6 +977,37 @@ function LuminCallPanel() {
                     style={{ width: '100%', marginTop: 7, padding: '9px 10px', border: 0, borderRadius: 8, background: '#0F172A', color: '#fff', fontSize: 11.5, fontWeight: 800, cursor: callerIdAction ? 'wait' : 'pointer', opacity: callerIdAction ? .65 : 1 }}
                   >
                     {callerIdAction ? 'A iniciar…' : 'Ligar para verificar'}
+                  </button>
+                  {callerIdVerificationCode && (
+                    <button
+                      type="button"
+                      onClick={completeCallerIdVerification}
+                      disabled={callerIdAction}
+                      style={{ width: '100%', marginTop: 7, padding: '9px 10px', border: '1px solid #CBD5E1', borderRadius: 8, background: '#fff', color: '#0F172A', fontSize: 11, fontWeight: 800, cursor: callerIdAction ? 'wait' : 'pointer', opacity: callerIdAction ? .65 : 1 }}
+                    >
+                      Já introduzi o código — validar número
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div style={{ marginTop: 9 }}>
+                  <div style={{ fontSize: 11, lineHeight: 1.5, color: '#475569', marginBottom: 8 }}>
+                    Associa à empresa um número que já aparece como verificado na conta Twilio. Esta opção requer perfil de administrador.
+                  </div>
+                  <input
+                    value={callerIdName}
+                    onChange={e => setCallerIdName(e.target.value)}
+                    placeholder="Nome para identificar o número (opcional)"
+                    maxLength={64}
+                    style={{ width: '100%', boxSizing: 'border-box', marginTop: 2, padding: '9px 10px', border: '1px solid #CBD5E1', borderRadius: 8, fontSize: 12 }}
+                  />
+                  <button
+                    type="button"
+                    onClick={startCallerIdVerification}
+                    disabled={callerIdAction || callerIdPhone.replace(/\D/g, '').length < 8}
+                    style={{ width: '100%', marginTop: 7, padding: '9px 10px', border: 0, borderRadius: 8, background: '#0F172A', color: '#fff', fontSize: 11.5, fontWeight: 800, cursor: callerIdAction ? 'wait' : 'pointer', opacity: callerIdAction ? .65 : 1 }}
+                  >
+                    {callerIdAction ? 'A associar…' : 'Associar número já verificado'}
                   </button>
                 </div>
               )}
