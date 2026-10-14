@@ -16,12 +16,33 @@ export class CallerIdError extends Error {
   }
 }
 
-type CallerIdProfile = { id: string; role: string; company_id: string }
+export type CallerIdProfile = { id: string; role: string; company_id: string }
 type TwilioItem = { phone_number?: string; friendly_name?: string }
 type CallerIdCache = { accountSid: string; expiresAt: number; callerIds: TwilioCallerId[] }
+export type CompanyCallerId = {
+  company_id: string
+  phone_number: string
+  friendly_name: string
+  status: 'pending' | 'verified'
+  verification_method: 'sms' | 'call' | 'existing'
+  requested_by: string | null
+  expires_at: string | null
+  verified_at: string | null
+}
 
 let callerIdCache: CallerIdCache | null = null
 const allowedRoles = new Set(['parceiro', 'admin', 'supervisor', 'super_admin'])
+
+function supabaseAdmin() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new CallerIdError(503, 'Integração de autenticação não configurada.')
+  }
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+}
 
 export function normalizeCallerId(value: unknown): string {
   const phoneNumber = String(value ?? '').trim().replace(/[^\d+]/g, '')
@@ -35,15 +56,7 @@ export async function requireSdCallerIdUser(request: NextRequest): Promise<Calle
   const jwt = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '').trim()
   if (!jwt) throw new CallerIdError(401, 'Sessão do SD Dialer em falta.')
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new CallerIdError(503, 'Integração de autenticação não configurada.')
-  }
-
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
+  const supabase = supabaseAdmin()
   const { data: authData, error: authError } = await supabase.auth.getUser(jwt)
   if (authError || !authData.user) throw new CallerIdError(401, 'Sessão do SD Dialer inválida.')
 
@@ -154,8 +167,142 @@ export function getDefaultTwilioCallerId(): string {
   return /^\+[1-9]\d{7,14}$/.test(phoneNumber) ? phoneNumber : ''
 }
 
-export async function isTwilioCallerIdVerified(phoneNumber: string): Promise<boolean> {
-  const callerIds = await listTwilioCallerIds()
+export async function listCompanyCallerIds(companyId: string): Promise<CompanyCallerId[]> {
+  const { data, error } = await supabaseAdmin()
+    .from('company_caller_ids')
+    .select('company_id,phone_number,friendly_name,status,verification_method,requested_by,expires_at,verified_at')
+    .eq('company_id', companyId)
+    .eq('status', 'verified')
+    .order('created_at', { ascending: false })
+  if (error) throw new CallerIdError(502, 'Não foi possível carregar os números desta empresa.')
+  return (data ?? []) as CompanyCallerId[]
+}
+
+export async function findCallerIdAssociation(phoneNumber: string): Promise<CompanyCallerId | null> {
+  const { data, error } = await supabaseAdmin()
+    .from('company_caller_ids')
+    .select('company_id,phone_number,friendly_name,status,verification_method,requested_by,expires_at,verified_at')
+    .eq('phone_number', phoneNumber)
+    .maybeSingle()
+  if (error) throw new CallerIdError(502, 'Não foi possível consultar a associação do número.')
+  return (data ?? null) as CompanyCallerId | null
+}
+
+export async function beginCompanyCallerIdVerification(
+  profile: CallerIdProfile,
+  phoneNumber: string,
+  friendlyName: string,
+  method: 'sms' | 'call',
+): Promise<{ alreadyLinked: boolean }> {
+  const supabase = supabaseAdmin()
+  const current = await findCallerIdAssociation(phoneNumber)
+  if (current && current.company_id !== profile.company_id) {
+    throw new CallerIdError(409, 'Este número já está associado a outra empresa.')
+  }
+  if (current?.status === 'verified') return { alreadyLinked: true }
+
+  const expiresAt = new Date(Date.now() + 20 * 60 * 1000).toISOString()
+  const values = {
+    company_id: profile.company_id,
+    phone_number: phoneNumber,
+    friendly_name: friendlyName.slice(0, 64),
+    status: 'pending',
+    verification_method: method,
+    requested_by: profile.id,
+    expires_at: expiresAt,
+  }
+
+  const result = current
+    ? await supabase.from('company_caller_ids').update(values).eq('phone_number', phoneNumber)
+    : await supabase.from('company_caller_ids').insert(values)
+  if (result.error) {
+    if (result.error.code === '23505') {
+      throw new CallerIdError(409, 'Este número já está associado a outra empresa.')
+    }
+    throw new CallerIdError(502, 'Não foi possível iniciar a associação do número.')
+  }
+  return { alreadyLinked: false }
+}
+
+export async function completeCompanyCallerIdVerification(
+  profile: CallerIdProfile,
+  phoneNumber: string,
+): Promise<{ alreadyLinked: boolean }> {
+  const supabase = supabaseAdmin()
+  const current = await findCallerIdAssociation(phoneNumber)
+  if (!current || current.company_id !== profile.company_id) {
+    throw new CallerIdError(404, 'Não existe uma verificação pendente deste número para a empresa.')
+  }
+  if (current.status === 'verified') return { alreadyLinked: true }
+  if (!current.expires_at || Date.parse(current.expires_at) <= Date.now()) {
+    await supabase
+      .from('company_caller_ids')
+      .delete()
+      .eq('company_id', profile.company_id)
+      .eq('phone_number', phoneNumber)
+      .eq('status', 'pending')
+    throw new CallerIdError(410, 'A verificação expirou. Inicia novamente o processo.')
+  }
+  if (!(await isTwilioCallerIdVerified(phoneNumber, true))) {
+    throw new CallerIdError(409, 'A Twilio ainda não confirmou este número. Termina a verificação e tenta novamente.')
+  }
+
+  const { error } = await supabase
+    .from('company_caller_ids')
+    .update({ status: 'verified', verified_at: new Date().toISOString(), expires_at: null })
+    .eq('company_id', profile.company_id)
+    .eq('phone_number', phoneNumber)
+    .eq('status', 'pending')
+  if (error) throw new CallerIdError(502, 'Não foi possível concluir a associação do número.')
+  return { alreadyLinked: false }
+}
+
+export async function associateExistingCallerId(
+  profile: CallerIdProfile,
+  phoneNumber: string,
+  friendlyName: string,
+): Promise<void> {
+  if (!['admin', 'super_admin'].includes(profile.role)) {
+    throw new CallerIdError(403, 'Só um administrador pode associar um número que já estava verificado.')
+  }
+  if (!(await isTwilioCallerIdVerified(phoneNumber, true))) {
+    throw new CallerIdError(404, 'Este número ainda não está verificado na conta Twilio.')
+  }
+
+  const current = await findCallerIdAssociation(phoneNumber)
+  if (current?.company_id === profile.company_id && current.status === 'verified') return
+  if (current) throw new CallerIdError(409, 'Este número já está associado a outra empresa.')
+
+  const { error } = await supabaseAdmin().from('company_caller_ids').insert({
+    company_id: profile.company_id,
+    phone_number: phoneNumber,
+    friendly_name: friendlyName.slice(0, 64),
+    status: 'verified',
+    verification_method: 'existing',
+    requested_by: profile.id,
+    verified_at: new Date().toISOString(),
+    expires_at: null,
+  })
+  if (error) {
+    if (error.code === '23505') throw new CallerIdError(409, 'Este número já está associado a outra empresa.')
+    throw new CallerIdError(502, 'Não foi possível associar o número existente.')
+  }
+}
+
+export async function isCompanyCallerIdAuthorized(companyId: string, phoneNumber: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin()
+    .from('company_caller_ids')
+    .select('phone_number')
+    .eq('company_id', companyId)
+    .eq('phone_number', phoneNumber)
+    .eq('status', 'verified')
+    .maybeSingle()
+  if (error) throw new CallerIdError(502, 'Não foi possível validar a empresa deste Caller ID.')
+  return Boolean(data)
+}
+
+export async function isTwilioCallerIdVerified(phoneNumber: string, forceRefresh = false): Promise<boolean> {
+  const callerIds = await listTwilioCallerIds(forceRefresh)
   return callerIds.some((callerId) => callerId.phoneNumber === phoneNumber)
 }
 
