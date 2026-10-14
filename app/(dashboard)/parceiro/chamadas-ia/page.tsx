@@ -299,11 +299,17 @@ const RICARDO_VOICE_PROFILE_LABEL = 'Ricardo - Qualificação telecom'
 const RICARDO_VOICE_CUSTOMIZATION: VoiceCustomization = {
   name: 'Ricardo Salgado',
   company: 'Compara+',
+  objective: 'Confirmar operadora e fidelização; agendar contacto comercial só se a fidelização terminou ou estiver perto do fim.',
+  product: 'Só 3 passos, uma pergunta de cada vez: 1) Qual é a sua operadora? 2) Ainda está fidelizado? Se sim, até quando? 3) Se terminou ou termina em breve, oferece marcação comercial e combina dia/hora só se aceitar. Caso contrário, agradece e termina. Não repitas nem acrescentes perguntas; aproveita as respostas já dadas.',
+  opening: 'Boa tarde, [nome]. Falo da Compara+. Vou ser breve.',
+  voice: 'natural',
+  voiceEngine: 'xai',
+}
+
+const RICARDO_VOICE_PREVIOUS_CUSTOMIZATION = {
   objective: 'Confirmar a operadora atual e o estado/data da fidelização. Se não houver fidelização ou estiver perto do fim, propor uma marcação com a equipa comercial.',
   product: 'Qualifica serviços residenciais de internet/TV, com uma pergunta de cada vez: (1) operadora atual; (2) fidelização ativa? Se sim, mês/ano de fim; se não souber, regista desconhecido sem insistir. (3) Se não tem fidelização ou termina em breve, oferece contacto comercial e só agenda se aceitar, combinando dia/período horário. Se falta bastante, regista a data, agradece e termina. Não perguntes titularidade, satisfação, preços ou email. Não vendas, não prometas poupanças e respeita recusas.',
   opening: 'Boa tarde, [nome]. Falo da Compara+. Vou ser breve: quero confirmar a operadora e a fidelização para ver se faz sentido deixar contacto da equipa comercial.',
-  voice: 'natural',
-  voiceEngine: 'xai',
 }
 
 const VOICE_STYLES: Array<{ id: VoiceStyle; label: string; detail: string; tone: string }> = [
@@ -471,8 +477,15 @@ function LuminCallPanel() {
   function selectRicardoVoiceProfile() {
     const existing = voiceProfiles.find(profile => profile.label === RICARDO_VOICE_PROFILE_LABEL && profile.agentId === 'lumin-telecom')
     if (existing) {
+      const settings = { ...existing.settings }
+      if (settings.objective === RICARDO_VOICE_PREVIOUS_CUSTOMIZATION.objective) settings.objective = RICARDO_VOICE_CUSTOMIZATION.objective
+      if (settings.product === RICARDO_VOICE_PREVIOUS_CUSTOMIZATION.product) settings.product = RICARDO_VOICE_CUSTOMIZATION.product
+      if (settings.opening === RICARDO_VOICE_PREVIOUS_CUSTOMIZATION.opening) settings.opening = RICARDO_VOICE_CUSTOMIZATION.opening
+      if (settings.objective !== existing.settings.objective || settings.product !== existing.settings.product || settings.opening !== existing.settings.opening) {
+        setVoiceProfiles(current => current.map(profile => profile.id === existing.id ? { ...profile, settings } : profile))
+      }
       setActiveProfileId(existing.id)
-      setProfileNotice('Guião do Ricardo selecionado.')
+      setProfileNotice('Guião curto do Ricardo selecionado e atualizado.')
       stopVoiceSample()
       return
     }
