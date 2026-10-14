@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
   CallerIdError,
+  isCompanyCallerIdAuthorized,
   isTwilioCallerIdVerified,
   normalizeCallerId,
   requireSdCallerIdUser,
@@ -10,12 +11,16 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
-    await requireSdCallerIdUser(request)
+    const profile = await requireSdCallerIdUser(request)
     const body = await request.json().catch(() => ({})) as { phone_number?: unknown }
     const phoneNumber = normalizeCallerId(body.phone_number)
-    const verified = await isTwilioCallerIdVerified(phoneNumber)
+    const [verifiedInTwilio, assignedToCompany] = await Promise.all([
+      isTwilioCallerIdVerified(phoneNumber),
+      isCompanyCallerIdAuthorized(profile.company_id, phoneNumber),
+    ])
+    const verified = verifiedInTwilio && assignedToCompany
     if (!verified) {
-      return NextResponse.json({ verified: false, error: 'Caller ID não está verificado na conta Twilio.' }, { status: 403 })
+      return NextResponse.json({ verified: false, error: 'Caller ID não está verificado e associado à empresa na conta Twilio.' }, { status: 403 })
     }
     return NextResponse.json({ verified: true })
   } catch (error) {
