@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
+  associateExistingCallerId,
+  beginCompanyCallerIdVerification,
   CallerIdError,
+  completeCompanyCallerIdVerification,
+  findCallerIdAssociation,
   getDefaultTwilioCallerId,
+  isTwilioCallerIdVerified,
+  listCompanyCallerIds,
   listTwilioCallerIds,
   normalizeCallerId,
   requireSdCallerIdUser,
@@ -20,8 +26,18 @@ function errorResponse(error: unknown) {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireSdCallerIdUser(request)
-    const callerIds = await listTwilioCallerIds(request.nextUrl.searchParams.get('refresh') === '1')
+    const profile = await requireSdCallerIdUser(request)
+    const [twilioCallerIds, companyCallerIds] = await Promise.all([
+      listTwilioCallerIds(request.nextUrl.searchParams.get('refresh') === '1'),
+      listCompanyCallerIds(profile.company_id),
+    ])
+    const available = new Map(twilioCallerIds.map((callerId) => [callerId.phoneNumber, callerId]))
+    const callerIds = companyCallerIds.flatMap((companyCallerId) => {
+      const callerId = available.get(companyCallerId.phone_number)
+      return callerId
+        ? [{ ...callerId, friendlyName: companyCallerId.friendly_name || callerId.friendlyName }]
+        : []
+    })
     return NextResponse.json({
       callerIds,
       defaultCallerId: getDefaultTwilioCallerId(),
@@ -33,21 +49,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireSdCallerIdUser(request)
+    const profile = await requireSdCallerIdUser(request)
     const body = await request.json().catch(() => ({})) as {
+      action?: unknown
       phone_number?: unknown
       friendly_name?: unknown
       method?: unknown
-    }
-
-    if (body.method === 'sms') {
-      return NextResponse.json({
-        error: 'A Twilio disponibiliza a verificação de Caller ID por SMS no Console. Depois de confirmar o número, atualiza a lista nesta página.',
-        consoleUrl: 'https://console.twilio.com/us1/develop/phone-numbers/manage/verified-caller-ids',
-      }, { status: 409 })
-    }
-    if (body.method !== 'call') {
-      return NextResponse.json({ error: 'Escolhe SMS ou chamada para verificar o número.' }, { status: 400 })
     }
 
     const phoneNumber = normalizeCallerId(body.phone_number)
@@ -58,6 +65,57 @@ export async function POST(request: NextRequest) {
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 64) || phoneNumber.replace(/\D/g, '')
+
+    if (body.action === 'complete') {
+      await completeCompanyCallerIdVerification(profile, phoneNumber)
+      return NextResponse.json({ ok: true, phoneNumber })
+    }
+
+    if (body.action === 'associate_existing') {
+      await associateExistingCallerId(profile, phoneNumber, friendlyName)
+      return NextResponse.json({ ok: true, phoneNumber, alreadyVerified: true })
+    }
+
+    if (body.action !== 'begin') {
+      return NextResponse.json({ error: 'Ação de Caller ID inválida.' }, { status: 400 })
+    }
+    if (body.method !== 'sms' && body.method !== 'call') {
+      return NextResponse.json({ error: 'Escolhe SMS ou chamada para verificar o número.' }, { status: 400 })
+    }
+
+    const current = await findCallerIdAssociation(phoneNumber)
+    if (current && current.company_id !== profile.company_id) {
+      return NextResponse.json({ error: 'Este número já está associado a outra empresa.' }, { status: 409 })
+    }
+    if (current?.status === 'verified') {
+      return NextResponse.json({ ok: true, phoneNumber, alreadyLinked: true })
+    }
+    if (await isTwilioCallerIdVerified(phoneNumber, true)) {
+      if (current?.status === 'pending') {
+        await completeCompanyCallerIdVerification(profile, phoneNumber)
+        return NextResponse.json({ ok: true, phoneNumber, alreadyLinked: true })
+      }
+      return NextResponse.json({
+        error: 'Este número já está verificado na Twilio. Um administrador da empresa deve associá-lo em “Já verificado”.',
+      }, { status: 409 })
+    }
+
+    await beginCompanyCallerIdVerification(
+      profile,
+      phoneNumber,
+      friendlyName,
+      body.method,
+    )
+
+    if (body.method === 'sms') {
+      return NextResponse.json({
+        ok: true,
+        phoneNumber,
+        consoleUrl: 'https://console.twilio.com/us1/develop/phone-numbers/manage/verified-caller-ids',
+        message: 'Conclui a verificação por SMS no Console Twilio e depois atualiza a lista.',
+      }, { status: 202 })
+    }
+
     const verification = await startTwilioCallerIdVerification(phoneNumber, friendlyName)
 
     return NextResponse.json({
