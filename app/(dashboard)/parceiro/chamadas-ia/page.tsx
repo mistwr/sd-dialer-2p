@@ -12,10 +12,12 @@ import useSWR from 'swr'
 import {
   AudioLines, Play, Download, Brain, ChevronDown, ChevronUp,
   Clock, Megaphone, Calendar, RefreshCw, Loader2, Mic,
-  Sparkles, Send, Wifi, Zap, PhoneCall, Search, CheckCircle2, AlertCircle,
+  Sparkles, Send, Wifi, Zap, PhoneCall, AlertCircle,
   Plus, Copy, Trash2,
 } from 'lucide-react'
 import AIAnalysisPanel from '@/components/ai/AIAnalysisPanel'
+import VoiceLeadPicker from '@/components/ai/VoiceLeadPicker'
+import type { VoiceLead } from '@/lib/utils/voice-leads'
 import { createClient } from '@/lib/supabase/client'
 
 type Recording = {
@@ -226,13 +228,6 @@ function RecordingRow({ recording, onAnalyse }: { recording: Recording; onAnalys
 
 const LUMIN_GATEWAY = 'https://lumin-voice-gateway-production.up.railway.app'
 
-type VoiceLead = {
-  id: string
-  nome: string
-  telefone: string
-  status: string
-  assigned_to?: string | null
-}
 
 const VOICE_AGENTS = [
   { id: 'lumin-telecom', label: 'Lumin Telecom', detail: 'Qualifica telecomunicações e fecha interesse para comparação.' },
@@ -319,14 +314,11 @@ const VOICE_STYLES: Array<{ id: VoiceStyle; label: string; detail: string; tone:
 ]
 
 function LuminCallPanel() {
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState<VoiceLead[]>([])
   const [selected, setSelected] = useState<VoiceLead | null>(null)
   const [callMode, setCallMode] = useState<'lead' | 'manual'>('lead')
   const [manualPhone, setManualPhone] = useState('')
   const [manualName, setManualName] = useState('')
   const [manualConsent, setManualConsent] = useState(false)
-  const [searching, setSearching] = useState(false)
   const [previewing, setPreviewing] = useState(false)
   const [voiceProfiles, setVoiceProfiles] = useState<SavedVoiceProfile[]>([])
   const [activeProfileId, setActiveProfileId] = useState('')
@@ -335,7 +327,7 @@ function LuminCallPanel() {
   const [settingsReady, setSettingsReady] = useState(false)
   const [profileNotice, setProfileNotice] = useState('')
   const [accountCompany, setAccountCompany] = useState('')
-  const [callStatus, setCallStatus] = useState<'idle' | 'queued' | 'preparing' | 'ringing' | 'answered' | 'connected' | 'failed'>('idle')
+  const [callStatus, setCallStatus] = useState<'idle' | 'queued' | 'preparing' | 'ringing' | 'answered' | 'connected' | 'ended' | 'failed'>('idle')
   const [callMessage, setCallMessage] = useState('Escolhe uma lead ou introduz um número autorizado para contacto.')
   const [error, setError] = useState('')
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -601,37 +593,6 @@ function LuminCallPanel() {
     return session.access_token
   }
 
-  async function searchLeads() {
-    const term = query.trim().replace(/[%,_\\]/g, '').slice(0, 80)
-    if (term.length < 2) {
-      setError('Escreve pelo menos 2 caracteres.')
-      return
-    }
-
-    setSearching(true)
-    setError('')
-    setSelected(null)
-    try {
-      const sb = createClient()
-      const { data: { user } } = await sb.auth.getUser()
-      if (!user) throw new Error('Sessão expirada.')
-
-      const { data, error: searchError } = await sb.rpc('search_voice_leads', { p_query: term })
-      if (searchError) {
-        if (searchError.code === '57014') throw new Error('A pesquisa demorou demasiado. Acrescenta mais letras.')
-        throw searchError
-      }
-
-      const matches = (data ?? []).filter((lead: any) => lead?.id && lead?.telefone).slice(0, 15) as VoiceLead[]
-      setResults(matches)
-      if (matches.length === 0) setError('Nenhuma lead encontrada na tua empresa.')
-    } catch (err: any) {
-      setError(err?.message || 'Erro ao pesquisar leads.')
-    } finally {
-      setSearching(false)
-    }
-  }
-
   async function pollCall(callId: string, token: string) {
     try {
       const res = await fetch(`${LUMIN_GATEWAY}/api/sd-dialer/call/${callId}`, {
@@ -650,11 +611,12 @@ function LuminCallPanel() {
         ringing: 'Telefone a tocar...',
         answered: 'Cliente atendeu. A ligar o Lumin...',
         connected: 'Lumin ligado à chamada.',
+        ended: 'Chamada terminada. Podes selecionar a próxima lead.',
         failed: json.error || 'A chamada falhou.',
       }
       setCallMessage(labels[status] || status)
 
-      if (!['connected', 'failed'].includes(status)) {
+      if (!['ended', 'failed'].includes(status)) {
         pollTimer.current = setTimeout(() => pollCall(callId, token), 1200)
       }
     } catch (err: any) {
@@ -663,7 +625,7 @@ function LuminCallPanel() {
     }
   }
 
-  const callIsBusy = ['queued', 'preparing', 'ringing', 'answered'].includes(callStatus)
+  const callIsBusy = ['queued', 'preparing', 'ringing', 'answered', 'connected'].includes(callStatus)
   const canStartCall = callMode === 'lead'
     ? Boolean(selected)
     : Boolean(manualPhone.trim() && manualConsent && manualPhone.replace(/\D/g, '').length >= 9)
@@ -804,6 +766,7 @@ function LuminCallPanel() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: 4, borderRadius: 10, background: '#F1F5F9', marginBottom: 14 }}>
             <button
               type="button"
+              disabled={callIsBusy}
               onClick={() => { setCallMode('lead'); setError(''); setCallStatus('idle') }}
               style={{ padding: '9px 8px', border: 0, borderRadius: 8, background: callMode === 'lead' ? '#0F172A' : 'transparent', color: callMode === 'lead' ? '#fff' : '#475569', fontSize: 12, fontWeight: 800 }}
             >
@@ -811,7 +774,8 @@ function LuminCallPanel() {
             </button>
             <button
               type="button"
-              onClick={() => { setCallMode('manual'); setSelected(null); setResults([]); setError(''); setCallStatus('idle') }}
+              disabled={callIsBusy}
+              onClick={() => { setCallMode('manual'); setSelected(null); setError(''); setCallStatus('idle') }}
               style={{ padding: '9px 8px', border: 0, borderRadius: 8, background: callMode === 'manual' ? '#0F172A' : 'transparent', color: callMode === 'manual' ? '#fff' : '#475569', fontSize: 12, fontWeight: 800 }}
             >
               Número manual
@@ -819,25 +783,16 @@ function LuminCallPanel() {
           </div>
 
           {callMode === 'lead' ? (
-            <>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 6, textTransform: 'uppercase' }}>1. Procurar lead da empresa</label>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <div style={{ flex: 1, position: 'relative' }}>
-                  <Search size={14} color="#94A3B8" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)' }} />
-                  <input
-                    value={query}
-                    onChange={e => { setQuery(e.target.value); setSelected(null); setResults([]) }}
-                    onKeyDown={e => { if (e.key === 'Enter') searchLeads() }}
-                    placeholder="Nome ou telefone..."
-                    style={{ width: '100%', padding: '10px 12px 10px 34px', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-                  />
-                </div>
-                <button onClick={searchLeads} disabled={searching} style={{ padding: '0 14px', borderRadius: 9, border: 'none', background: '#0F172A', color: '#fff', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', opacity: searching ? .65 : 1 }}>
-                  {searching ? 'A procurar...' : 'Procurar'}
-                </button>
-              </div>
-              <div style={{ fontSize: 10.5, color: '#64748B', marginTop: 5 }}>2 letras procuram pelo início do nome; 3 ou mais pesquisam também dentro do nome e telefone.</div>
-            </>
+            <VoiceLeadPicker
+              selectedId={selected?.id}
+              disabled={callIsBusy}
+              onSelect={lead => {
+                setSelected(lead)
+                setError('')
+                setCallStatus('idle')
+                setCallMessage(lead ? 'Pronto para ligar.' : 'Escolhe uma lead para preparar a chamada.')
+              }}
+            />
           ) : (
             <>
               <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 6, textTransform: 'uppercase' }}>1. Marcar número</label>
@@ -866,32 +821,6 @@ function LuminCallPanel() {
         {error && (
           <div style={{ display: 'flex', gap: 7, alignItems: 'center', marginTop: 10, fontSize: 12, color: '#B91C1C', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '8px 10px' }}>
             <AlertCircle size={13} /> {error}
-          </div>
-        )}
-
-        {results.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10, maxHeight: 260, overflowY: 'auto' }}>
-            {results.map(lead => {
-              const active = selected?.id === lead.id
-              return (
-                <button
-                  key={lead.id}
-                  aria-pressed={active}
-                  onClick={() => { setSelected(lead); setCallStatus('idle'); setCallMessage('Pronto para ligar.') }}
-                  style={{
-                    textAlign: 'left', padding: '10px 12px', borderRadius: 9, cursor: 'pointer',
-                    background: active ? '#EFF6FF' : '#F8FAFC',
-                    border: `1px solid ${active ? '#93C5FD' : '#E2E8F0'}`,
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                    <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0F172A' }}>{lead.nome}</span>
-                    {active && <CheckCircle2 size={15} color="#2563EB" />}
-                  </div>
-                  <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{lead.telefone} · {lead.status}</div>
-                </button>
-              )
-            })}
           </div>
         )}
 
@@ -1070,7 +999,7 @@ function LuminCallPanel() {
             cursor: canStartCall ? 'pointer' : 'not-allowed',
           }}
         >
-          {['queued','preparing','ringing','answered'].includes(callStatus) ? 'A LIGAR...' : '📞 LIGAR COM LUMIN'}
+          {callStatus === 'connected' ? 'CHAMADA EM CURSO' : callIsBusy ? 'A LIGAR...' : '📞 LIGAR COM LUMIN'}
         </button>
 
         <div style={{ fontSize: 10.5, lineHeight: 1.5, color: '#94A3B8', marginTop: 12 }}>
