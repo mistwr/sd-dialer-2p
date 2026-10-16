@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import AIAnalysisPanel from '@/components/ai/AIAnalysisPanel'
 import VoiceLeadPicker from '@/components/ai/VoiceLeadPicker'
+import VoiceCallHistory from '@/components/ai/VoiceCallHistory'
 import type { VoiceLead } from '@/lib/utils/voice-leads'
 import { createClient } from '@/lib/supabase/client'
 
@@ -1219,6 +1220,7 @@ export default function ChamadasIAPage() {
 
       {tab === 'ligar' ? <LuminCallPanel /> : tab === 'assistente' ? <AssistenteComercial /> : (
         <>
+      <VoiceCallHistory />
       {/* Stats bar */}
       {recordings.length > 0 && (
         <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
