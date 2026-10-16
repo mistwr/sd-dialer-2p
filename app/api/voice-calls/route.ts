@@ -134,22 +134,6 @@ export async function GET(req: NextRequest) {
       transcriptOffset += rows.length
     }
 
-    return NextResponse.json({ error: 'Nao foi possivel carregar as transcricoes' }, { status: 500 })
-      }
-
-      for (const row of transcripts ?? []) {
-        const existing = transcriptsByCall.get(row.call_id) ?? []
-        existing.push({
-          id: row.id,
-          speaker: row.speaker,
-          text: row.text,
-          is_interruption: row.is_interruption,
-          spoken_at: row.spoken_at,
-        })
-        transcriptsByCall.set(row.call_id, existing)
-      }
-    }
-
     return NextResponse.json({
       calls: (calls ?? []).map((call) => ({
         ...call,
