@@ -236,379 +236,70 @@ const VOICE_AGENTS = [
   { id: 'lumin-ai', label: 'Lumin AI Comercial', detail: 'Vende a plataforma LUMIN AI de forma consultiva.' },
 ] as const
 
-type VoiceStyle = 'natural' | 'clear' | 'commercial'
-type VoiceEngine = 'piper' | 'xai'
-type VoiceCustomization = {
-  name: string
-  company: string
-  objective: string
-  product: string
-  opening: string
-  voice: VoiceStyle
-  voiceEngine: VoiceEngine
-}
-
 type VoiceAgentId = (typeof VOICE_AGENTS)[number]['id']
-type SavedVoiceProfile = {
-  id: string
-  label: string
-  agentId: VoiceAgentId
-  settings: VoiceCustomization
-}
-
-const MAX_VOICE_PROFILES = 12
-
-function normalizeVoiceSettings(value: unknown, accountCompany: string): VoiceCustomization {
-  const saved = value && typeof value === 'object' ? value as Partial<VoiceCustomization> : {}
-  const text = (value: unknown, fallback: string, max: number) =>
-    typeof value === 'string' ? value.slice(0, max) : fallback
-  const hasCompany = Object.prototype.hasOwnProperty.call(saved, 'company')
-
-  return {
-    name: text(saved.name, DEFAULT_VOICE_CUSTOMIZATION.name, 48),
-    company: hasCompany ? text(saved.company, '', 64) : accountCompany,
-    objective: text(saved.objective, DEFAULT_VOICE_CUSTOMIZATION.objective, 180),
-    product: text(saved.product, DEFAULT_VOICE_CUSTOMIZATION.product, 500),
-    opening: text(saved.opening, DEFAULT_VOICE_CUSTOMIZATION.opening, 180),
-    voice: saved.voice && ['natural', 'clear', 'commercial'].includes(saved.voice) ? saved.voice : 'natural',
-    voiceEngine: saved.voiceEngine === 'piper' ? 'piper' : 'xai',
-  }
-}
-
-function newVoiceProfileId() {
-  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `profile-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-}
-
-const DEFAULT_VOICE_CUSTOMIZATION: VoiceCustomization = {
-  name: 'João',
-  company: 'Soluções Diferentes',
-  objective: 'Quero que faças um questionário para vender energias no primeiro dia.',
-  product: '',
-  opening: 'Olá! Sou o João, assistente de voz da Soluções Diferentes.',
-  voice: 'natural',
-  voiceEngine: 'xai',
-}
-
-const COMPARA_VOICE_PROFILE_LABEL = 'Lumin - Compara+'
-const COMPARA_VOICE_CUSTOMIZATION: VoiceCustomization = {
-  name: 'Lumin',
-  company: 'Compara+',
-  objective: 'Perceber o que a pessoa gostaria de melhorar e agendar um contacto com um consultor se houver interesse.',
-  product: 'Compara opções residenciais de internet e televisão. Ouve a necessidade, responde de forma natural e oferece uma comparação sem compromisso. Não perguntes titularidade, operadora, fidelização, preços, morada, tecnologia ou email.',
-  opening: 'Boa tarde, [nome]. Sou o Lumin, assistente virtual da Compara+. O que gostava de melhorar na sua internet?',
-  voice: 'natural',
-  voiceEngine: 'xai',
-}
-const VOICE_STYLES: Array<{ id: VoiceStyle; label: string; detail: string; tone: string }> = [
-  { id: 'natural', label: 'Natural', detail: 'Próxima e equilibrada', tone: 'Natural, profissional e direto.' },
-  { id: 'clear', label: 'Clara', detail: 'Calma e objetiva', tone: 'Clara, calma e objetiva.' },
-  { id: 'commercial', label: 'Comercial', detail: 'Enérgica e cordial', tone: 'Comercial, enérgica e cordial.' },
-]
 
 function LuminCallPanel() {
   const [selected, setSelected] = useState<VoiceLead | null>(null)
   const [callMode, setCallMode] = useState<'lead' | 'manual'>('lead')
   const [manualPhone, setManualPhone] = useState('')
   const [manualName, setManualName] = useState('')
-  const [previewing, setPreviewing] = useState(false)
-  const [voiceProfiles, setVoiceProfiles] = useState<SavedVoiceProfile[]>([])
-  const [activeProfileId, setActiveProfileId] = useState('')
-  const [settingsKey, setSettingsKey] = useState('')
-  const [legacySettingsKey, setLegacySettingsKey] = useState('')
-  const [settingsReady, setSettingsReady] = useState(false)
-  const [profileNotice, setProfileNotice] = useState('')
-  const [accountCompany, setAccountCompany] = useState('')
+  const [agentId, setAgentId] = useState<VoiceAgentId>('lumin-telecom')
+  const [agentStorageKey, setAgentStorageKey] = useState('')
+  const [agentReady, setAgentReady] = useState(false)
   const [callStatus, setCallStatus] = useState<'idle' | 'queued' | 'preparing' | 'ringing' | 'answered' | 'connected' | 'ended' | 'failed'>('idle')
   const [callMessage, setCallMessage] = useState('Escolhe uma lead ou introduz um número autorizado para contacto.')
   const [error, setError] = useState('')
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const previewAudioRef = useRef<HTMLAudioElement | null>(null)
-  const previewUrlRef = useRef<string | null>(null)
-
-  const activeProfile = voiceProfiles.find(profile => profile.id === activeProfileId) ?? voiceProfiles[0]
-  const voiceSettings = activeProfile?.settings ?? DEFAULT_VOICE_CUSTOMIZATION
-  const agentId = activeProfile?.agentId ?? 'lumin-energia'
 
   useEffect(() => () => {
     if (pollTimer.current) clearTimeout(pollTimer.current)
-    previewAudioRef.current?.pause()
-    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current)
   }, [])
 
   useEffect(() => {
     let active = true
-    async function loadCustomization() {
-      const sb = createClient()
-      const { data: { user } } = await sb.auth.getUser()
-      if (!user) {
-        if (active) setSettingsReady(true)
-        return
-      }
 
-      const key = 'sd-dialer-voice-profiles-v2:' + user.id
-      const oldKey = 'sd-dialer-voice-profile-v1:' + user.id
-      const { data: account } = await sb
-        .from('usuarios')
-        .select('company_id')
-        .eq('id', user.id)
-        .single()
-
-      let company = ''
-      if (account?.company_id) {
-        const { data: companyRow } = await sb
-          .from('companies')
-          .select('name')
-          .eq('id', account.company_id)
-          .single()
-        company = companyRow?.name || ''
-      }
-
-      let profiles: SavedVoiceProfile[] = []
-      let activeId = ''
+    async function loadAgentChoice() {
+      let key = ''
+      let selectedAgent: unknown = null
       try {
-        const raw = window.localStorage.getItem(key)
-        const parsed = raw ? JSON.parse(raw) : null
-        if (Array.isArray(parsed?.profiles)) {
-          profiles = parsed.profiles
-            .filter((profile: any) => profile && typeof profile.id === 'string' && typeof profile.label === 'string')
-            .slice(0, MAX_VOICE_PROFILES)
-            .map((profile: any): SavedVoiceProfile => {
-              const profileAgentId = VOICE_AGENTS.some(agent => agent.id === profile.agentId)
-                ? profile.agentId as VoiceAgentId
-                : 'lumin-energia'
-              const settings = normalizeVoiceSettings(profile.settings, company)
-              const isComparaTelecom = profileAgentId === 'lumin-telecom' && (
-                /compara/i.test(settings.company) ||
-                /ricardo|compara/i.test(profile.label) ||
-                /^ricardo/i.test(settings.name)
-              )
-              return {
-                id: profile.id.slice(0, 100),
-                label: isComparaTelecom ? COMPARA_VOICE_PROFILE_LABEL : profile.label.trim().slice(0, 56) || 'Perfil sem nome',
-                agentId: profileAgentId,
-                settings: isComparaTelecom
-                  ? { ...settings, ...COMPARA_VOICE_CUSTOMIZATION, voice: settings.voice, voiceEngine: settings.voiceEngine }
-                  : settings,
-              }
-            })
-          activeId = profiles.some(profile => profile.id === parsed.activeProfileId)
-            ? parsed.activeProfileId
-            : profiles[0]?.id || ''
-        }
-      } catch {}
+        const sb = createClient()
+        const { data: { user } } = await sb.auth.getUser()
+        if (user) {
+          key = 'sd-dialer-agent-v1:' + user.id
+          selectedAgent = window.localStorage.getItem(key)
 
-      if (profiles.length === 0) {
-        let legacy: Partial<VoiceCustomization> | null = null
-        try {
-          const raw = window.localStorage.getItem(oldKey)
-          const parsed = raw ? JSON.parse(raw) : null
-          if (parsed && typeof parsed === 'object') legacy = parsed
-        } catch {}
-        const baseSettings = normalizeVoiceSettings(legacy, company)
-        const isComparaCompany = /compara/i.test(company)
-        const settings = isComparaCompany
-          ? { ...baseSettings, ...COMPARA_VOICE_CUSTOMIZATION, voice: baseSettings.voice, voiceEngine: baseSettings.voiceEngine }
-          : baseSettings
-        const agentId: VoiceAgentId = isComparaCompany ? 'lumin-telecom' : 'lumin-energia'
-        activeId = 'default'
-        profiles = [{
-          id: activeId,
-          label: isComparaCompany ? COMPARA_VOICE_PROFILE_LABEL : settings.name.trim() || 'Perfil principal',
-          agentId,
-          settings,
-        }]
+          // Preserve the previously selected agent when moving away from local script settings.
+          if (!VOICE_AGENTS.some(item => item.id === selectedAgent)) {
+            const oldKey = 'sd-dialer-voice-profiles-v2:' + user.id
+            const raw = window.localStorage.getItem(oldKey)
+            const saved = raw ? JSON.parse(raw) : null
+            const selectedProfile = Array.isArray(saved?.profiles)
+              ? saved.profiles.find((profile: any) => profile?.id === saved.activeProfileId)
+              : null
+            selectedAgent = selectedProfile?.agentId
+          }
+        }
+      } catch {
+        selectedAgent = null
       }
 
       if (!active) return
-      setAccountCompany(company)
-      setSettingsKey(key)
-      setLegacySettingsKey(oldKey)
-      setVoiceProfiles(profiles)
-      setActiveProfileId(activeId)
-      setSettingsReady(true)
+      const validAgent = VOICE_AGENTS.some(item => item.id === selectedAgent)
+      setAgentId(validAgent ? selectedAgent as VoiceAgentId : 'lumin-telecom')
+      setAgentStorageKey(key)
+      setAgentReady(true)
     }
 
-    loadCustomization().catch(() => {
-      if (active) setSettingsReady(true)
-    })
+    loadAgentChoice()
     return () => { active = false }
   }, [])
 
   useEffect(() => {
-    if (!settingsReady || !settingsKey || !activeProfile || voiceProfiles.length === 0) return
+    if (!agentReady || !agentStorageKey) return
     try {
-      window.localStorage.setItem(settingsKey, JSON.stringify({ version: 2, activeProfileId, profiles: voiceProfiles }))
-      // Keep the previous single-profile key current so a rollback does not lose the active setup.
-      if (legacySettingsKey) window.localStorage.setItem(legacySettingsKey, JSON.stringify(voiceSettings))
-    } catch {
-      setProfileNotice('O navegador não conseguiu guardar o guião. Verifica o espaço disponível neste dispositivo.')
-    }
-  }, [settingsReady, settingsKey, legacySettingsKey, activeProfileId, activeProfile, voiceProfiles, voiceSettings])
-
-  function updateVoiceSetting<K extends keyof VoiceCustomization>(key: K, value: VoiceCustomization[K]) {
-    if (!activeProfile) return
-    setVoiceProfiles(current => current.map(profile => profile.id === activeProfile.id
-      ? { ...profile, settings: { ...profile.settings, [key]: value } }
-      : profile))
-  }
-
-  function updateActiveProfile(updates: Partial<SavedVoiceProfile>) {
-    if (!activeProfile) return
-    setVoiceProfiles(current => current.map(profile => profile.id === activeProfile.id
-      ? { ...profile, ...updates }
-      : profile))
-  }
-
-  function createVoiceProfile(duplicate = false) {
-    if (voiceProfiles.length >= MAX_VOICE_PROFILES) {
-      setProfileNotice(`Podes guardar até ${MAX_VOICE_PROFILES} guiões neste dispositivo.`)
-      return
-    }
-    const id = newVoiceProfileId()
-    const label = duplicate
-      ? `${activeProfile?.label || 'Guião'} (cópia)`.slice(0, 56)
-      : 'Novo guião'
-    const profile: SavedVoiceProfile = {
-      id,
-      label,
-      agentId,
-      settings: { ...voiceSettings },
-    }
-    setVoiceProfiles(current => [...current, profile])
-    setActiveProfileId(id)
-    setProfileNotice(duplicate ? 'Cópia criada e guardada neste dispositivo.' : 'Novo guião criado e guardado neste dispositivo.')
-    stopVoiceSample()
-  }
-
-  function selectComparaVoiceProfile() {
-    const existing = voiceProfiles.find(profile =>
-      profile.agentId === 'lumin-telecom' &&
-      (profile.label === COMPARA_VOICE_PROFILE_LABEL ||
-        profile.label === 'Ricardo - Qualificação telecom' ||
-        /compara/i.test(profile.settings.company) ||
-        /^ricardo/i.test(profile.settings.name))
-    )
-    if (existing) {
-      const settings = {
-        ...existing.settings,
-        ...COMPARA_VOICE_CUSTOMIZATION,
-        voice: existing.settings.voice,
-        voiceEngine: existing.settings.voiceEngine,
-      }
-      setVoiceProfiles(current => current.map(profile => profile.id === existing.id
-        ? { ...profile, label: COMPARA_VOICE_PROFILE_LABEL, settings }
-        : profile))
-      setActiveProfileId(existing.id)
-      setProfileNotice('Guião direto do Lumin selecionado e atualizado.')
-      stopVoiceSample()
-      return
-    }
-    if (voiceProfiles.length >= MAX_VOICE_PROFILES) {
-      setProfileNotice(`Podes guardar até ${MAX_VOICE_PROFILES} guiões neste dispositivo. Apaga um para adicionar o guião do Lumin.`)
-      return
-    }
-
-    const profile: SavedVoiceProfile = {
-      id: newVoiceProfileId(),
-      label: COMPARA_VOICE_PROFILE_LABEL,
-      agentId: 'lumin-telecom',
-      settings: { ...COMPARA_VOICE_CUSTOMIZATION },
-    }
-    setVoiceProfiles(current => [...current, profile])
-    setActiveProfileId(profile.id)
-    setProfileNotice('Guião do Lumin criado e guardado neste dispositivo.')
-    stopVoiceSample()
-  }
-
-  function deleteActiveProfile() {
-    if (!activeProfile || voiceProfiles.length <= 1) {
-      setProfileNotice('Mantém pelo menos um guião guardado.')
-      return
-    }
-    if (!window.confirm(`Apagar o guião “${activeProfile.label}” deste dispositivo?`)) return
-    const remaining = voiceProfiles.filter(profile => profile.id !== activeProfile.id)
-    setVoiceProfiles(remaining)
-    setActiveProfileId(remaining[0].id)
-    setProfileNotice('Guião apagado deste dispositivo.')
-    stopVoiceSample()
-  }
-
-  function buildAgentOverride() {
-    const style = VOICE_STYLES.find(item => item.id === voiceSettings.voice)!
-    const profile: Record<string, string> = {
-      voice: voiceSettings.voice,
-      voiceEngine: voiceSettings.voiceEngine,
-      tone: '[VOICE:' + voiceSettings.voice + '] ' + style.tone,
-    }
-    for (const key of ['name', 'company', 'objective', 'product', 'opening'] as const) {
-      const value = voiceSettings[key].trim()
-      if (value) profile[key] = value
-    }
-    return profile
-  }
-
-  function stopVoiceSample() {
-    previewAudioRef.current?.pause()
-    if (previewAudioRef.current) {
-      previewAudioRef.current.removeAttribute('src')
-      previewAudioRef.current.load()
-      previewAudioRef.current = null
-    }
-    if (previewUrlRef.current) {
-      URL.revokeObjectURL(previewUrlRef.current)
-      previewUrlRef.current = null
-    }
-  }
-
-  async function playVoiceSample() {
-    const agentName = voiceSettings.name.trim() || agent.label
-    const companyName = voiceSettings.company.trim() || accountCompany || 'a empresa'
-    const sample = (voiceSettings.opening.trim() || ('Olá, sou ' + agentName + ', assistente de voz da ' + companyName + '.')).slice(0, 800)
-    setError('')
-    setPreviewing(true)
-    stopVoiceSample()
-    try {
-      const token = await getSessionToken()
-      const response = await fetch(`${LUMIN_GATEWAY}/api/sd-dialer/voice-preview`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          voice: voiceSettings.voice,
-          voiceEngine: voiceSettings.voiceEngine,
-          text: sample,
-        }),
-      })
-      if (!response.ok) {
-        const body = await response.json().catch(() => null)
-        throw new Error(body?.detail || 'Não foi possível gerar a amostra de voz.')
-      }
-      const audioUrl = URL.createObjectURL(await response.blob())
-      const audio = new Audio(audioUrl)
-      previewAudioRef.current = audio
-      previewUrlRef.current = audioUrl
-      audio.onended = () => {
-        if (previewAudioRef.current === audio) previewAudioRef.current = null
-        if (previewUrlRef.current === audioUrl) previewUrlRef.current = null
-        URL.revokeObjectURL(audioUrl)
-      }
-      await audio.play()
-    } catch (err: any) {
-      setError(err?.message || 'Erro ao reproduzir a amostra de voz.')
-      stopVoiceSample()
-    } finally {
-      setPreviewing(false)
-    }
-  }
-
-  function resetVoiceSettings() {
-    stopVoiceSample()
-    updateActiveProfile({ settings: { ...DEFAULT_VOICE_CUSTOMIZATION, company: accountCompany } })
-  }
+      window.localStorage.setItem(agentStorageKey, agentId)
+    } catch {}
+  }, [agentReady, agentStorageKey, agentId])
 
   async function getSessionToken() {
     const sb = createClient()
@@ -650,9 +341,9 @@ function LuminCallPanel() {
   }
 
   const callIsBusy = ['queued', 'preparing', 'ringing', 'answered', 'connected'].includes(callStatus)
-  const canStartCall = callMode === 'lead'
+  const canStartCall = agentReady && (callMode === 'lead'
     ? Boolean(selected)
-    : Boolean(manualPhone.trim() && manualName.trim() && manualPhone.replace(/\D/g, '').length >= 9)
+    : Boolean(manualPhone.trim() && manualName.trim() && manualPhone.replace(/\D/g, '').length >= 9))
 
   async function startCall() {
     if (!canStartCall || callIsBusy) return
@@ -663,13 +354,12 @@ function LuminCallPanel() {
     try {
       const token = await getSessionToken()
       const requestBody = callMode === 'lead' && selected
-        ? { lead_id: selected.id, agent_id: agentId, agent: buildAgentOverride() }
+        ? { lead_id: selected.id, agent_id: agentId }
         : {
             phone: manualPhone.trim(),
             name: manualName.trim(),
             consent_confirmed: true,
             agent_id: agentId,
-            agent: buildAgentOverride(),
           }
       const res = await fetch(`${LUMIN_GATEWAY}/api/sd-dialer/call`, {
         method: 'POST',
@@ -691,7 +381,7 @@ function LuminCallPanel() {
     }
   }
 
-  const agent = VOICE_AGENTS.find(a => a.id === agentId)!
+  const agent = VOICE_AGENTS.find(a => a.id === agentId) ?? VOICE_AGENTS[0]
 
   return (
     <>
@@ -844,6 +534,19 @@ function LuminCallPanel() {
             <AlertCircle size={13} /> {error}
           </div>
         )}
+        <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid #E2E8F0' }}>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 6, textTransform: 'uppercase' }}>Agente</label>
+          <select
+            value={agentId}
+            onChange={e => setAgentId(e.target.value as VoiceAgentId)}
+            disabled={!agentReady || callIsBusy}
+            style={{ width: '100%', padding: '10px 12px', borderRadius: 9, border: '1.5px solid #E2E8F0', background: '#fff', color: '#0F172A', fontSize: 13.5 }}
+          >
+            {VOICE_AGENTS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+          </select>
+          <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 5 }}>{agent.detail}</div>
+        </div>
+
         <button
           type="button"
           onClick={startCall}
@@ -858,147 +561,7 @@ function LuminCallPanel() {
           {callStatus === 'connected' ? 'CHAMADA EM CURSO' : callIsBusy ? 'A LIGAR…' : '📞 LIGAR'}
         </button>
 
-        <details style={{ marginTop: 18, paddingTop: 12, borderTop: '1px solid #E2E8F0' }}>
-          <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 800, color: '#334155' }}>
-            Configurar guião e voz
-          </summary>
-        <div style={{ marginTop: 18 }}>
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 6, textTransform: 'uppercase' }}>Agente de voz</label>
-          <select
-            value={agentId}
-            onChange={e => updateActiveProfile({ agentId: e.target.value as VoiceAgentId })}
-            style={{ width: '100%', padding: '10px 12px', borderRadius: 9, border: '1.5px solid #E2E8F0', background: '#fff', color: '#0F172A', fontSize: 13.5 }}
-          >
-            {VOICE_AGENTS.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
-          </select>
-          <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 5 }}>{agent.detail}</div>
-        </div>
 
-        <section style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid #E2E8F0' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A' }}>3. Guiões guardados</div>
-              <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 3 }}>Guarda configurações diferentes para trocar de agente sem reescrever o guião.</div>
-            </div>
-            <button type="button" onClick={() => createVoiceProfile()} disabled={!settingsReady || !settingsKey || voiceProfiles.length >= MAX_VOICE_PROFILES} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '1px solid #E2E8F0', borderRadius: 8, padding: '7px 9px', color: '#334155', fontSize: 11, fontWeight: 700, cursor: 'pointer', opacity: !settingsReady || !settingsKey || voiceProfiles.length >= MAX_VOICE_PROFILES ? .55 : 1, whiteSpace: 'nowrap' }}>
-              <Plus size={13} /> Novo
-            </button>
-          </div>
-
-          <select
-            aria-label="Selecionar guião guardado"
-            value={activeProfileId}
-            disabled={!settingsReady || voiceProfiles.length === 0}
-            onChange={e => { setActiveProfileId(e.target.value); setProfileNotice(''); stopVoiceSample() }}
-            style={{ width: '100%', padding: '9px 10px', borderRadius: 9, border: '1.5px solid #E2E8F0', background: '#fff', color: '#0F172A', fontSize: 12.5 }}
-          >
-            {voiceProfiles.map(profile => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
-          </select>
-
-          <button
-            type="button"
-            onClick={selectComparaVoiceProfile}
-            disabled={!settingsReady || !settingsKey}
-            style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8, padding: '8px 10px', border: '1px solid #F3D48B', borderRadius: 8, background: '#FFFBEB', color: '#854D0E', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', opacity: !settingsReady || !settingsKey ? .55 : 1 }}
-          >
-            <Sparkles size={13} /> Usar guião direto da Compara+
-          </button>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto auto', gap: 6, marginTop: 8 }}>
-            <input
-              aria-label="Nome do guião"
-              value={activeProfile?.label ?? ''}
-              maxLength={56}
-              disabled={!settingsReady || !activeProfile}
-              onChange={e => { updateActiveProfile({ label: e.target.value }); setProfileNotice('') }}
-              placeholder="Nome deste guião"
-              style={{ minWidth: 0, padding: '8px 9px', border: '1.5px solid #E2E8F0', borderRadius: 8, fontSize: 12 }}
-            />
-            <button type="button" onClick={() => createVoiceProfile(true)} disabled={!settingsReady || !settingsKey || voiceProfiles.length >= MAX_VOICE_PROFILES} title="Duplicar guião" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 8px', border: '1px solid #E2E8F0', borderRadius: 8, color: '#334155', fontSize: 11, fontWeight: 700, cursor: 'pointer', opacity: !settingsReady || !settingsKey || voiceProfiles.length >= MAX_VOICE_PROFILES ? .55 : 1 }}>
-              <Copy size={12} /> Duplicar
-            </button>
-            <button type="button" onClick={deleteActiveProfile} disabled={!settingsReady || !settingsKey || voiceProfiles.length <= 1} title="Apagar guião" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 8px', border: '1px solid #FECACA', borderRadius: 8, color: '#B91C1C', fontSize: 11, fontWeight: 700, cursor: 'pointer', opacity: !settingsReady || !settingsKey || voiceProfiles.length <= 1 ? .5 : 1 }}>
-              <Trash2 size={12} /> Apagar
-            </button>
-          </div>
-          <div role="status" aria-live="polite" style={{ fontSize: 10.5, lineHeight: 1.4, color: profileNotice.startsWith('O navegador') ? '#B91C1C' : profileNotice ? '#15803D' : '#64748B', marginTop: 7 }}>
-            {profileNotice || 'Guardado automaticamente neste dispositivo. Até 12 guiões por utilizador.'}
-          </div>
-        </section>
-
-        <section style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid #E2E8F0' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A' }}>4. Personaliza o agente</div>
-              <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 3 }}>As alterações ficam guardadas no guião selecionado.</div>
-            </div>
-            <button type="button" onClick={resetVoiceSettings} style={{ border: 0, background: 'transparent', color: '#64748B', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>Repor exemplo</button>
-          </div>
-
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 6 }}>Qualidade de voz</label>
-          <select
-            value={voiceSettings.voiceEngine}
-            onChange={e => updateVoiceSetting('voiceEngine', e.target.value as VoiceEngine)}
-            style={{ width: '100%', padding: '9px 10px', borderRadius: 9, border: '1.5px solid #E2E8F0', background: '#fff', color: '#0F172A', fontSize: 12.5 }}
-          >
-            <option value="piper">Local · económica (Piper)</option>
-            <option value="xai">Neural PT-PT · mais natural (LiveKit)</option>
-          </select>
-          <div style={{ fontSize: 10.5, lineHeight: 1.4, color: '#64748B', marginTop: 5 }}>A opção neural pode gerar custos LiveKit, também nas chamadas.</div>
-
-          <div style={{ marginTop: 13 }}>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 6 }}>Estilo de voz</label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
-              {VOICE_STYLES.map(style => {
-                const active = voiceSettings.voice === style.id
-                return (
-                  <button
-                    type="button"
-                    key={style.id}
-                    aria-pressed={active}
-                    onClick={() => updateVoiceSetting('voice', style.id)}
-                    style={{ textAlign: 'left', minWidth: 0, padding: '9px 8px', borderRadius: 9, cursor: 'pointer', border: active ? '1px solid #2563EB' : '1px solid #E2E8F0', background: active ? '#EFF6FF' : '#fff', color: '#0F172A', fontSize: 11.5, fontWeight: 700 }}
-                  >
-                    {style.label}
-                    <span style={{ display: 'block', fontSize: 9.5, lineHeight: 1.25, color: '#64748B', fontWeight: 400, marginTop: 3 }}>{style.detail}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginTop: 13 }}>
-            <label style={{ display: 'block', minWidth: 0, fontSize: 11, fontWeight: 700, color: '#64748B' }}>
-              Nome do agente
-              <input value={voiceSettings.name} maxLength={48} onChange={e => updateVoiceSetting('name', e.target.value)} placeholder={agent.label} style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 5, padding: '9px 10px', borderRadius: 9, border: '1.5px solid #E2E8F0', color: '#0F172A', fontSize: 12.5 }} />
-            </label>
-            <label style={{ display: 'block', minWidth: 0, fontSize: 11, fontWeight: 700, color: '#64748B' }}>
-              Empresa
-              <input value={voiceSettings.company} maxLength={64} onChange={e => updateVoiceSetting('company', e.target.value)} placeholder={accountCompany || 'Nome da empresa'} style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 5, padding: '9px 10px', borderRadius: 9, border: '1.5px solid #E2E8F0', color: '#0F172A', fontSize: 12.5 }} />
-            </label>
-          </div>
-
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginTop: 12 }}>
-            Objetivo da conversa
-            <input value={voiceSettings.objective} maxLength={180} onChange={e => updateVoiceSetting('objective', e.target.value)} placeholder="O que o agente deve alcançar nesta chamada?" style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 5, padding: '9px 10px', borderRadius: 9, border: '1.5px solid #E2E8F0', color: '#0F172A', fontSize: 12.5 }} />
-          </label>
-
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginTop: 12 }}>
-            Contexto, produto ou serviço
-            <textarea value={voiceSettings.product} maxLength={500} rows={2} onChange={e => updateVoiceSetting('product', e.target.value)} placeholder="O que deve saber para responder melhor?" style={{ display: 'block', width: '100%', boxSizing: 'border-box', resize: 'vertical', minHeight: 58, marginTop: 5, padding: '9px 10px', borderRadius: 9, border: '1.5px solid #E2E8F0', color: '#0F172A', fontSize: 12.5 }} />
-          </label>
-
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginTop: 12 }}>
-            Frase de abertura
-            <input value={voiceSettings.opening} maxLength={180} onChange={e => updateVoiceSetting('opening', e.target.value)} placeholder="Ex.: Olá, sou o Lumin da sua empresa..." style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 5, padding: '9px 10px', borderRadius: 9, border: '1.5px solid #E2E8F0', color: '#0F172A', fontSize: 12.5 }} />
-          </label>
-          <div style={{ fontSize: 10.5, lineHeight: 1.4, color: '#64748B', marginTop: 9 }}>Os campos vazios mantêm as instruções do agente selecionado.</div>
-        </section>
-        <button type="button" onClick={playVoiceSample} disabled={previewing} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 8, padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 8, background: '#fff', color: '#334155', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>
-          {previewing ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
-          {previewing ? 'A gerar amostra…' : 'Ouvir amostra'}
-        </button>
-        </details>
       </div>
 
       <div className="lumin-call-status" style={{
@@ -1011,9 +574,8 @@ function LuminCallPanel() {
         <div style={{ fontSize: 13, color: '#CBD5E1', marginTop: 3 }}>{callMode === 'manual' ? (manualPhone.trim() || 'Número manual') : (selected?.telefone || 'A chamada sai pelo número autorizado do Lumin.')}</div>
 
         <div style={{ marginTop: 15, padding: '11px 12px', borderRadius: 10, background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.08)' }}>
-          <div style={{ fontSize: 10, color: '#94A3B8', marginBottom: 4 }}>AGENTE CONFIGURADO</div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{voiceSettings.name.trim() || agent.label}</div>
-          <div style={{ fontSize: 11, color: '#CBD5E1', marginTop: 3 }}>{voiceSettings.company.trim() || accountCompany || 'Empresa por definir'} · {voiceSettings.voice.toUpperCase()} · {voiceSettings.voiceEngine === 'xai' ? 'NEURAL PT-PT' : 'PIPER PT-PT'}</div>
+          <div style={{ fontSize: 10, color: '#94A3B8', marginBottom: 4 }}>AGENTE SELECIONADO</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{agent.label}</div>
         </div>
 
         {error && <div role="alert" style={{ fontSize: 11, color: '#FCA5A5', marginTop: 8 }}>{error}</div>}
@@ -1027,7 +589,7 @@ function LuminCallPanel() {
 
 
         <div style={{ fontSize: 10.5, lineHeight: 1.5, color: '#94A3B8', marginTop: 12 }}>
-          O Lumin identifica-se como assistente virtual de IA. Leads marcadas como não interessadas, desligadas ou com número inválido ficam bloqueadas; números manuais exigem confirmação de autorização.
+          A voz e o guião seguem a configuração central do agente. Leads marcadas como não interessadas, desligadas ou com número inválido ficam bloqueadas.
         </div>
       </div>
     </div>
