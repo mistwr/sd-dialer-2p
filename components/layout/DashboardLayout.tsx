@@ -23,10 +23,11 @@ interface NavItem {
   roles: string[]
 }
 
-// Utilizadores com acesso ao menu "Chamadas IA" (Miguel + Soluções Diferentes)
+// IDs autorizados para o menu "Chamadas IA".
 const AI_CALLS_MENU_USER_IDS = [
   '8c43ee2a-9c99-4493-a215-abcb0849b8bf',
   'efff74d7-b3f6-4336-8daa-0d7d13bc2a10',
+  '60bf2363-ec80-4664-aae4-0479c18ce52b',
 ]
 
 const NAV: NavItem[] = [
