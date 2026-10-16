@@ -56,14 +56,24 @@ function consentLabel(status: VoiceCall['transcript_consent_status']) {
 }
 
 function callStatusLabel(status: string, endedAt: string | null) {
+  const terminalLabels: Record<string, string> = {
+    failed: 'Falhada',
+    voicemail: 'Correio de voz',
+    not_interested: 'Sem interesse',
+    do_not_call: 'Não voltar a ligar',
+  }
+  if (terminalLabels[status]) return terminalLabels[status]
   if (endedAt) return 'Terminada'
   const labels: Record<string, string> = {
     queued: 'A aguardar',
     ringing: 'A tocar',
     answered: 'Atendida',
     active: 'Em curso',
-    failed: 'Falhada',
-    voicemail: 'Correio de voz',
+    interested: 'Interessado',
+    follow_up: 'Pedir novo contacto',
+    transferred: 'Transferida',
+    sale: 'Venda',
+    callback: 'Pedir retorno',
   }
   return labels[status] ?? status
 }
