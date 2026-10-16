@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
       .order('created_at', { ascending: false })
       .limit(limit)
 
-    if (!canSeeCompany && me.role === 'supervisor') {
+    if (!canSeeCompany && (me.role === 'supervisor' || me.role === 'admin')) {
       query = query.in('created_by', allowedUserIds)
     } else if (!canSeeCompany) {
       query = query.eq('created_by', userId)
@@ -92,6 +92,7 @@ export async function GET(req: NextRequest) {
     const callIds = (calls ?? [])
       .filter((call) => call.transcript_consent_status === 'granted')
       .map((call) => call.id)
+
     const transcriptsByCall = new Map<string, Array<{
       id: string
       speaker: string
@@ -100,18 +101,40 @@ export async function GET(req: NextRequest) {
       spoken_at: string
     }>>()
 
-    if (callIds.length) {
+    let transcriptOffset = 0
+    while (callIds.length) {
       const { data: transcripts, error: transcriptError } = await admin
         .from('voice_call_transcripts')
         .select('id, call_id, speaker, text, is_interruption, spoken_at')
         .eq('company_id', me.company_id)
         .in('call_id', callIds)
         .order('spoken_at', { ascending: true })
-        .limit(3000)
+        .order('id', { ascending: true })
+        .range(transcriptOffset, transcriptOffset + 999)
 
       if (transcriptError) {
         console.error('[voice-calls GET] transcript query error:', transcriptError.message)
         return NextResponse.json({ error: 'Nao foi possivel carregar as transcricoes' }, { status: 500 })
+      }
+
+      const rows = transcripts ?? []
+      for (const row of rows) {
+        const existing = transcriptsByCall.get(row.call_id) ?? []
+        existing.push({
+          id: row.id,
+          speaker: row.speaker,
+          text: row.text,
+          is_interruption: row.is_interruption,
+          spoken_at: row.spoken_at,
+        })
+        transcriptsByCall.set(row.call_id, existing)
+      }
+
+      if (rows.length < 1000) break
+      transcriptOffset += rows.length
+    }
+
+    return NextResponse.json({ error: 'Nao foi possivel carregar as transcricoes' }, { status: 500 })
       }
 
       for (const row of transcripts ?? []) {
