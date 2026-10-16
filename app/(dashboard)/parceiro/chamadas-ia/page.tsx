@@ -295,18 +295,24 @@ const RICARDO_VOICE_PROFILE_LABEL = 'Ricardo - Qualificação telecom'
 const RICARDO_VOICE_CUSTOMIZATION: VoiceCustomization = {
   name: 'Ricardo Salgado',
   company: 'Compara+',
-  objective: 'Confirmar operadora e fidelização; agendar contacto comercial só se a fidelização terminou ou estiver perto do fim.',
-  product: 'Só 3 passos, uma pergunta de cada vez: 1) Qual é a sua operadora? 2) Ainda está fidelizado? Se sim, até quando? 3) Se terminou ou termina em breve, oferece marcação comercial e combina dia/hora só se aceitar. Caso contrário, agradece e termina. Não repitas nem acrescentes perguntas; aproveita as respostas já dadas.',
-  opening: 'Boa tarde, [nome]. Falo da Compara+. Vou ser breve.',
+  objective: 'Gerar interesse numa comparação e agendar um contacto com um consultor quando a pessoa aceitar.',
+  product: 'Vai direto ao assunto. A abertura pergunta se quer receber uma comparação de internet e televisão. Se aceitar, pergunta só o melhor dia e hora para um consultor ligar. Não perguntes operadora, fidelização, titularidade, preços, morada, tecnologia, email nem se pode guardar o contacto. Não repitas respostas nem perguntas.',
+  opening: 'Boa tarde, [nome]. Sou o Ricardo, assistente virtual de IA da Compara+. Vou ser direto: quer receber uma comparação das opções de internet e televisão para sua casa?',
   voice: 'natural',
   voiceEngine: 'xai',
 }
-
-const RICARDO_VOICE_PREVIOUS_CUSTOMIZATION = {
-  objective: 'Confirmar a operadora atual e o estado/data da fidelização. Se não houver fidelização ou estiver perto do fim, propor uma marcação com a equipa comercial.',
-  product: 'Qualifica serviços residenciais de internet/TV, com uma pergunta de cada vez: (1) operadora atual; (2) fidelização ativa? Se sim, mês/ano de fim; se não souber, regista desconhecido sem insistir. (3) Se não tem fidelização ou termina em breve, oferece contacto comercial e só agenda se aceitar, combinando dia/período horário. Se falta bastante, regista a data, agradece e termina. Não perguntes titularidade, satisfação, preços ou email. Não vendas, não prometas poupanças e respeita recusas.',
-  opening: 'Boa tarde, [nome]. Falo da Compara+. Vou ser breve: quero confirmar a operadora e a fidelização para ver se faz sentido deixar contacto da equipa comercial.',
-}
+const RICARDO_VOICE_PREVIOUS_CUSTOMIZATIONS = [
+  {
+    objective: 'Confirmar operadora e fidelização; agendar contacto comercial só se a fidelização terminou ou estiver perto do fim.',
+    product: 'Só 3 passos, uma pergunta de cada vez: 1) Qual é a sua operadora? 2) Ainda está fidelizado? Se sim, até quando? 3) Se terminou ou termina em breve, oferece marcação comercial e combina dia/hora só se aceitar. Caso contrário, agradece e termina. Não repitas nem acrescentes perguntas; aproveita as respostas já dadas.',
+    opening: 'Boa tarde, [nome]. Falo da Compara+. Vou ser breve.',
+  },
+  {
+    objective: 'Confirmar a operadora atual e o estado/data da fidelização. Se não houver fidelização ou estiver perto do fim, propor uma marcação com a equipa comercial.',
+    product: 'Qualifica serviços residenciais de internet/TV, com uma pergunta de cada vez: (1) operadora atual; (2) fidelização ativa? Se sim, mês/ano de fim; se não souber, regista desconhecido sem insistir. (3) Se não tem fidelização ou termina em breve, oferece contacto comercial e só agenda se aceitar, combinando dia/período horário. Se falta bastante, regista a data, agradece e termina. Não perguntes titularidade, satisfação, preços ou email. Não vendas, não prometas poupanças e respeita recusas.',
+    opening: 'Boa tarde, [nome]. Falo da Compara+. Vou ser breve: quero confirmar a operadora e a fidelização para ver se faz sentido deixar contacto da equipa comercial.',
+  },
+]
 
 const VOICE_STYLES: Array<{ id: VoiceStyle; label: string; detail: string; tone: string }> = [
   { id: 'natural', label: 'Natural', detail: 'Próxima e equilibrada', tone: 'Natural, profissional e direto.' },
@@ -471,9 +477,11 @@ function LuminCallPanel() {
     const existing = voiceProfiles.find(profile => profile.label === RICARDO_VOICE_PROFILE_LABEL && profile.agentId === 'lumin-telecom')
     if (existing) {
       const settings = { ...existing.settings }
-      if (settings.objective === RICARDO_VOICE_PREVIOUS_CUSTOMIZATION.objective) settings.objective = RICARDO_VOICE_CUSTOMIZATION.objective
-      if (settings.product === RICARDO_VOICE_PREVIOUS_CUSTOMIZATION.product) settings.product = RICARDO_VOICE_CUSTOMIZATION.product
-      if (settings.opening === RICARDO_VOICE_PREVIOUS_CUSTOMIZATION.opening) settings.opening = RICARDO_VOICE_CUSTOMIZATION.opening
+      for (const previous of RICARDO_VOICE_PREVIOUS_CUSTOMIZATIONS) {
+        if (settings.objective === previous.objective) settings.objective = RICARDO_VOICE_CUSTOMIZATION.objective
+        if (settings.product === previous.product) settings.product = RICARDO_VOICE_CUSTOMIZATION.product
+        if (settings.opening === previous.opening) settings.opening = RICARDO_VOICE_CUSTOMIZATION.opening
+      }
       if (settings.objective !== existing.settings.objective || settings.product !== existing.settings.product || settings.opening !== existing.settings.opening) {
         setVoiceProfiles(current => current.map(profile => profile.id === existing.id ? { ...profile, settings } : profile))
       }
@@ -629,7 +637,7 @@ function LuminCallPanel() {
   const callIsBusy = ['queued', 'preparing', 'ringing', 'answered', 'connected'].includes(callStatus)
   const canStartCall = callMode === 'lead'
     ? Boolean(selected)
-    : Boolean(manualPhone.trim() && manualConsent && manualPhone.replace(/\D/g, '').length >= 9)
+    : Boolean(manualPhone.trim() && manualName.trim() && manualConsent && manualPhone.replace(/\D/g, '').length >= 9)
 
   async function startCall() {
     if (!canStartCall || callIsBusy) return
@@ -643,7 +651,7 @@ function LuminCallPanel() {
         ? { lead_id: selected.id, agent_id: agentId, agent: buildAgentOverride() }
         : {
             phone: manualPhone.trim(),
-            name: manualName.trim() || 'Contacto manual',
+            name: manualName.trim(),
             consent_confirmed: manualConsent,
             agent_id: agentId,
             agent: buildAgentOverride(),
@@ -808,7 +816,8 @@ function LuminCallPanel() {
               <input
                 value={manualName}
                 onChange={e => setManualName(e.target.value)}
-                placeholder="Nome (opcional)"
+                placeholder="Nome da pessoa que vai atender"
+                required
                 style={{ width: '100%', marginTop: 8, padding: '10px 12px', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
               />
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 10, fontSize: 11.5, lineHeight: 1.45, color: '#64748B', cursor: 'pointer' }}>
