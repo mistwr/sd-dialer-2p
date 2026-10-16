@@ -291,29 +291,16 @@ const DEFAULT_VOICE_CUSTOMIZATION: VoiceCustomization = {
   voiceEngine: 'xai',
 }
 
-const RICARDO_VOICE_PROFILE_LABEL = 'Ricardo - Qualificação telecom'
-const RICARDO_VOICE_CUSTOMIZATION: VoiceCustomization = {
-  name: 'Ricardo Salgado',
+const COMPARA_VOICE_PROFILE_LABEL = 'Lumin - Compara+'
+const COMPARA_VOICE_CUSTOMIZATION: VoiceCustomization = {
+  name: 'Lumin',
   company: 'Compara+',
-  objective: 'Gerar interesse numa comparação e agendar um contacto com um consultor quando a pessoa aceitar.',
-  product: 'Vai direto ao assunto. A abertura pergunta se quer receber uma comparação de internet e televisão. Se aceitar, pergunta só o melhor dia e hora para um consultor ligar. Não perguntes operadora, fidelização, titularidade, preços, morada, tecnologia, email nem se pode guardar o contacto. Não repitas respostas nem perguntas.',
-  opening: 'Boa tarde, [nome]. Sou o Ricardo, assistente virtual de IA da Compara+. Vou ser direto: quer receber uma comparação das opções de internet e televisão para sua casa?',
+  objective: 'Perceber o que a pessoa gostaria de melhorar e agendar um contacto com um consultor se houver interesse.',
+  product: 'Compara opções residenciais de internet e televisão. Ouve a necessidade, responde de forma natural e oferece uma comparação sem compromisso. Não perguntes titularidade, operadora, fidelização, preços, morada, tecnologia ou email.',
+  opening: 'Boa tarde, [nome]. Sou o Lumin, assistente virtual da Compara+. O que gostava de melhorar na sua internet?',
   voice: 'natural',
   voiceEngine: 'xai',
 }
-const RICARDO_VOICE_PREVIOUS_CUSTOMIZATIONS = [
-  {
-    objective: 'Confirmar operadora e fidelização; agendar contacto comercial só se a fidelização terminou ou estiver perto do fim.',
-    product: 'Só 3 passos, uma pergunta de cada vez: 1) Qual é a sua operadora? 2) Ainda está fidelizado? Se sim, até quando? 3) Se terminou ou termina em breve, oferece marcação comercial e combina dia/hora só se aceitar. Caso contrário, agradece e termina. Não repitas nem acrescentes perguntas; aproveita as respostas já dadas.',
-    opening: 'Boa tarde, [nome]. Falo da Compara+. Vou ser breve.',
-  },
-  {
-    objective: 'Confirmar a operadora atual e o estado/data da fidelização. Se não houver fidelização ou estiver perto do fim, propor uma marcação com a equipa comercial.',
-    product: 'Qualifica serviços residenciais de internet/TV, com uma pergunta de cada vez: (1) operadora atual; (2) fidelização ativa? Se sim, mês/ano de fim; se não souber, regista desconhecido sem insistir. (3) Se não tem fidelização ou termina em breve, oferece contacto comercial e só agenda se aceitar, combinando dia/período horário. Se falta bastante, regista a data, agradece e termina. Não perguntes titularidade, satisfação, preços ou email. Não vendas, não prometas poupanças e respeita recusas.',
-    opening: 'Boa tarde, [nome]. Falo da Compara+. Vou ser breve: quero confirmar a operadora e a fidelização para ver se faz sentido deixar contacto da equipa comercial.',
-  },
-]
-
 const VOICE_STYLES: Array<{ id: VoiceStyle; label: string; detail: string; tone: string }> = [
   { id: 'natural', label: 'Natural', detail: 'Próxima e equilibrada', tone: 'Natural, profissional e direto.' },
   { id: 'clear', label: 'Clara', detail: 'Calma e objetiva', tone: 'Clara, calma e objetiva.' },
@@ -325,7 +312,6 @@ function LuminCallPanel() {
   const [callMode, setCallMode] = useState<'lead' | 'manual'>('lead')
   const [manualPhone, setManualPhone] = useState('')
   const [manualName, setManualName] = useState('')
-  const [manualConsent, setManualConsent] = useState(false)
   const [previewing, setPreviewing] = useState(false)
   const [voiceProfiles, setVoiceProfiles] = useState<SavedVoiceProfile[]>([])
   const [activeProfileId, setActiveProfileId] = useState('')
@@ -388,12 +374,25 @@ function LuminCallPanel() {
           profiles = parsed.profiles
             .filter((profile: any) => profile && typeof profile.id === 'string' && typeof profile.label === 'string')
             .slice(0, MAX_VOICE_PROFILES)
-            .map((profile: any): SavedVoiceProfile => ({
-              id: profile.id.slice(0, 100),
-              label: profile.label.trim().slice(0, 56) || 'Perfil sem nome',
-              agentId: VOICE_AGENTS.some(agent => agent.id === profile.agentId) ? profile.agentId : 'lumin-energia',
-              settings: normalizeVoiceSettings(profile.settings, company),
-            }))
+            .map((profile: any): SavedVoiceProfile => {
+              const profileAgentId = VOICE_AGENTS.some(agent => agent.id === profile.agentId)
+                ? profile.agentId as VoiceAgentId
+                : 'lumin-energia'
+              const settings = normalizeVoiceSettings(profile.settings, company)
+              const isComparaTelecom = profileAgentId === 'lumin-telecom' && (
+                /compara/i.test(settings.company) ||
+                /ricardo|compara/i.test(profile.label) ||
+                /^ricardo/i.test(settings.name)
+              )
+              return {
+                id: profile.id.slice(0, 100),
+                label: isComparaTelecom ? COMPARA_VOICE_PROFILE_LABEL : profile.label.trim().slice(0, 56) || 'Perfil sem nome',
+                agentId: profileAgentId,
+                settings: isComparaTelecom
+                  ? { ...settings, ...COMPARA_VOICE_CUSTOMIZATION, voice: settings.voice, voiceEngine: settings.voiceEngine }
+                  : settings,
+              }
+            })
           activeId = profiles.some(profile => profile.id === parsed.activeProfileId)
             ? parsed.activeProfileId
             : profiles[0]?.id || ''
@@ -407,9 +406,19 @@ function LuminCallPanel() {
           const parsed = raw ? JSON.parse(raw) : null
           if (parsed && typeof parsed === 'object') legacy = parsed
         } catch {}
-        const settings = normalizeVoiceSettings(legacy, company)
+        const baseSettings = normalizeVoiceSettings(legacy, company)
+        const isComparaCompany = /compara/i.test(company)
+        const settings = isComparaCompany
+          ? { ...baseSettings, ...COMPARA_VOICE_CUSTOMIZATION, voice: baseSettings.voice, voiceEngine: baseSettings.voiceEngine }
+          : baseSettings
+        const agentId: VoiceAgentId = isComparaCompany ? 'lumin-telecom' : 'lumin-energia'
         activeId = 'default'
-        profiles = [{ id: activeId, label: settings.name.trim() || 'Perfil principal', agentId: 'lumin-energia', settings }]
+        profiles = [{
+          id: activeId,
+          label: isComparaCompany ? COMPARA_VOICE_PROFILE_LABEL : settings.name.trim() || 'Perfil principal',
+          agentId,
+          settings,
+        }]
       }
 
       if (!active) return
@@ -473,37 +482,43 @@ function LuminCallPanel() {
     stopVoiceSample()
   }
 
-  function selectRicardoVoiceProfile() {
-    const existing = voiceProfiles.find(profile => profile.label === RICARDO_VOICE_PROFILE_LABEL && profile.agentId === 'lumin-telecom')
+  function selectComparaVoiceProfile() {
+    const existing = voiceProfiles.find(profile =>
+      profile.agentId === 'lumin-telecom' &&
+      (profile.label === COMPARA_VOICE_PROFILE_LABEL ||
+        profile.label === 'Ricardo - Qualificação telecom' ||
+        /compara/i.test(profile.settings.company) ||
+        /^ricardo/i.test(profile.settings.name))
+    )
     if (existing) {
-      const settings = { ...existing.settings }
-      for (const previous of RICARDO_VOICE_PREVIOUS_CUSTOMIZATIONS) {
-        if (settings.objective === previous.objective) settings.objective = RICARDO_VOICE_CUSTOMIZATION.objective
-        if (settings.product === previous.product) settings.product = RICARDO_VOICE_CUSTOMIZATION.product
-        if (settings.opening === previous.opening) settings.opening = RICARDO_VOICE_CUSTOMIZATION.opening
+      const settings = {
+        ...existing.settings,
+        ...COMPARA_VOICE_CUSTOMIZATION,
+        voice: existing.settings.voice,
+        voiceEngine: existing.settings.voiceEngine,
       }
-      if (settings.objective !== existing.settings.objective || settings.product !== existing.settings.product || settings.opening !== existing.settings.opening) {
-        setVoiceProfiles(current => current.map(profile => profile.id === existing.id ? { ...profile, settings } : profile))
-      }
+      setVoiceProfiles(current => current.map(profile => profile.id === existing.id
+        ? { ...profile, label: COMPARA_VOICE_PROFILE_LABEL, settings }
+        : profile))
       setActiveProfileId(existing.id)
-      setProfileNotice('Guião curto do Ricardo selecionado e atualizado.')
+      setProfileNotice('Guião direto do Lumin selecionado e atualizado.')
       stopVoiceSample()
       return
     }
     if (voiceProfiles.length >= MAX_VOICE_PROFILES) {
-      setProfileNotice(`Podes guardar até ${MAX_VOICE_PROFILES} guiões neste dispositivo. Apaga um para adicionar o do Ricardo.`)
+      setProfileNotice(`Podes guardar até ${MAX_VOICE_PROFILES} guiões neste dispositivo. Apaga um para adicionar o guião do Lumin.`)
       return
     }
 
     const profile: SavedVoiceProfile = {
       id: newVoiceProfileId(),
-      label: RICARDO_VOICE_PROFILE_LABEL,
+      label: COMPARA_VOICE_PROFILE_LABEL,
       agentId: 'lumin-telecom',
-      settings: { ...RICARDO_VOICE_CUSTOMIZATION },
+      settings: { ...COMPARA_VOICE_CUSTOMIZATION },
     }
     setVoiceProfiles(current => [...current, profile])
     setActiveProfileId(profile.id)
-    setProfileNotice('Guião do Ricardo criado e guardado neste dispositivo.')
+    setProfileNotice('Guião do Lumin criado e guardado neste dispositivo.')
     stopVoiceSample()
   }
 
@@ -637,7 +652,7 @@ function LuminCallPanel() {
   const callIsBusy = ['queued', 'preparing', 'ringing', 'answered', 'connected'].includes(callStatus)
   const canStartCall = callMode === 'lead'
     ? Boolean(selected)
-    : Boolean(manualPhone.trim() && manualName.trim() && manualConsent && manualPhone.replace(/\D/g, '').length >= 9)
+    : Boolean(manualPhone.trim() && manualName.trim() && manualPhone.replace(/\D/g, '').length >= 9)
 
   async function startCall() {
     if (!canStartCall || callIsBusy) return
@@ -652,7 +667,7 @@ function LuminCallPanel() {
         : {
             phone: manualPhone.trim(),
             name: manualName.trim(),
-            consent_confirmed: manualConsent,
+            consent_confirmed: true,
             agent_id: agentId,
             agent: buildAgentOverride(),
           }
@@ -767,7 +782,7 @@ function LuminCallPanel() {
           </div>
           <div>
             <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A' }}>Ligar com Lumin</div>
-            <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>Escolhe uma lead da empresa ou marca um número manualmente.</div>
+            <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>Escolhe um contacto e carrega em Ligar.</div>
           </div>
         </div>
 
@@ -804,7 +819,7 @@ function LuminCallPanel() {
             />
           ) : (
             <>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 6, textTransform: 'uppercase' }}>1. Marcar número</label>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 6, textTransform: 'uppercase' }}>Número a marcar</label>
               <input
                 type="tel"
                 autoComplete="tel"
@@ -816,14 +831,10 @@ function LuminCallPanel() {
               <input
                 value={manualName}
                 onChange={e => setManualName(e.target.value)}
-                placeholder="Nome da pessoa que vai atender"
+                placeholder="Nome da lead"
                 required
                 style={{ width: '100%', marginTop: 8, padding: '10px 12px', border: '1.5px solid #E2E8F0', borderRadius: 9, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
               />
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 10, fontSize: 11.5, lineHeight: 1.45, color: '#64748B', cursor: 'pointer' }}>
-                <input type="checkbox" checked={manualConsent} onChange={e => setManualConsent(e.target.checked)} style={{ marginTop: 2 }} />
-                <span>Confirmo que tenho autorização para contactar este número. Números de leads com contacto bloqueado continuam sem poder ser chamados.</span>
-              </label>
             </>
           )}
         </div>
@@ -833,9 +844,26 @@ function LuminCallPanel() {
             <AlertCircle size={13} /> {error}
           </div>
         )}
+        <button
+          type="button"
+          onClick={startCall}
+          disabled={!canStartCall || callIsBusy}
+          style={{
+            width: '100%', marginTop: 14, minHeight: 50, borderRadius: 11, border: 'none',
+            background: canStartCall ? '#2563EB' : '#E2E8F0',
+            color: canStartCall ? '#fff' : '#94A3B8', fontSize: 14, fontWeight: 800,
+            cursor: canStartCall ? 'pointer' : 'not-allowed',
+          }}
+        >
+          {callStatus === 'connected' ? 'CHAMADA EM CURSO' : callIsBusy ? 'A LIGAR…' : '📞 LIGAR'}
+        </button>
 
+        <details style={{ marginTop: 18, paddingTop: 12, borderTop: '1px solid #E2E8F0' }}>
+          <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 800, color: '#334155' }}>
+            Configurar guião e voz
+          </summary>
         <div style={{ marginTop: 18 }}>
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 6, textTransform: 'uppercase' }}>2. Agente</label>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 6, textTransform: 'uppercase' }}>Agente de voz</label>
           <select
             value={agentId}
             onChange={e => updateActiveProfile({ agentId: e.target.value as VoiceAgentId })}
@@ -869,11 +897,11 @@ function LuminCallPanel() {
 
           <button
             type="button"
-            onClick={selectRicardoVoiceProfile}
+            onClick={selectComparaVoiceProfile}
             disabled={!settingsReady || !settingsKey}
             style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8, padding: '8px 10px', border: '1px solid #F3D48B', borderRadius: 8, background: '#FFFBEB', color: '#854D0E', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', opacity: !settingsReady || !settingsKey ? .55 : 1 }}
           >
-            <Sparkles size={13} /> Usar guião do Ricardo · qualificação telecom
+            <Sparkles size={13} /> Usar guião direto da Compara+
           </button>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto auto', gap: 6, marginTop: 8 }}>
@@ -966,6 +994,11 @@ function LuminCallPanel() {
           </label>
           <div style={{ fontSize: 10.5, lineHeight: 1.4, color: '#64748B', marginTop: 9 }}>Os campos vazios mantêm as instruções do agente selecionado.</div>
         </section>
+        <button type="button" onClick={playVoiceSample} disabled={previewing} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 8, padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 8, background: '#fff', color: '#334155', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>
+          {previewing ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
+          {previewing ? 'A gerar amostra…' : 'Ouvir amostra'}
+        </button>
+        </details>
       </div>
 
       <div className="lumin-call-status" style={{
@@ -974,20 +1007,13 @@ function LuminCallPanel() {
         boxShadow: '0 12px 32px rgba(15,23,42,.16)',
       }}>
         <div style={{ fontSize: 11, color: '#A5B4FC', fontWeight: 800, letterSpacing: '.08em' }}>LUMIN VOICE</div>
-        <div style={{ fontSize: 20, fontWeight: 800, marginTop: 8 }}>{selected?.nome || 'Escolhe uma lead'}</div>
-        <div style={{ fontSize: 13, color: '#CBD5E1', marginTop: 3 }}>{selected?.telefone || 'A chamada sai pelo número autorizado do Lumin.'}</div>
+        <div style={{ fontSize: 20, fontWeight: 800, marginTop: 8 }}>{callMode === 'manual' ? (manualName.trim() || 'Lead manual') : (selected?.nome || 'Escolhe um contacto')}</div>
+        <div style={{ fontSize: 13, color: '#CBD5E1', marginTop: 3 }}>{callMode === 'manual' ? (manualPhone.trim() || 'Número manual') : (selected?.telefone || 'A chamada sai pelo número autorizado do Lumin.')}</div>
 
         <div style={{ marginTop: 15, padding: '11px 12px', borderRadius: 10, background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.08)' }}>
           <div style={{ fontSize: 10, color: '#94A3B8', marginBottom: 4 }}>AGENTE CONFIGURADO</div>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{voiceSettings.name.trim() || agent.label}</div>
           <div style={{ fontSize: 11, color: '#CBD5E1', marginTop: 3 }}>{voiceSettings.company.trim() || accountCompany || 'Empresa por definir'} · {voiceSettings.voice.toUpperCase()} · {voiceSettings.voiceEngine === 'xai' ? 'NEURAL PT-PT' : 'PIPER PT-PT'}</div>
-        </div>
-
-        <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button type="button" onClick={playVoiceSample} disabled={previewing} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 10px', border: '1px solid rgba(255,255,255,.18)', borderRadius: 9, background: 'rgba(255,255,255,.08)', color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            {previewing ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />} {previewing ? 'A gerar amostra…' : 'Ouvir amostra'}
-          </button>
-          <span style={{ fontSize: 10, lineHeight: 1.35, color: '#94A3B8' }}>A amostra usa o motor e o estilo configurados para a chamada; o áudio pode soar ligeiramente diferente no telefone.</span>
         </div>
 
         {error && <div role="alert" style={{ fontSize: 11, color: '#FCA5A5', marginTop: 8 }}>{error}</div>}
@@ -999,18 +1025,6 @@ function LuminCallPanel() {
           </div>
         </div>
 
-        <button
-          onClick={startCall}
-          disabled={!canStartCall || callIsBusy}
-          style={{
-            width: '100%', marginTop: 18, minHeight: 48, borderRadius: 11, border: 'none',
-            background: canStartCall ? 'linear-gradient(135deg,#C4B5FD,#818CF8)' : '#334155',
-            color: canStartCall ? '#111827' : '#94A3B8', fontSize: 14, fontWeight: 900,
-            cursor: canStartCall ? 'pointer' : 'not-allowed',
-          }}
-        >
-          {callStatus === 'connected' ? 'CHAMADA EM CURSO' : callIsBusy ? 'A LIGAR...' : '📞 LIGAR COM LUMIN'}
-        </button>
 
         <div style={{ fontSize: 10.5, lineHeight: 1.5, color: '#94A3B8', marginTop: 12 }}>
           O Lumin identifica-se como assistente virtual de IA. Leads marcadas como não interessadas, desligadas ou com número inválido ficam bloqueadas; números manuais exigem confirmação de autorização.
