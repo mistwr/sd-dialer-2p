@@ -51,23 +51,39 @@ declare
   v_user_id uuid;
   v_requested_at timestamptz;
 begin
-  select c.user_id, c.requested_at
-    into v_user_id, v_requested_at
+  select c.user_id
+    into v_user_id
     from public.sd_dialer_caller_ids c
    where c.id = p_verification_id
-     and c.verification_status = 'pending'
+     and c.verification_status = 'pending';
+
+  if not found then
+    return;
+  end if;
+
+  -- Always lock the user before a caller-ID row. Two callbacks for different
+  -- numbers owned by the same user then serialize without locking rows in an
+  -- opposing order.
+  perform 1
+    from public.usuarios u
+   where u.id = v_user_id
    for update;
 
   if not found then
     return;
   end if;
 
-  -- Serialize callbacks for the same account and let the newest requested
-  -- successful verification become active.
-  perform 1
-    from public.usuarios u
-   where u.id = v_user_id
+  select c.requested_at
+    into v_requested_at
+    from public.sd_dialer_caller_ids c
+   where c.id = p_verification_id
+     and c.user_id = v_user_id
+     and c.verification_status = 'pending'
    for update;
+
+  if not found then
+    return;
+  end if;
 
   update public.sd_dialer_caller_ids c
      set verification_status = 'verified',
