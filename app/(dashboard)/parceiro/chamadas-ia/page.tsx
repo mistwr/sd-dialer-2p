@@ -269,6 +269,9 @@ function LuminCallPanel() {
   const [callerIdActive, setCallerIdActive] = useState<CallerIdRecord | null>(null)
   const [callerIdPending, setCallerIdPending] = useState<CallerIdRecord | null>(null)
   const [callerIdFailed, setCallerIdFailed] = useState<CallerIdRecord | null>(null)
+  const [callerIdVerificationAvailable, setCallerIdVerificationAvailable] = useState(false)
+  const [callerIdFallbackAvailable, setCallerIdFallbackAvailable] = useState(false)
+  const [callerIdFallbackNumber, setCallerIdFallbackNumber] = useState('')
   const [callerIdLoading, setCallerIdLoading] = useState(true)
   const [callerIdSaving, setCallerIdSaving] = useState(false)
   const [callerIdError, setCallerIdError] = useState('')
@@ -347,6 +350,9 @@ function LuminCallPanel() {
     setCallerIdActive(active)
     setCallerIdPending(pending)
     setCallerIdFailed(failed)
+    setCallerIdVerificationAvailable(Boolean(json.verificationAvailable))
+    setCallerIdFallbackAvailable(Boolean(json.fallbackAvailable))
+    setCallerIdFallbackNumber(String(json.fallbackPhoneNumber || ''))
     setVerificationCode(pending?.validationCode || '')
     setCallerIdError('')
     return { active, pending, failed }
@@ -390,6 +396,10 @@ function LuminCallPanel() {
 
   async function startCallerIdVerification() {
     if (!callerPhone.trim() || callerIdSaving || callIsBusy) return
+    if (!callerIdVerificationAvailable) {
+      setCallerIdError('A validação do número pessoal ainda não está configurada. Podes continuar a fazer chamadas pelo número atual da empresa.')
+      return
+    }
     setCallerIdSaving(true)
     setCallerIdError('')
     setCallerIdMessage('')
@@ -453,7 +463,7 @@ function LuminCallPanel() {
   }
 
   const callIsBusy = ['queued', 'preparing', 'ringing', 'answered', 'connected'].includes(callStatus)
-  const canStartCall = agentReady && !callerIdLoading && Boolean(callerIdActive) && (callMode === 'lead'
+  const canStartCall = agentReady && !callerIdLoading && (Boolean(callerIdActive) || callerIdFallbackAvailable) && (callMode === 'lead'
     ? Boolean(selected)
     : Boolean(manualPhone.trim() && manualName.trim() && manualPhone.replace(/\D/g, '').length >= 9))
 
@@ -591,11 +601,21 @@ function LuminCallPanel() {
         <section aria-label="Número de saída" style={{ marginTop: 16, padding: 13, borderRadius: 11, background: '#13110D', border: '1px solid #383228' }}>
           <div style={{ fontSize: 12, fontWeight: 800, color: '#F5EEDC' }}>Número de saída</div>
           <div style={{ fontSize: 11.5, lineHeight: 1.5, color: '#B7AA91', marginTop: 4 }}>
-            Usa o teu próprio número. A Twilio faz uma chamada automática para confirmar que tens acesso; não é preciso comprar ou alugar um número.
+            Depois de verificado, as chamadas usam o teu próprio número. A Twilio liga-te e pede o código apresentado abaixo; não é preciso comprar ou alugar um número.
           </div>
           {callerIdActive && (
             <div style={{ marginTop: 8, fontSize: 12, color: '#86EFAC' }}>
               Verificado e ativo: <strong>{callerIdActive.phoneNumber}</strong>
+            </div>
+          )}
+          {!callerIdActive && callerIdFallbackAvailable && (
+            <div style={{ marginTop: 8, fontSize: 11.5, lineHeight: 1.5, color: '#FFE6B0' }}>
+              Até validares o teu número, as chamadas continuam a sair pelo número atual da empresa{callerIdFallbackNumber ? ` (${callerIdFallbackNumber})` : ''}.
+            </div>
+          )}
+          {!callerIdActive && !callerIdFallbackAvailable && (
+            <div style={{ marginTop: 8, fontSize: 11.5, lineHeight: 1.5, color: '#FCA5A5' }}>
+              Ainda não existe um número de saída. Verifica o teu número ou pede ao administrador para configurar o número da empresa.
             </div>
           )}
           {callerIdFailed && !callerIdPending && (
@@ -623,13 +643,14 @@ function LuminCallPanel() {
             <button
               type="button"
               onClick={startCallerIdVerification}
-              disabled={callerIdLoading || callerIdSaving || callIsBusy || !callerPhone.trim()}
-              style={{ padding: '0 12px', border: '1px solid #D5AA56', borderRadius: 8, color: '#FFE6B0', fontSize: 11.5, fontWeight: 800, cursor: 'pointer' }}
+              disabled={callerIdLoading || !callerIdVerificationAvailable || callerIdSaving || callIsBusy || !callerPhone.trim()}
+              style={{ padding: '0 12px', border: '1px solid #D5AA56', borderRadius: 8, color: '#FFE6B0', fontSize: 11.5, fontWeight: 800, cursor: callerIdLoading || !callerIdVerificationAvailable || callerIdSaving || callIsBusy || !callerPhone.trim() ? 'not-allowed' : 'pointer', opacity: !callerIdVerificationAvailable ? 0.55 : 1 }}
             >
-              {callerIdSaving ? 'A iniciar…' : callerIdActive ? 'Verificar outro número' : 'Verificar número'}
+              {callerIdSaving ? 'A iniciar…' : !callerIdVerificationAvailable ? 'Verificação indisponível' : callerIdActive ? 'Verificar outro número' : 'Verificar número'}
             </button>
           </div>
           {callerIdLoading && <div style={{ marginTop: 7, fontSize: 11, color: '#B7AA91' }}>A carregar a configuração…</div>}
+          {!callerIdLoading && !callerIdVerificationAvailable && <div style={{ marginTop: 7, fontSize: 11, color: '#B7AA91' }}>A validação automática ainda não está ligada no gateway.</div>}
           {callerIdMessage && <div role="status" style={{ marginTop: 7, fontSize: 11.5, color: '#86EFAC' }}>{callerIdMessage}</div>}
           {callerIdError && <div role="alert" style={{ marginTop: 7, fontSize: 11.5, color: '#FCA5A5' }}>{callerIdError}</div>}
         </section>
@@ -730,7 +751,7 @@ function LuminCallPanel() {
         <div style={{ fontSize: 11, color: '#A5B4FC', fontWeight: 800, letterSpacing: '.08em' }}>LUMIN VOICE</div>
         <div style={{ fontSize: 20, fontWeight: 800, marginTop: 8 }}>{callMode === 'manual' ? (manualName.trim() || 'Lead manual') : (selected?.nome || 'Escolhe um contacto')}</div>
         <div style={{ fontSize: 13, color: '#CBD5E1', marginTop: 3 }}>{callMode === 'manual' ? (manualPhone.trim() || 'Número manual') : (selected?.telefone || 'Escolhe um contacto para preparar a chamada.')}</div>
-        <div style={{ fontSize: 11, color: '#B7AA91', marginTop: 5 }}>Sai por: {callerIdActive?.phoneNumber || (callerIdLoading ? 'a carregar…' : 'número por verificar')}</div>
+        <div style={{ fontSize: 11, color: '#B7AA91', marginTop: 5 }}>Sai por: {callerIdActive?.phoneNumber || (callerIdLoading ? 'a carregar…' : callerIdFallbackNumber || 'número por configurar')}</div>
 
         <div style={{ marginTop: 15, padding: '11px 12px', borderRadius: 10, background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.08)' }}>
           <div style={{ fontSize: 10, color: '#94A3B8', marginBottom: 4 }}>AGENTE SELECIONADO</div>
