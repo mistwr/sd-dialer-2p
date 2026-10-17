@@ -237,6 +237,22 @@ const VOICE_AGENTS = [
 ] as const
 
 type VoiceAgentId = (typeof VOICE_AGENTS)[number]['id']
+type CallerIdRecord = {
+  phoneNumber: string
+  status: 'pending' | 'verified' | 'failed'
+  isActive: boolean
+  requestedAt?: string | null
+  verifiedAt?: string | null
+  validationCode?: string | null
+}
+
+function normalizeCallerIdInput(phone: string) {
+  let normalized = phone.replace(/[^0-9+]/g, '')
+  if (normalized.startsWith('00')) normalized = '+' + normalized.slice(2)
+  else if (normalized.startsWith('351') && !normalized.startsWith('+')) normalized = '+' + normalized
+  else if (/^\d{9}$/.test(normalized)) normalized = '+351' + normalized
+  return normalized
+}
 
 function LuminCallPanel() {
   const [selected, setSelected] = useState<VoiceLead | null>(null)
@@ -249,7 +265,17 @@ function LuminCallPanel() {
   const [callStatus, setCallStatus] = useState<'idle' | 'queued' | 'preparing' | 'ringing' | 'answered' | 'connected' | 'ended' | 'failed'>('idle')
   const [callMessage, setCallMessage] = useState('Escolhe uma lead ou introduz um número autorizado para contacto.')
   const [error, setError] = useState('')
+  const [callerPhone, setCallerPhone] = useState('')
+  const [callerIdActive, setCallerIdActive] = useState<CallerIdRecord | null>(null)
+  const [callerIdPending, setCallerIdPending] = useState<CallerIdRecord | null>(null)
+  const [callerIdFailed, setCallerIdFailed] = useState<CallerIdRecord | null>(null)
+  const [callerIdLoading, setCallerIdLoading] = useState(true)
+  const [callerIdSaving, setCallerIdSaving] = useState(false)
+  const [callerIdError, setCallerIdError] = useState('')
+  const [callerIdMessage, setCallerIdMessage] = useState('')
+  const [verificationCode, setVerificationCode] = useState('')
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const callerIdPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => () => {
     if (pollTimer.current) clearTimeout(pollTimer.current)
@@ -308,6 +334,92 @@ function LuminCallPanel() {
     return session.access_token
   }
 
+  async function fetchCallerIdentity(token: string) {
+    const res = await fetch(LUMIN_GATEWAY + '/api/sd-dialer/caller-id', {
+      headers: { Authorization: 'Bearer ' + token },
+      cache: 'no-store',
+    })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.detail || 'Erro ao consultar o número de saída.')
+    const active = (json.active ?? null) as CallerIdRecord | null
+    const pending = (json.pending ?? null) as CallerIdRecord | null
+    const failed = (json.failed ?? null) as CallerIdRecord | null
+    setCallerIdActive(active)
+    setCallerIdPending(pending)
+    setCallerIdFailed(failed)
+    setVerificationCode(pending?.validationCode || '')
+    setCallerIdError('')
+    return { active, pending, failed }
+  }
+
+  function scheduleCallerIdentityPoll(token: string) {
+    if (callerIdPollTimer.current) clearTimeout(callerIdPollTimer.current)
+    callerIdPollTimer.current = setTimeout(() => pollCallerIdentity(token), 3000)
+  }
+
+  async function pollCallerIdentity(token: string) {
+    try {
+      const result = await fetchCallerIdentity(token)
+      if (result.pending) scheduleCallerIdentityPoll(token)
+    } catch (err: any) {
+      setCallerIdError(err?.message || 'Não foi possível atualizar a verificação.')
+    }
+  }
+
+  useEffect(() => {
+    let active = true
+    async function loadCallerIdentity() {
+      try {
+        const token = await getSessionToken()
+        const result = await fetchCallerIdentity(token)
+        if (active && result.pending) {
+          scheduleCallerIdentityPoll(token)
+        }
+      } catch (err: any) {
+        if (active) setCallerIdError(err?.message || 'Não foi possível carregar o número de saída.')
+      } finally {
+        if (active) setCallerIdLoading(false)
+      }
+    }
+    void loadCallerIdentity()
+    return () => {
+      active = false
+      if (callerIdPollTimer.current) clearTimeout(callerIdPollTimer.current)
+    }
+  }, [])
+
+  async function startCallerIdVerification() {
+    if (!callerPhone.trim() || callerIdSaving || callIsBusy) return
+    setCallerIdSaving(true)
+    setCallerIdError('')
+    setCallerIdMessage('')
+    setVerificationCode('')
+    try {
+      const token = await getSessionToken()
+      const res = await fetch(LUMIN_GATEWAY + '/api/sd-dialer/caller-id/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + token,
+        },
+        body: JSON.stringify({ phone: callerPhone.trim() }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.detail || 'Não foi possível verificar o número.')
+      const result = await fetchCallerIdentity(token)
+      if (result.active?.phoneNumber === normalizeCallerIdInput(callerPhone)) {
+        setCallerIdMessage('Este número já está verificado e ficou ativo para as chamadas.')
+      } else {
+        setCallerIdMessage(result.pending ? 'A Twilio vai ligar para ' + result.pending.phoneNumber + '. Atende e introduz o código abaixo.' : 'O número foi atualizado.')
+        if (result.pending) scheduleCallerIdentityPoll(token)
+      }
+    } catch (err: any) {
+      setCallerIdError(err?.message || 'Falha ao iniciar a verificação.')
+    } finally {
+      setCallerIdSaving(false)
+    }
+  }
+
   async function pollCall(callId: string, token: string) {
     try {
       const res = await fetch(`${LUMIN_GATEWAY}/api/sd-dialer/call/${callId}`, {
@@ -341,7 +453,7 @@ function LuminCallPanel() {
   }
 
   const callIsBusy = ['queued', 'preparing', 'ringing', 'answered', 'connected'].includes(callStatus)
-  const canStartCall = agentReady && (callMode === 'lead'
+  const canStartCall = agentReady && !callerIdLoading && Boolean(callerIdActive) && (callMode === 'lead'
     ? Boolean(selected)
     : Boolean(manualPhone.trim() && manualName.trim() && manualPhone.replace(/\D/g, '').length >= 9))
 
@@ -476,6 +588,52 @@ function LuminCallPanel() {
           </div>
         </div>
 
+        <section aria-label="Número de saída" style={{ marginTop: 16, padding: 13, borderRadius: 11, background: '#13110D', border: '1px solid #383228' }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: '#F5EEDC' }}>Número de saída</div>
+          <div style={{ fontSize: 11.5, lineHeight: 1.5, color: '#B7AA91', marginTop: 4 }}>
+            Usa o teu próprio número. A Twilio faz uma chamada automática para confirmar que tens acesso; não é preciso comprar ou alugar um número.
+          </div>
+          {callerIdActive && (
+            <div style={{ marginTop: 8, fontSize: 12, color: '#86EFAC' }}>
+              Verificado e ativo: <strong>{callerIdActive.phoneNumber}</strong>
+            </div>
+          )}
+          {callerIdFailed && !callerIdPending && (
+            <div role="alert" style={{ marginTop: 8, padding: 9, borderRadius: 8, background: '#281414', color: '#FCA5A5', fontSize: 11.5, lineHeight: 1.5 }}>
+              A última verificação falhou. Confirma que atendeste à chamada da Twilio e introduziste o código corretamente; depois podes tentar novamente.
+            </div>
+          )}
+          {callerIdPending && (
+            <div style={{ marginTop: 8, padding: 9, borderRadius: 8, background: '#211B10', color: '#FFE6B0', fontSize: 11.5, lineHeight: 1.5 }}>
+              A verificar {callerIdPending.phoneNumber}. Quando atenderes à chamada da Twilio, introduz este código:
+              <div style={{ fontSize: 20, letterSpacing: '.16em', fontWeight: 900, marginTop: 3 }}>{verificationCode || '— — — — — —'}</div>
+              A chamada automática é em inglês. O número atual continua ativo até a nova verificação terminar.
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+            <input
+              type="tel"
+              autoComplete="tel"
+              value={callerPhone}
+              onChange={e => setCallerPhone(e.target.value)}
+              placeholder="+351 912 345 678"
+              aria-label="O teu número de telefone"
+              style={{ flex: '1 1 190px', minWidth: 0, padding: '9px 10px', border: '1px solid #383228', borderRadius: 8, fontSize: 12.5, boxSizing: 'border-box' }}
+            />
+            <button
+              type="button"
+              onClick={startCallerIdVerification}
+              disabled={callerIdLoading || callerIdSaving || callIsBusy || !callerPhone.trim()}
+              style={{ padding: '0 12px', border: '1px solid #D5AA56', borderRadius: 8, color: '#FFE6B0', fontSize: 11.5, fontWeight: 800, cursor: 'pointer' }}
+            >
+              {callerIdSaving ? 'A iniciar…' : callerIdActive ? 'Verificar outro número' : 'Verificar número'}
+            </button>
+          </div>
+          {callerIdLoading && <div style={{ marginTop: 7, fontSize: 11, color: '#B7AA91' }}>A carregar a configuração…</div>}
+          {callerIdMessage && <div role="status" style={{ marginTop: 7, fontSize: 11.5, color: '#86EFAC' }}>{callerIdMessage}</div>}
+          {callerIdError && <div role="alert" style={{ marginTop: 7, fontSize: 11.5, color: '#FCA5A5' }}>{callerIdError}</div>}
+        </section>
+
         <div style={{ marginTop: 18 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: 4, borderRadius: 10, background: '#F1F5F9', marginBottom: 14 }}>
             <button
@@ -571,7 +729,8 @@ function LuminCallPanel() {
       }}>
         <div style={{ fontSize: 11, color: '#A5B4FC', fontWeight: 800, letterSpacing: '.08em' }}>LUMIN VOICE</div>
         <div style={{ fontSize: 20, fontWeight: 800, marginTop: 8 }}>{callMode === 'manual' ? (manualName.trim() || 'Lead manual') : (selected?.nome || 'Escolhe um contacto')}</div>
-        <div style={{ fontSize: 13, color: '#CBD5E1', marginTop: 3 }}>{callMode === 'manual' ? (manualPhone.trim() || 'Número manual') : (selected?.telefone || 'A chamada sai pelo número autorizado do Lumin.')}</div>
+        <div style={{ fontSize: 13, color: '#CBD5E1', marginTop: 3 }}>{callMode === 'manual' ? (manualPhone.trim() || 'Número manual') : (selected?.telefone || 'Escolhe um contacto para preparar a chamada.')}</div>
+        <div style={{ fontSize: 11, color: '#B7AA91', marginTop: 5 }}>Sai por: {callerIdActive?.phoneNumber || (callerIdLoading ? 'a carregar…' : 'número por verificar')}</div>
 
         <div style={{ marginTop: 15, padding: '11px 12px', borderRadius: 10, background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.08)' }}>
           <div style={{ fontSize: 10, color: '#94A3B8', marginBottom: 4 }}>AGENTE SELECIONADO</div>
