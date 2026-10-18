@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, type CSSProperties } from 'react'
-import { CheckCircle2, Loader2, RefreshCw, Search, Users } from 'lucide-react'
+import { Loader2, RefreshCw, Search, Users } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { canViewVoiceSeller, voiceLeadSearch, VOICE_BLOCKED_STATUSES, type VoiceLead, type VoiceSeller } from '@/lib/utils/voice-leads'
 
@@ -10,7 +10,9 @@ const control: CSSProperties = { width: '100%', padding: '10px 12px', border: '1
 const button: CSSProperties = { padding: '9px 12px', borderRadius: 9, cursor: 'pointer', fontSize: 12, fontWeight: 700 }
 const statusLabels: Record<string, string> = { novo: 'Nova', contactado: 'Contactada', nao_atende: 'Não atendeu', ligar_depois: 'Ligar depois', sem_cobertura: 'Sem cobertura', outro: 'Outro' }
 
-export default function VoiceLeadPicker({ selectedId, onSelect, disabled = false }: {
+export default function VoiceLeadPicker({ selectedId, onSelect, selectedLeads = [], onSelectionChange, disabled = false }: {
+  selectedLeads?: VoiceLead[]
+  onSelectionChange?: (leads: VoiceLead[]) => void
   selectedId?: string
   onSelect: (lead: VoiceLead | null) => void
   disabled?: boolean
@@ -89,7 +91,7 @@ export default function VoiceLeadPicker({ selectedId, onSelect, disabled = false
     return () => { active = false; controller.abort() }
   }, [actor, sellers, sellerId, term, status, page, revision])
 
-  function resetSelection() { onSelect(null); setLeads([]); setPage(0) }
+  function resetSelection() { onSelectionChange?.([]); onSelect(null); setLeads([]); setPage(0) }
   const manager = actor?.role === 'admin' || actor?.role === 'supervisor'
   const sellerName = (id?: string | null) => sellers.find(seller => seller.id === id)?.full_name || 'Vendedor'
 
@@ -117,18 +119,34 @@ export default function VoiceLeadPicker({ selectedId, onSelect, disabled = false
     </select>
     {error && <p role="alert" style={{ color: '#FCA5A5', fontSize: 12 }}>{error} <button type="button" style={button} onClick={() => actor ? setRevision(value => value + 1) : setAuthRevision(value => value + 1)}>Tentar novamente</button></p>}
     {loading ? <p role="status" style={{ display: 'flex', gap: 7, fontSize: 12 }}><Loader2 size={15} />A carregar leads…</p> : !error && <>
-      <p role="status" style={{ fontSize: 11, margin: '4px 0 10px', color: '#CDBFA3' }}>{leads.length ? `Página ${page + 1} · ${leads.length} leads. Escolhe uma para preparar a chamada.` : 'Sem leads disponíveis com estes filtros.'}</p>
+      <p role="status" style={{ fontSize: 11, margin: '4px 0 10px', color: '#CDBFA3' }}>{leads.length ? `Página ${page + 1} · ${leads.length} leads. Seleciona uma ou várias para ligar.` : 'Sem leads disponíveis com estes filtros.'}</p>
+      {onSelectionChange && leads.length > 0 && <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+        <label style={{ fontSize: 12 }}><input type="checkbox" disabled={disabled}
+          checked={leads.every(lead => selectedLeads.some(item => item.id === lead.id))}
+          onChange={event => onSelectionChange(event.target.checked
+            ? [...selectedLeads, ...leads.filter(lead => !selectedLeads.some(item => item.id === lead.id))]
+            : selectedLeads.filter(item => !leads.some(lead => lead.id === item.id)))} /> Selecionar esta página</label>
+        <span>{selectedLeads.length} selecionadas</span>
+        <button type="button" disabled={disabled || !selectedLeads.length} style={button} onClick={() => { onSelectionChange([]); onSelect(null) }}>Limpar</button>
+      </div>}
       <div style={{ display: 'grid', gap: 7, maxHeight: 360, overflowY: 'auto' }}>
-        {leads.map(lead => <button type="button" key={lead.id} disabled={disabled} aria-pressed={selectedId === lead.id} onClick={() => onSelect(lead)}
-          style={{ padding: '12px', borderRadius: 10, textAlign: 'left', cursor: disabled ? 'default' : 'pointer', border: '1px solid #393329', opacity: disabled ? .6 : 1 }}>
-          <span style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontWeight: 700, fontSize: 13 }}>{lead.nome || 'Sem nome'}{selectedId === lead.id && <CheckCircle2 size={16} />}</span>
+        {leads.map(lead => <label key={lead.id} style={{ display: 'flex', gap: 10, padding: 12, borderRadius: 10, textAlign: 'left', border: '1px solid #393329', opacity: disabled ? .6 : 1 }}>
+          <input type="checkbox" aria-label={`Selecionar ${lead.nome || lead.telefone}`} disabled={disabled}
+            checked={onSelectionChange ? selectedLeads.some(item => item.id === lead.id) : selectedId === lead.id}
+            onChange={event => {
+              if (onSelectionChange) {
+                const next = event.target.checked ? [...selectedLeads, lead] : selectedLeads.filter(item => item.id !== lead.id)
+                onSelectionChange(next); onSelect(next[0] || null)
+              } else onSelect(event.target.checked ? lead : null)
+            }} />
+          <span><span style={{ fontWeight: 700, fontSize: 13 }}>{lead.nome || 'Sem nome'}</span>
           <span style={{ display: 'block', fontSize: 12, marginTop: 4 }}>{lead.telefone} · {statusLabels[lead.status] || lead.status}</span>
-          {manager && <span style={{ display: 'block', fontSize: 11, marginTop: 4, opacity: .75 }}>{sellerName(lead.assigned_to)}</span>}
-        </button>)}
+          {manager && <span style={{ display: 'block', fontSize: 11, marginTop: 4, opacity: .75 }}>{sellerName(lead.assigned_to)}</span>}</span>
+        </label>)}
       </div>
       {(page > 0 || hasMore) && <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 10 }}>
-        <button type="button" style={button} disabled={page === 0 || disabled} onClick={() => { onSelect(null); setLeads([]); setPage(value => value - 1) }}>Anterior</button>
-        <button type="button" style={button} disabled={!hasMore || disabled} onClick={() => { onSelect(null); setLeads([]); setPage(value => value + 1) }}>Seguinte</button>
+        <button type="button" style={button} disabled={page === 0 || disabled} onClick={() => { setLeads([]); setPage(value => value - 1) }}>Anterior</button>
+        <button type="button" style={button} disabled={!hasMore || disabled} onClick={() => { setLeads([]); setPage(value => value + 1) }}>Seguinte</button>
       </div>}
     </>}
   </section>

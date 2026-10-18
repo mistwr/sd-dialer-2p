@@ -18,6 +18,7 @@ import {
 import AIAnalysisPanel from '@/components/ai/AIAnalysisPanel'
 import VoiceLeadPicker from '@/components/ai/VoiceLeadPicker'
 import VoiceCallHistory from '@/components/ai/VoiceCallHistory'
+import { VoiceCallQueue } from '@/lib/utils/voice-call-queue'
 import type { VoiceLead } from '@/lib/utils/voice-leads'
 import { createClient } from '@/lib/supabase/client'
 
@@ -255,6 +256,11 @@ function normalizeCallerIdInput(phone: string) {
 }
 
 function LuminCallPanel() {
+  const [selectedLeads, setSelectedLeads] = useState<VoiceLead[]>([])
+  const queue = useRef<VoiceCallQueue<VoiceLead> | null>(null)
+  const [, refreshQueue] = useState(0)
+  const requestBusy = useRef(false)
+  const alive = useRef(true)
   const [selected, setSelected] = useState<VoiceLead | null>(null)
   const [callMode, setCallMode] = useState<'lead' | 'manual'>('lead')
   const [manualPhone, setManualPhone] = useState('')
@@ -280,8 +286,13 @@ function LuminCallPanel() {
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const callerIdPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => () => {
+  useEffect(() => {
+    alive.current = true
+    return () => {
+    alive.current = false
+    queue.current?.stop()
     if (pollTimer.current) clearTimeout(pollTimer.current)
+    }
   }, [])
 
   useEffect(() => {
@@ -430,7 +441,7 @@ function LuminCallPanel() {
     }
   }
 
-  async function pollCall(callId: string, token: string) {
+  async function pollCall(callId: string, token: string, leadId?: string) {
     try {
       const res = await fetch(`${LUMIN_GATEWAY}/api/sd-dialer/call/${callId}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -439,6 +450,7 @@ function LuminCallPanel() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.detail || 'Erro ao consultar a chamada.')
 
+      if (!alive.current) return
       const status = json.status as typeof callStatus
       setCallStatus(status)
 
@@ -453,30 +465,67 @@ function LuminCallPanel() {
       }
       setCallMessage(labels[status] || status)
 
-      if (!['ended', 'failed'].includes(status)) {
-        pollTimer.current = setTimeout(() => pollCall(callId, token), 1200)
+      if (['ended', 'failed'].includes(status)) {
+        if (leadId && queue.current?.complete(leadId)) {
+          refreshQueue(value => value + 1)
+          pollTimer.current = setTimeout(() => advanceQueue(), 1500)
+        }
+      } else {
+        pollTimer.current = setTimeout(async () => {
+          try { await pollCall(callId, await getSessionToken(), leadId) }
+          catch { await pollCall(callId, token, leadId) }
+        }, 1500)
       }
     } catch (err: any) {
-      setCallStatus('failed')
-      setCallMessage(err?.message || 'Erro ao acompanhar a chamada.')
+      if (!alive.current) return
+      queue.current?.pause()
+      refreshQueue(value => value + 1)
+      setCallMessage('Ligação interrompida. A confirmar o fim da chamada; a fila ficou pausada.')
+      pollTimer.current = setTimeout(() => pollCall(callId, token, leadId), 5000)
     }
   }
 
-  const callIsBusy = ['queued', 'preparing', 'ringing', 'answered', 'connected'].includes(callStatus)
+  const callIsBusy = Boolean(queue.current?.active) || ['queued', 'preparing', 'ringing', 'answered', 'connected'].includes(callStatus)
   const canStartCall = agentReady && !callerIdLoading && (Boolean(callerIdActive) || callerIdFallbackAvailable) && (callMode === 'lead'
     ? Boolean(selected)
     : Boolean(manualPhone.trim() && manualName.trim() && manualPhone.replace(/\D/g, '').length >= 9))
 
-  async function startCall() {
-    if (!canStartCall || callIsBusy) return
+  const queueActive = queue.current?.mode === 'running' || queue.current?.mode === 'paused'
+  const controlsLocked = callIsBusy || queueActive
+  useEffect(() => {
+    if (!controlsLocked) return
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', warnBeforeLeaving)
+    return () => window.removeEventListener('beforeunload', warnBeforeLeaving)
+  }, [controlsLocked])
+
+  async function advanceQueue() {
+    if (!alive.current || requestBusy.current) return
+    const lead = queue.current?.take()
+    refreshQueue(value => value + 1)
+    if (lead) { setSelected(lead); await startCall(lead) }
+  }
+
+  function startSelectedCalls() {
+    if (!canStartCall || controlsLocked || requestBusy.current) return
+    if (callMode === 'lead' && selectedLeads.length > 1) {
+      queue.current = new VoiceCallQueue(selectedLeads)
+      void advanceQueue()
+    } else { queue.current = null; void startCall() }
+  }
+
+  async function startCall(queuedLead?: VoiceLead) {
+    if (requestBusy.current || (!queuedLead && (!canStartCall || callIsBusy))) return
+    requestBusy.current = true
     setError('')
     setCallStatus('queued')
     setCallMessage('A iniciar chamada...')
 
     try {
       const token = await getSessionToken()
-      const requestBody = callMode === 'lead' && selected
-        ? { lead_id: selected.id, agent_id: agentId }
+      const lead = queuedLead || selected
+      const requestBody = callMode === 'lead' && lead
+        ? { lead_id: lead.id, agent_id: agentId }
         : {
             phone: manualPhone.trim(),
             name: manualName.trim(),
@@ -492,15 +541,23 @@ function LuminCallPanel() {
         body: JSON.stringify(requestBody),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.detail || 'Não foi possível iniciar a chamada.')
+      if (!res.ok) {
+        if (queuedLead) queue.current?.complete(queuedLead.id)
+        throw new Error(json.detail || 'Não foi possível iniciar a chamada.')
+      }
 
+      if (!json.callId) throw new Error('Sem identificador de chamada. Verifica o histórico antes de voltar a ligar.')
+      if (!alive.current) return
       setCallStatus(json.status || 'queued')
       setCallMessage('Chamada iniciada.')
-      pollCall(json.callId, token)
+      void pollCall(json.callId, token, queuedLead?.id)
     } catch (err: any) {
+      queue.current?.stop()
       setCallStatus('failed')
-      setCallMessage(err?.message || 'Falha ao iniciar chamada.')
-    }
+      setCallMessage((err?.message || 'Falha ao iniciar chamada.') + ' Verifica o histórico antes de repetir.')
+      // An uncertain POST must never automatically retry or release the next lead.
+      refreshQueue(value => value + 1)
+    } finally { requestBusy.current = false }
   }
 
   const agent = VOICE_AGENTS.find(a => a.id === agentId) ?? VOICE_AGENTS[0]
@@ -659,7 +716,7 @@ function LuminCallPanel() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: 4, borderRadius: 10, background: '#F1F5F9', marginBottom: 14 }}>
             <button
               type="button"
-              disabled={callIsBusy}
+              disabled={controlsLocked}
               onClick={() => { setCallMode('lead'); setError(''); setCallStatus('idle') }}
               style={{ padding: '9px 8px', border: 0, borderRadius: 8, background: callMode === 'lead' ? '#0F172A' : 'transparent', color: callMode === 'lead' ? '#fff' : '#475569', fontSize: 12, fontWeight: 800 }}
             >
@@ -667,7 +724,7 @@ function LuminCallPanel() {
             </button>
             <button
               type="button"
-              disabled={callIsBusy}
+              disabled={controlsLocked}
               onClick={() => { setCallMode('manual'); setSelected(null); setError(''); setCallStatus('idle') }}
               style={{ padding: '9px 8px', border: 0, borderRadius: 8, background: callMode === 'manual' ? '#0F172A' : 'transparent', color: callMode === 'manual' ? '#fff' : '#475569', fontSize: 12, fontWeight: 800 }}
             >
@@ -678,7 +735,9 @@ function LuminCallPanel() {
           {callMode === 'lead' ? (
             <VoiceLeadPicker
               selectedId={selected?.id}
-              disabled={callIsBusy}
+              selectedLeads={selectedLeads}
+              onSelectionChange={leads => { setSelectedLeads(leads); setSelected(leads[0] || null) }}
+              disabled={controlsLocked}
               onSelect={lead => {
                 setSelected(lead)
                 setError('')
@@ -718,7 +777,7 @@ function LuminCallPanel() {
           <select
             value={agentId}
             onChange={e => setAgentId(e.target.value as VoiceAgentId)}
-            disabled={!agentReady || callIsBusy}
+            disabled={!agentReady || controlsLocked}
             style={{ width: '100%', padding: '10px 12px', borderRadius: 9, border: '1.5px solid #E2E8F0', background: '#fff', color: '#0F172A', fontSize: 13.5 }}
           >
             {VOICE_AGENTS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
@@ -726,10 +785,23 @@ function LuminCallPanel() {
           <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 5 }}>{agent.detail}</div>
         </div>
 
+        {queue.current && <section aria-label="Fila de chamadas" style={{ marginTop: 16, padding: 12, border: '1px solid #D5AA56', borderRadius: 10 }}>
+          <strong role="status">{queue.current.completed} de {queue.current.total} concluídas · {queue.current.mode === 'paused' ? 'Pausada' : queue.current.mode === 'stopped' ? 'Terminada' : 'Em execução'}</strong>
+          {queueActive && <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button type="button" onClick={() => {
+              if (queue.current?.mode === 'paused') { queue.current.resume(); void advanceQueue() }
+              else queue.current?.pause()
+              refreshQueue(value => value + 1)
+            }}>{queue.current.mode === 'paused' ? 'Retomar' : 'Pausar'}</button>
+            <button type="button" onClick={() => { queue.current?.stop(); refreshQueue(value => value + 1) }}>Parar fila</button>
+          </div>}
+          <p style={{ fontSize: 11, marginBottom: 0 }}>Uma chamada de cada vez. Pausar/Parar impede a próxima; a chamada atual termina normalmente. Mantém esta página aberta. Fechar ou atualizar interrompe a fila.</p>
+        </section>}
+
         <button
           type="button"
-          onClick={startCall}
-          disabled={!canStartCall || callIsBusy}
+          onClick={startSelectedCalls}
+          disabled={!canStartCall || controlsLocked}
           style={{
             width: '100%', marginTop: 14, minHeight: 50, borderRadius: 11, border: 'none',
             background: canStartCall ? '#2563EB' : '#E2E8F0',
@@ -737,7 +809,7 @@ function LuminCallPanel() {
             cursor: canStartCall ? 'pointer' : 'not-allowed',
           }}
         >
-          {callStatus === 'connected' ? 'CHAMADA EM CURSO' : callIsBusy ? 'A LIGAR…' : '📞 LIGAR'}
+          {callStatus === 'connected' ? 'CHAMADA EM CURSO' : callIsBusy ? 'A LIGAR…' : queueActive ? 'FILA ATIVA' : callMode === 'lead' && selectedLeads.length > 1 ? `📞 LIGAR ÀS ${selectedLeads.length} SELECIONADAS` : '📞 LIGAR'}
         </button>
 
 
@@ -983,7 +1055,8 @@ export default function ChamadasIAPage() {
         ))}
       </div>
 
-      {tab === 'ligar' ? <LuminCallPanel /> : tab === 'assistente' ? <AssistenteComercial /> : (
+      <div style={{ display: tab === 'ligar' ? 'block' : 'none' }}><LuminCallPanel /></div>
+      {tab === 'ligar' ? null : tab === 'assistente' ? <AssistenteComercial /> : (
         <>
       <VoiceCallHistory />
       {/* Stats bar */}
