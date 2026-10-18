@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Download, Share2, X } from 'lucide-react'
 
 interface BeforeInstallPromptEvent extends Event {
@@ -16,6 +16,8 @@ export default function PWAInstallPrompt() {
   const [isAndroid, setIsAndroid] = useState(false)
   const [isSamsungBrowser, setIsSamsungBrowser] = useState(false)
   const [isStandalone, setIsStandalone] = useState(false)
+  const dismissedForVisit = useRef(false)
+  const promptTimer = useRef<number | undefined>(undefined)
 
   useEffect(() => {
     const userAgent = navigator.userAgent
@@ -40,9 +42,15 @@ export default function PWAInstallPrompt() {
     }
 
     const supportsInstallUi = ios || android || /Chrome|Chromium|CriOS|Edg\//i.test(userAgent)
-    const timer = supportsInstallUi ? window.setTimeout(() => setShowPrompt(true), 3500) : undefined
+    promptTimer.current = supportsInstallUi
+      ? window.setTimeout(() => {
+          promptTimer.current = undefined
+          if (!dismissedForVisit.current) setShowPrompt(true)
+        }, 3500)
+      : undefined
 
     const handleBeforeInstallPrompt = (event: Event) => {
+      if (dismissedForVisit.current) return
       event.preventDefault()
       setDeferredPrompt(event as BeforeInstallPromptEvent)
       setShowPrompt(true)
@@ -58,7 +66,8 @@ export default function PWAInstallPrompt() {
     window.addEventListener('appinstalled', handleInstalled)
 
     return () => {
-      if (timer) window.clearTimeout(timer)
+      if (promptTimer.current !== undefined) window.clearTimeout(promptTimer.current)
+      promptTimer.current = undefined
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
       window.removeEventListener('appinstalled', handleInstalled)
     }
@@ -80,7 +89,12 @@ export default function PWAInstallPrompt() {
       if (outcome === 'accepted') {
         setShowPrompt(false)
       } else {
-        localStorage.setItem('sd-dialer-pwa-install-dismissed', Date.now().toString())
+        dismissedForVisit.current = true
+        try {
+          localStorage.setItem('sd-dialer-pwa-install-dismissed', Date.now().toString())
+        } catch {
+          // Keep the card dismissed for this visit if storage is unavailable.
+        }
         setShowPrompt(false)
       }
     } catch {
@@ -89,6 +103,9 @@ export default function PWAInstallPrompt() {
   }
 
   const handleDismiss = () => {
+    dismissedForVisit.current = true
+    if (promptTimer.current !== undefined) window.clearTimeout(promptTimer.current)
+    promptTimer.current = undefined
     setShowPrompt(false)
     try {
       localStorage.setItem('sd-dialer-pwa-install-dismissed', Date.now().toString())
