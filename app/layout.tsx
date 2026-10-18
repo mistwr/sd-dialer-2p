@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import ServiceWorkerRegistration from '@/components/common/ServiceWorkerRegistration'
+import PWAInstallPrompt from '@/components/common/PWAInstallPrompt'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' })
 
@@ -23,11 +24,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt" className={inter.variable} style={{ background: '#F8FAFC' }}>
+    <html lang="pt-PT" className={inter.variable} style={{ background: '#F8FAFC' }}>
       <head>
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
       </head>
-      <body><ServiceWorkerRegistration />{children}</body>
+      <body><ServiceWorkerRegistration />{children}<PWAInstallPrompt /></body>
     </html>
   )
 }

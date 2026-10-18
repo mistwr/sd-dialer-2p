@@ -6,7 +6,7 @@
  * Isto evita servir versões antigas do dashboard depois de um deploy.
  */
 
-const CACHE_NAME = 'sd-dialer-v3'
+const CACHE_NAME = 'sd-dialer-v4'
 const ASSETS_TO_CACHE = [
   '/manifest.json',
   '/icons/icon-192.png',
