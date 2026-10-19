@@ -413,7 +413,7 @@ function LuminCallPanel() {
   }, [])
 
   async function startCallerIdVerification() {
-    if (!callerPhone.trim() || callerIdSaving || callIsBusy) return
+    if (!callerPhone.trim() || callerIdSaving || callerIdRemoving || callIsBusy) return
     if (!callerIdVerificationAvailable) {
       setCallerIdError('A validação do número pessoal ainda não está configurada. Podes continuar a fazer chamadas pelo número atual da empresa.')
       return
@@ -450,7 +450,7 @@ function LuminCallPanel() {
 
 
   async function removeCallerIdNumber(record: CallerIdRecord) {
-    if (!record.id || callerIdRemoving || callIsBusy) return
+    if (!record.id || callerIdRemoving || callerIdSaving || callIsBusy) return
     const activeNote = record.isActive
       ? ' Se removeres o número ativo, as chamadas passam a usar o número de saída da empresa.'
       : ''
@@ -741,8 +741,8 @@ function LuminCallPanel() {
             <button
               type="button"
               onClick={startCallerIdVerification}
-              disabled={callerIdLoading || !callerIdVerificationAvailable || callerIdSaving || callIsBusy || !callerPhone.trim()}
-              style={{ padding: '0 12px', border: '1px solid #D5AA56', borderRadius: 8, color: '#FFE6B0', fontSize: 11.5, fontWeight: 800, cursor: callerIdLoading || !callerIdVerificationAvailable || callerIdSaving || callIsBusy || !callerPhone.trim() ? 'not-allowed' : 'pointer', opacity: !callerIdVerificationAvailable ? 0.55 : 1 }}
+              disabled={callerIdLoading || !callerIdVerificationAvailable || callerIdSaving || Boolean(callerIdRemoving) || callIsBusy || !callerPhone.trim()}
+              style={{ padding: '0 12px', border: '1px solid #D5AA56', borderRadius: 8, color: '#FFE6B0', fontSize: 11.5, fontWeight: 800, cursor: callerIdLoading || !callerIdVerificationAvailable || callerIdSaving || callerIdRemoving || callIsBusy || !callerPhone.trim() ? 'not-allowed' : 'pointer', opacity: !callerIdVerificationAvailable ? 0.55 : 1 }}
             >
               {callerIdSaving ? 'A iniciar…' : !callerIdVerificationAvailable ? 'Verificação indisponível' : callerIdActive ? 'Verificar outro número' : 'Verificar número'}
             </button>
@@ -775,7 +775,7 @@ function LuminCallPanel() {
                         aria-label={`Remover ${record.phoneNumber} da conta Twilio`}
                         title="Remover número"
                         onClick={() => void removeCallerIdNumber(record)}
-                        disabled={Boolean(callerIdRemoving) || callIsBusy}
+                        disabled={Boolean(callerIdRemoving) || callerIdSaving || callIsBusy}
                         style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '6px 8px', borderRadius: 7, fontSize: 10.5, fontWeight: 700, cursor: callerIdRemoving || callIsBusy ? 'not-allowed' : 'pointer', opacity: callerIdRemoving || callIsBusy ? 0.6 : 1 }}
                       >
                         {callerIdRemoving === record.id ? <Loader2 size={13} /> : <Trash2 size={13} color="#FCA5A5" />}
