@@ -173,7 +173,7 @@ export async function POST(req: NextRequest) {
     // Fetch recording + analysis
     const { data: recording, error: recErr } = await admin
       .from('call_recordings')
-      .select('*, leads(nome), campanhas(nome), ai_analyses(*)')
+      .select('*, leads(nome), campanhas(nome:name), ai_analyses(*)')
       .eq('id', recording_id)
       .single()
 

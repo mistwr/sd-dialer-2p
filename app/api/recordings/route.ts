@@ -61,8 +61,8 @@ export async function GET(req: NextRequest) {
         id, audio_url, file_name, file_size, duration_sec, mime_type,
         status, error_msg, created_at, parceiro_id, company_id,
         leads(nome, telefone),
-        campanhas(nome),
-        usuarios!call_recordings_parceiro_id_fkey(nome),
+        campanhas(nome:name),
+        usuarios!call_recordings_parceiro_id_fkey(nome:full_name),
         ai_analyses(
           id, score, summary, status, urgency, next_action,
           objections, interests, competitor, current_operator,

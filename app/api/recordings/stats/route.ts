@@ -35,8 +35,8 @@ export async function GET(req: NextRequest) {
         parceiro_id,
         call_recordings!ai_analyses_recording_id_fkey(
           duration_sec, campanha_id, created_at,
-          campanhas(nome),
-          usuarios!call_recordings_parceiro_id_fkey(nome)
+          campanhas(nome:name),
+          usuarios!call_recordings_parceiro_id_fkey(nome:full_name)
         )
       `)
       .eq('company_id', me?.company_id)

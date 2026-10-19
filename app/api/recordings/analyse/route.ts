@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     // Fetch recording with joined data
     const { data: recording, error: recErr } = await admin
       .from('call_recordings')
-      .select('*, leads(nome), campanhas(nome)')
+      .select('*, leads(nome), campanhas(nome:name)')
       .eq('id', recording_id)
       .single()
 
