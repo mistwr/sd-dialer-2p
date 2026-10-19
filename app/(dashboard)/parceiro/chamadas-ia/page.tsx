@@ -451,11 +451,18 @@ function LuminCallPanel() {
 
   async function removeCallerIdNumber(record: CallerIdRecord) {
     if (!record.id || callerIdRemoving || callerIdSaving || callIsBusy) return
-    const activeNote = record.isActive
+    const digits = (value: string) => value.replace(/\D/g, '')
+    const isCompanyFallback = Boolean(
+      callerIdFallbackNumber &&
+      digits(record.phoneNumber) === digits(callerIdFallbackNumber)
+    )
+    const activeNote = record.isActive && !isCompanyFallback
       ? ' Se removeres o número ativo, as chamadas passam a usar o número de saída da empresa.'
       : ''
     const confirmation = window.confirm(
-      `Remover ${record.phoneNumber} da conta Twilio? O número deixa de estar disponível como Caller ID nas chamadas feitas por esta conta Twilio.${activeNote}`
+      isCompanyFallback
+        ? `Remover ${record.phoneNumber} das associações do teu utilizador? Este número também é o fallback da empresa, por isso continuará verificado na Twilio para as chamadas da empresa.`
+        : `Remover ${record.phoneNumber} da conta Twilio? O número deixa de estar disponível como Caller ID nas chamadas feitas por esta conta Twilio.${activeNote}`
     )
     if (!confirmation) return
 
@@ -474,7 +481,11 @@ function LuminCallPanel() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.detail || 'Não foi possível remover o número.')
       await fetchCallerIdentity(token)
-      setCallerIdMessage('Número removido da conta Twilio.')
+      setCallerIdMessage(
+        json.twilioCallerIdRetained
+          ? 'Número removido das associações do teu utilizador; mantido na Twilio como saída da empresa.'
+          : 'Número removido da conta Twilio.'
+      )
     } catch (err: any) {
       setCallerIdError(err?.message || 'Falha ao remover o número.')
     } finally {
