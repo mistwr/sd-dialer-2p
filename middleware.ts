@@ -1,51 +1,39 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request })
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return request.cookies.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
-        },
-      },
-    }
+function hasSessionCookie(request: NextRequest) {
+  return request.cookies.getAll().some(({ name }) =>
+    /^sb-.+-auth-token(?:\.\d+)?$/.test(name)
   )
+}
 
-  const { data: { user } } = await supabase.auth.getUser()
+export function middleware(request: NextRequest) {
+  // This is a fast navigation hint only. API routes and Supabase RLS still
+  // validate the session before returning protected data.
+  const isSignedIn = hasSessionCookie(request)
   const { pathname } = request.nextUrl
 
   if (pathname === '/') {
     const url = request.nextUrl.clone()
-    url.pathname = user ? '/admin' : '/login'
+    url.pathname = isSignedIn ? '/admin' : '/login'
     return NextResponse.redirect(url)
   }
 
   const isProtected = pathname.startsWith('/admin') || pathname.startsWith('/supervisor') || pathname.startsWith('/parceiro')
-  const isAuthPage  = pathname === '/login'
+  const isAuthPage = pathname === '/login'
 
-  if (isProtected && !user) {
+  if (isProtected && !isSignedIn) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  if (isAuthPage && user) {
+  if (isAuthPage && isSignedIn) {
     const url = request.nextUrl.clone()
     url.pathname = '/admin'
     return NextResponse.redirect(url)
   }
 
-  return supabaseResponse
+  return NextResponse.next()
 }
 
 export const config = {
