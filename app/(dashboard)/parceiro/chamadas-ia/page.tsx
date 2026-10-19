@@ -239,6 +239,7 @@ const VOICE_AGENTS = [
 
 type VoiceAgentId = (typeof VOICE_AGENTS)[number]['id']
 type CallerIdRecord = {
+  id: string
   phoneNumber: string
   status: 'pending' | 'verified' | 'failed'
   isActive: boolean
@@ -273,6 +274,8 @@ function LuminCallPanel() {
   const [error, setError] = useState('')
   const [callerPhone, setCallerPhone] = useState('')
   const [callerIdActive, setCallerIdActive] = useState<CallerIdRecord | null>(null)
+  const [callerIdNumbers, setCallerIdNumbers] = useState<CallerIdRecord[]>([])
+  const [callerIdRemoving, setCallerIdRemoving] = useState<string | null>(null)
   const [callerIdPending, setCallerIdPending] = useState<CallerIdRecord | null>(null)
   const [callerIdFailed, setCallerIdFailed] = useState<CallerIdRecord | null>(null)
   const [callerIdVerificationAvailable, setCallerIdVerificationAvailable] = useState(false)
@@ -358,7 +361,11 @@ function LuminCallPanel() {
     const active = (json.active ?? null) as CallerIdRecord | null
     const pending = (json.pending ?? null) as CallerIdRecord | null
     const failed = (json.failed ?? null) as CallerIdRecord | null
+    const numbers = Array.isArray(json.numbers)
+      ? json.numbers as CallerIdRecord[]
+      : active ? [active] : []
     setCallerIdActive(active)
+    setCallerIdNumbers(numbers)
     setCallerIdPending(pending)
     setCallerIdFailed(failed)
     setCallerIdVerificationAvailable(Boolean(json.verificationAvailable))
@@ -366,7 +373,7 @@ function LuminCallPanel() {
     setCallerIdFallbackNumber(String(json.fallbackPhoneNumber || ''))
     setVerificationCode(pending?.validationCode || '')
     setCallerIdError('')
-    return { active, pending, failed }
+    return { active, pending, failed, numbers }
   }
 
   function scheduleCallerIdentityPoll(token: string) {
@@ -438,6 +445,40 @@ function LuminCallPanel() {
       setCallerIdError(err?.message || 'Falha ao iniciar a verificação.')
     } finally {
       setCallerIdSaving(false)
+    }
+  }
+
+
+  async function removeCallerIdNumber(record: CallerIdRecord) {
+    if (!record.id || callerIdRemoving || callIsBusy) return
+    const activeNote = record.isActive
+      ? ' Se removeres o número ativo, as chamadas passam a usar o número de saída da empresa.'
+      : ''
+    const confirmation = window.confirm(
+      `Remover ${record.phoneNumber} da conta Twilio? O número deixa de estar disponível como Caller ID nas chamadas feitas por esta conta Twilio.${activeNote}`
+    )
+    if (!confirmation) return
+
+    setCallerIdRemoving(record.id)
+    setCallerIdError('')
+    setCallerIdMessage('')
+    try {
+      const token = await getSessionToken()
+      const res = await fetch(
+        `${LUMIN_GATEWAY}/api/sd-dialer/caller-id/${encodeURIComponent(record.id)}`,
+        {
+          method: 'DELETE',
+          headers: { Authorization: 'Bearer ' + token },
+        },
+      )
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.detail || 'Não foi possível remover o número.')
+      await fetchCallerIdentity(token)
+      setCallerIdMessage('Número removido da conta Twilio.')
+    } catch (err: any) {
+      setCallerIdError(err?.message || 'Falha ao remover o número.')
+    } finally {
+      setCallerIdRemoving(null)
     }
   }
 
@@ -710,6 +751,42 @@ function LuminCallPanel() {
           {!callerIdLoading && !callerIdVerificationAvailable && <div style={{ marginTop: 7, fontSize: 11, color: '#B7AA91' }}>A validação automática ainda não está ligada no gateway.</div>}
           {callerIdMessage && <div role="status" style={{ marginTop: 7, fontSize: 11.5, color: '#86EFAC' }}>{callerIdMessage}</div>}
           {callerIdError && <div role="alert" style={{ marginTop: 7, fontSize: 11.5, color: '#FCA5A5' }}>{callerIdError}</div>}
+
+          {!callerIdLoading && (
+            <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #352F24' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 7 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 800, color: '#F5EEDC' }}>Números associados</span>
+                <span style={{ fontSize: 10.5, color: '#B7AA91' }}>{callerIdNumbers.length} verificado{callerIdNumbers.length === 1 ? '' : 's'}</span>
+              </div>
+              {callerIdNumbers.length === 0 ? (
+                <div style={{ fontSize: 11, lineHeight: 1.45, color: '#B7AA91' }}>Ainda não tens números pessoais verificados nesta conta.</div>
+              ) : (
+                <div style={{ display: 'grid', gap: 6 }}>
+                  {callerIdNumbers.map(record => (
+                    <div key={record.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 9px', borderRadius: 8, background: '#1A1711', border: '1px solid #383228', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
+                        <strong style={{ fontSize: 12, color: '#F5EEDC' }}>{record.phoneNumber}</strong>
+                        <span style={{ fontSize: 10, padding: '3px 7px', borderRadius: 99, background: record.isActive ? '#15351F' : '#252118', color: record.isActive ? '#86EFAC' : '#D8CEBA' }}>
+                          {record.isActive ? 'Ativo para chamadas' : 'Verificado'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label={`Remover ${record.phoneNumber} da conta Twilio`}
+                        title="Remover número"
+                        onClick={() => void removeCallerIdNumber(record)}
+                        disabled={Boolean(callerIdRemoving) || callIsBusy}
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '6px 8px', borderRadius: 7, fontSize: 10.5, fontWeight: 700, cursor: callerIdRemoving || callIsBusy ? 'not-allowed' : 'pointer', opacity: callerIdRemoving || callIsBusy ? 0.6 : 1 }}
+                      >
+                        {callerIdRemoving === record.id ? <Loader2 size={13} /> : <Trash2 size={13} color="#FCA5A5" />}
+                        {callerIdRemoving === record.id ? 'A remover…' : 'Remover'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
         <div style={{ marginTop: 18 }}>
