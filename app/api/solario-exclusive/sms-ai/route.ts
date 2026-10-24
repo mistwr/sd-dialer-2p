@@ -18,5 +18,5 @@ export async function POST(req:NextRequest){
  const response=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+groq},body:JSON.stringify({model:'openai/gpt-oss-120b',temperature:0.65,max_tokens:220,messages:[{role:'system',content:'És a assistente de campanhas SMS do Solário Exclusive, Portugal. Cria UMA mensagem curta em português de Portugal, tom '+tone+'. Máximo 260 caracteres incluindo assinatura. Usa apenas factos e promoções dados pelo utilizador. Não inventes descontos, datas ou urgência. Não peças dados sensíveis. Inclui identificação Solário Exclusive e opção de oposição: Responde STOP. Devolve só a mensagem.'},{role:'user',content:theme}]})})
  if(!response.ok)return NextResponse.json({error:'Serviço de IA indisponível'},{status:502})
  const data=await response.json()
- return NextResponse.json({message:String(data.choices?.[0]?.message?.content||'').trim().slice(0,500)})
+ const message=String(data.choices?.[0]?.message?.content||'').trim();if(!message)return NextResponse.json({error:'A IA não devolveu texto. Tenta novamente.'},{status:502});return NextResponse.json({message:message.slice(0,500)})
 }
