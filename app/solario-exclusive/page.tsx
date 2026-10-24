@@ -11,6 +11,23 @@ export default function SolarioExclusivePage(){
  const tab=currentTab as 'dashboard'|'clientes'|'importar'|'campanhas'|'visitas'
  const setTab=(id:string)=>{setMenuOpen(false);router.push('/solario-exclusive'+(id==='dashboard'?'':'/'+id))}
  const [detailId,setDetailId]=useState<string|null>(null),[editingNotes,setEditingNotes]=useState(''),[savingNotes,setSavingNotes]=useState(false),[followupFilter,setFollowupFilter]=useState('todos'),[deleting,setDeleting]=useState<string|null>(null),[showAdd,setShowAdd]=useState(false),[clientPage,setClientPage]=useState(1),[menuOpen,setMenuOpen]=useState(false),[visits,setVisits]=useState<{id:string;client_id:string;visited_at:string;notes:string|null}[]>([]),[visitClient,setVisitClient]=useState(''),[visitNotes,setVisitNotes]=useState(''),[importConsent,setImportConsent]=useState(false),[importing,setImporting]=useState(false),[smsBatch,setSmsBatch]=useState(0),[generating,setGenerating]=useState(false),[theme,setTheme]=useState(''),[tone,setTone]=useState('elegante'),[ready,setReady]=useState(false),[allowed,setAllowed]=useState(false),[clients,setClients]=useState<Client[]>([]),[q,setQ]=useState(''),[selected,setSelected]=useState<string[]>([]),[name,setName]=useState(''),[phone,setPhone]=useState(''),[notes,setNotes]=useState(''),[message,setMessage]=useState(''),[status,setStatus]=useState(''),[aiError,setAiError]=useState('')
+ const [installEvent,setInstallEvent]=useState<Event|null>(null),[isInstalled,setIsInstalled]=useState(false),[installHelp,setInstallHelp]=useState(false)
+ useEffect(()=>{
+  const handler=(event:Event)=>{event.preventDefault();setInstallEvent(event)}
+  const installed=()=>{setIsInstalled(true);setInstallEvent(null);setInstallHelp(false)}
+  const media=window.matchMedia('(display-mode: standalone)')
+  if(media.matches || (window.navigator as Navigator & {standalone?:boolean}).standalone)setIsInstalled(true)
+  window.addEventListener('beforeinstallprompt',handler)
+  window.addEventListener('appinstalled',installed)
+  return ()=>{window.removeEventListener('beforeinstallprompt',handler);window.removeEventListener('appinstalled',installed)}
+ },[])
+ async function installSolario(){
+  if(!installEvent){setInstallHelp(true);return}
+  const event=installEvent as Event & {prompt:()=>Promise<void>;userChoice:Promise<{outcome:string}>}
+  await event.prompt()
+  const choice=await event.userChoice
+  if(choice.outcome==='accepted')setInstallEvent(null)
+ }
  const sb=useMemo(()=>createClient(),[])
  async function refresh(){const {data:visitRows}=await sb.from('solario_visits').select('id,client_id,visited_at,notes').order('visited_at',{ascending:false}).limit(100);setVisits(visitRows||[]);const {data,error}=await sb.from('solario_clients').select('id,name,phone,notes,consent,opted_out,last_visit').order('name');if(error)setStatus(error.message);else{setClients(data||[]);if(typeof window!=='undefined'&&window.location.pathname.endsWith('/campanhas')){const ids=new URLSearchParams(window.location.search).get('destinatarios');if(ids)setSelected(ids.split(',').filter(Boolean))}}}
  useEffect(()=>{if(tab==='visitas'&&typeof window!=='undefined'){const id=new URLSearchParams(window.location.search).get('cliente');if(id)setVisitClient(id)}},[tab])
