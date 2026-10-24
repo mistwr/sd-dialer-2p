@@ -55,7 +55,7 @@ export default function SolarioExclusivePage(){
  try{const {data}=await sb.auth.getSession();const token=data.session?.access_token;if(!token)throw Error('Sessão expirada')
  const r=await fetch('/api/solario-exclusive/sms-ai',{method:'POST',headers:{'content-type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({theme,tone})})
  const body=await r.json();if(!r.ok)throw Error(body.error||'Erro da IA')
- setMessage(body.message);setStatus('Mensagem criada pela IA. Revê antes de enviar.')
+ if(!body.message || !String(body.message).trim())throw Error('A IA não devolveu texto. Tenta novamente.');setMessage(String(body.message).trim());setStatus('Mensagem criada pela IA. Revê antes de enviar.')
  }catch(e){setStatus(e instanceof Error?e.message:'Erro de IA')}finally{setGenerating(false)}
  }
 
