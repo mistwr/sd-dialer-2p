@@ -1,0 +1,20 @@
+{
+  "name": "Exclusive Solário — Gestão VIP",
+  "short_name": "Exclusive Solário",
+  "description": "Clientes, visitas e campanhas SMS do Exclusive Solário",
+  "id": "/solario-exclusive/",
+  "start_url": "/solario-exclusive",
+  "scope": "/solario-exclusive",
+  "display": "standalone",
+  "background_color": "#1b1320",
+  "theme_color": "#321d39",
+  "lang": "pt-PT",
+  "icons": [
+    {
+      "src": "/solario-exclusive-original.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
