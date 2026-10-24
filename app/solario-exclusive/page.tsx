@@ -23,9 +23,9 @@ export default function SolarioExclusivePage(){
  const clean=(v:unknown)=>String(v??'').trim()
  const keys=Object.keys(rows[0])
  const find=(terms:string[])=>keys.find(k=>terms.some(t=>k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').includes(t)))
- const nk=find(['nome','cliente','name']),pk=find(['telemovel','telefone','contacto','phone','mobile']),ik=find(['codigo','numero','id']),ok=find(['observ','nota','coment'])
+ const nk=find(['nome','name'])||keys.find(k=>k.toLowerCase().trim()==='cliente'),pk=find(['telemovel','telefone','contacto','phone','mobile']),ik=find(['n.º cliente','nº cliente','numero cliente','codigo','id']),ok=find(['observ','nota','coment'])
  if(!nk||!pk){setStatus('Não encontrei as colunas de nome e telemóvel. Colunas: '+keys.join(', '));return}
- const existing=new Set(clients.map(c=>(c.phone||'').replace(/\D/g,'')))
+ const existing=new Set(clients.map(c=>(c.phone||'').replace(/\D/g,'').replace(/^351(?=9\d{8}$)/,'')))
  const seen=new Set<string>()
  const records=rows.map(row=>{
  const raw=clean(row[pk]);const digits=raw.replace(/\D/g,'').replace(/^351(?=9\d{8}$)/,'')
