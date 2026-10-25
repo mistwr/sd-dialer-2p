@@ -3,6 +3,7 @@ import {
   errorResponse,
   findTwilioOutgoingCallerId,
   isTwilioCallerIdConfigured,
+  normalizePtPhone,
   requireSdDialerUser,
   SdDialerError,
 } from '@/lib/server/sd-dialer-livekit'
@@ -97,12 +98,18 @@ export async function GET(request: NextRequest) {
     const numbers = rows
       .filter(row => row.verification_status === 'verified')
       .map(row => publicRecord(row))
+    const isSuperAdmin = profile.is_super_admin === true || profile.role === 'super_admin'
+    const legacyCallerId = isSuperAdmin
+      ? normalizePtPhone(process.env.LUMIN_CALLER_ID || '')
+      : ''
+    const legacyFallbackPhoneNumber = !activeRow ? legacyCallerId : ''
 
     return NextResponse.json({
       active: activeRow ? publicRecord(activeRow) : null,
       pending: pendingRow ? publicRecord(pendingRow, true) : null,
       failed: failedRow ? publicRecord(failedRow) : null,
       numbers,
+      legacyFallbackPhoneNumber: legacyFallbackPhoneNumber || null,
       verificationAvailable: isTwilioCallerIdConfigured(),
     })
   } catch (error) {
