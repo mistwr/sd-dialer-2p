@@ -102,69 +102,64 @@ export async function requireSdDialerSuperAdmin(request: NextRequest) {
   return auth
 }
 
+const TWILIO_CALLER_ID_PROXY_URL = "https://luminai.pt/.netlify/functions/sd-dialer-caller-id"
+
+function getTwilioCallerIdProxyToken() {
+  return process.env.SD_DIALER_TWILIO_PROXY_TOKEN
+}
+
 export function isTwilioCallerIdConfigured() {
-  return Boolean(
-    process.env.TWILIO_ACCOUNT_SID &&
-    (process.env.TWILIO_API_KEY_SID || process.env.TWILIO_API_KEY) &&
-    (process.env.TWILIO_API_KEY_SECRET || process.env.TWILIO_API_SECRET)
-  )
+  return Boolean(getTwilioCallerIdProxyToken())
 }
 
-function getTwilioCallerIdCredentials() {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID
-  const apiKey = process.env.TWILIO_API_KEY_SID || process.env.TWILIO_API_KEY
-  const apiSecret = process.env.TWILIO_API_KEY_SECRET || process.env.TWILIO_API_SECRET
-  if (!accountSid || !apiKey || !apiSecret) {
-    throw new SdDialerError('A validação de números Twilio não está configurada na Netlify.', 503)
+async function twilioCallerIdRequest(
+  action: "lookup" | "verify",
+  payload: { phoneNumber: string; friendlyName?: string },
+) {
+  const token = getTwilioCallerIdProxyToken()
+  if (!token) {
+    throw new SdDialerError("A validação de números pessoais não está configurada na Netlify.", 503)
   }
-  return {
-    accountSid,
-    authorization: 'Basic ' + Buffer.from(apiKey + ':' + apiSecret).toString('base64'),
-  }
-}
 
-async function twilioCallerIdRequest(path: string, init: RequestInit = {}) {
-  const credentials = getTwilioCallerIdCredentials()
-  const response = await fetch('https://api.twilio.com/2010-04-01/Accounts/' + credentials.accountSid + path, {
-    ...init,
-    headers: {
-      Authorization: credentials.authorization,
-      ...(init.headers || {}),
-    },
-    cache: 'no-store',
-  })
-  const data = await response.json().catch(() => ({}))
+  let response: Response
+  try {
+    response = await fetch(TWILIO_CALLER_ID_PROXY_URL, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + token,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ action, ...payload }),
+      cache: "no-store",
+    })
+  } catch {
+    throw new SdDialerError("Não foi possível ligar ao serviço de validação Twilio.", 502)
+  }
+
+  const data = await response.json().catch(() => ({})) as Record<string, any>
   if (!response.ok) {
-    const code = String(data?.code || '')
-    const message = code === '20003'
-      ? 'A chave Twilio não tem permissão para gerir caller IDs.'
-      : 'A Twilio não conseguiu processar a validação deste número.'
-    throw new SdDialerError(message, response.status === 401 || response.status === 403 ? 502 : 400)
+    const message = typeof data?.error === "string"
+      ? data.error
+      : "A Twilio não conseguiu processar a validação deste número."
+    throw new SdDialerError(message, response.status)
   }
   return data
 }
 
 export async function findTwilioOutgoingCallerId(phoneNumber: string) {
-  const query = new URLSearchParams({ PhoneNumber: phoneNumber })
-  const data = await twilioCallerIdRequest('/OutgoingCallerIds.json?' + query.toString())
-  const records = Array.isArray(data?.outgoing_caller_ids) ? data.outgoing_caller_ids : []
-  return records.find((record: any) => String(record.phone_number || '') === phoneNumber) ?? null
+  const data = await twilioCallerIdRequest("lookup", { phoneNumber })
+  const callerId = data?.callerId
+  return callerId?.sid
+    ? { sid: String(callerId.sid), phone_number: String(callerId.phone_number || phoneNumber) }
+    : null
 }
 
 export async function startTwilioCallerIdVerification(phoneNumber: string, friendlyName: string) {
-  const form = new URLSearchParams({
-    PhoneNumber: phoneNumber,
-    FriendlyName: friendlyName.slice(0, 64) || phoneNumber,
-  })
-  const data = await twilioCallerIdRequest('/OutgoingCallerIds.json', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: form.toString(),
-  })
+  const data = await twilioCallerIdRequest("verify", { phoneNumber, friendlyName })
   return {
-    validationCode: String(data?.validation_code || ''),
-    callSid: String(data?.call_sid || ''),
-    phoneNumber: String(data?.phone_number || phoneNumber),
+    validationCode: String(data?.validationCode || ""),
+    callSid: String(data?.callSid || ""),
+    phoneNumber: String(data?.phoneNumber || phoneNumber),
   }
 }
 
