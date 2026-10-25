@@ -11,6 +11,13 @@ import {
 
 export const runtime = 'nodejs'
 
+function logCallerIdDbFailure(operation: string, error: { code?: unknown } | null | undefined) {
+  console.warn('[sd-dialer] caller ID database request failed', {
+    operation,
+    code: String(error?.code || 'unknown').slice(0, 32),
+  })
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { admin, user, profile } = await requireSdDialerUser(request)
@@ -32,7 +39,10 @@ export async function POST(request: NextRequest) {
       .neq('user_id', user.id)
       .limit(1)
       .maybeSingle()
-    if (claimedError) throw new SdDialerError('Não foi possível confirmar se este número já está associado.', 500)
+    if (claimedError) {
+      logCallerIdDbFailure('claimed-number lookup', claimedError)
+      throw new SdDialerError('Não foi possível confirmar se este número já está associado.', 500)
+    }
     if (claimed) throw new SdDialerError('Este número já está associado a outro utilizador do SD Dialer.', 409)
 
     const { data: existing, error: existingError } = await admin
@@ -41,8 +51,13 @@ export async function POST(request: NextRequest) {
       .eq('user_id', user.id)
       .eq('company_id', profile.company_id)
       .eq('phone_number', phoneNumber)
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle()
-    if (existingError) throw new SdDialerError('Não foi possível consultar o número já registado.', 500)
+    if (existingError) {
+      logCallerIdDbFailure('number history lookup', existingError)
+      throw new SdDialerError('Não foi possível consultar o número já registado.', 500)
+    }
 
     const { data: pendingForUser, error: pendingError } = await admin
       .from('sd_dialer_caller_ids')
@@ -50,7 +65,10 @@ export async function POST(request: NextRequest) {
       .eq('user_id', user.id)
       .eq('verification_status', 'pending')
       .maybeSingle()
-    if (pendingError) throw new SdDialerError('Não foi possível consultar outra validação em curso.', 500)
+    if (pendingError) {
+      logCallerIdDbFailure('pending verification lookup', pendingError)
+      throw new SdDialerError('Não foi possível consultar outra validação em curso.', 500)
+    }
     if (pendingForUser && pendingForUser.phone_number !== phoneNumber) {
       const ageMs = Date.now() - new Date(pendingForUser.requested_at || pendingForUser.created_at).getTime()
       if (ageMs <= 10 * 60 * 1000) {
@@ -60,7 +78,10 @@ export async function POST(request: NextRequest) {
         .from('sd_dialer_caller_ids')
         .update({ verification_status: 'failed', is_active: false, validation_code: null })
         .eq('id', pendingForUser.id)
-      if (error) throw new SdDialerError('Não foi possível fechar a validação anterior.', 500)
+      if (error) {
+        logCallerIdDbFailure('expire old verification', error)
+        throw new SdDialerError('Não foi possível fechar a validação anterior.', 500)
+      }
     }
 
     if (existing?.verification_status === 'verified' && existing.is_active) {
@@ -98,20 +119,29 @@ export async function POST(request: NextRequest) {
           })
           .select('id')
           .single()
-        if (error || !inserted?.id) throw new SdDialerError('Não foi possível associar o número já validado.', 500)
+        if (error || !inserted?.id) {
+          logCallerIdDbFailure('associate existing Twilio caller ID', error)
+          throw new SdDialerError('Não foi possível associar o número já validado.', 500)
+        }
         recordId = String(inserted.id)
       } else if (existing.verification_status !== 'pending') {
         const { error } = await admin
           .from('sd_dialer_caller_ids')
           .update({ verification_status: 'pending', is_active: false, validation_code: null, requested_at: now })
           .eq('id', recordId)
-        if (error) throw new SdDialerError('Não foi possível preparar a ativação do número.', 500)
+        if (error) {
+          logCallerIdDbFailure('prepare existing Twilio caller ID', error)
+          throw new SdDialerError('Não foi possível preparar a ativação do número.', 500)
+        }
       }
       const { error } = await admin.rpc('activate_sd_dialer_caller_id', {
         p_verification_id: recordId,
         p_twilio_sid: String(alreadyVerified.sid),
       })
-      if (error) throw new SdDialerError('A Twilio já validou este número, mas não foi possível ativá-lo.', 500)
+      if (error) {
+        logCallerIdDbFailure('activate existing Twilio caller ID', error)
+        throw new SdDialerError('A Twilio já validou este número, mas não foi possível ativá-lo.', 500)
+      }
       return NextResponse.json({ ok: true, status: 'verified', phoneNumber })
     }
 
@@ -139,7 +169,10 @@ export async function POST(request: NextRequest) {
           phone_number: phoneNumber,
           ...values,
         }).select('id').single()
-    if (saved.error) throw new SdDialerError('A Twilio ligou para iniciar a validação, mas não foi possível guardar o pedido.', 500)
+    if (saved.error) {
+      logCallerIdDbFailure('save verification request', saved.error)
+      throw new SdDialerError('A Twilio ligou para iniciar a validação, mas não foi possível guardar o pedido.', 500)
+    }
 
     return NextResponse.json({
       ok: true,
