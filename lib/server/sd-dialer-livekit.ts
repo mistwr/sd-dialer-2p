@@ -185,5 +185,3 @@ export function buildAgentProfile(agentId: string, companyName: string) {
     followUpEnabled: true,
   }
 }
-
-[executed on device: LuminAI (a8ce5ed1-2d12-42b0-9a33-2bf4b649b392)]

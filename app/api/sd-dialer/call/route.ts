@@ -222,5 +222,3 @@ export async function POST(request: NextRequest) {
     return errorResponse(error, 'call POST')
   }
 }
-
-[executed on device: LuminAI (a8ce5ed1-2d12-42b0-9a33-2bf4b649b392)]

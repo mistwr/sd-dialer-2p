@@ -60,5 +60,3 @@ export async function GET(request: NextRequest) {
     return errorResponse(error, 'caller ID GET')
   }
 }
-
-[executed on device: LuminAI (a8ce5ed1-2d12-42b0-9a33-2bf4b649b392)]
