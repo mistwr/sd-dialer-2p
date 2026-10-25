@@ -169,6 +169,12 @@ export default function AdminVoiceCallsPage() {
     }, 'Subscrição suspensa.')
   }
 
+  function revokeCode(codeId: string) {
+    return runAction(async () => {
+      await post('/api/admin/voice-calls', { action: 'revoke_code', codeId })
+    }, 'Código revogado.')
+  }
+
   const panel: React.CSSProperties = { background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 20 }
   const field: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1px solid #CBD5E1', borderRadius: 8, boxSizing: 'border-box', fontSize: 14 }
   const button: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 14px', border: 0, borderRadius: 8, background: '#2563EB', color: 'white', fontWeight: 700, cursor: 'pointer' }
@@ -305,7 +311,7 @@ export default function AdminVoiceCallsPage() {
             {!data.codes.length ? <p style={{ color: '#64748B' }}>Ainda não foram gerados códigos.</p> : (
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 650 }}>
-                  <thead><tr>{['Utilizador', 'Duração', 'Estado', 'Expira'].map(label => <th key={label} style={{ padding: 9, textAlign: 'left', borderBottom: '1px solid #E2E8F0', color: '#475569' }}>{label}</th>)}</tr></thead>
+                  <thead><tr>{['Utilizador', 'Duração', 'Estado', 'Expira', 'Ação'].map(label => <th key={label} style={{ padding: 9, textAlign: 'left', borderBottom: '1px solid #E2E8F0', color: '#475569' }}>{label}</th>)}</tr></thead>
                   <tbody>{data.codes.map((item: any) => {
                     const expired = item.code_expires_at && new Date(item.code_expires_at).getTime() <= Date.now()
                     const status = item.revoked_at ? 'Revogado' : item.uses_count > 0 ? 'Utilizado' : expired ? 'Expirado' : 'Disponível'
@@ -315,6 +321,7 @@ export default function AdminVoiceCallsPage() {
                         <td style={{ padding: 9, borderBottom: '1px solid #F1F5F9' }}>{item.duration_days} dias</td>
                         <td style={{ padding: 9, borderBottom: '1px solid #F1F5F9' }}>{status}</td>
                         <td style={{ padding: 9, borderBottom: '1px solid #F1F5F9' }}>{item.code_expires_at ? new Date(item.code_expires_at).toLocaleDateString('pt-PT') : '—'}</td>
+                        <td style={{ padding: 9, borderBottom: '1px solid #F1F5F9' }}>{item.uses_count === 0 && !item.revoked_at && <button type="button" onClick={() => void revokeCode(item.id)} disabled={busy} style={{ ...button, background: '#DC2626', padding: '6px 9px' }}>Revogar</button>}</td>
                       </tr>
                     )
                   })}</tbody>
