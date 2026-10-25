@@ -228,7 +228,7 @@ function RecordingRow({ recording, onAnalyse }: { recording: Recording; onAnalys
   )
 }
 
-const LUMIN_GATEWAY = 'https://lumin-voice-gateway-production.up.railway.app'
+
 
 
 const VOICE_AGENTS = [
@@ -352,7 +352,7 @@ function LuminCallPanel() {
   }
 
   async function fetchCallerIdentity(token: string) {
-    const res = await fetch(LUMIN_GATEWAY + '/api/sd-dialer/caller-id', {
+    const res = await fetch('/api/sd-dialer/caller-id', {
       headers: { Authorization: 'Bearer ' + token },
       cache: 'no-store',
     })
@@ -424,7 +424,7 @@ function LuminCallPanel() {
     setVerificationCode('')
     try {
       const token = await getSessionToken()
-      const res = await fetch(LUMIN_GATEWAY + '/api/sd-dialer/caller-id/verify', {
+      const res = await fetch('/api/sd-dialer/caller-id/verify', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -472,7 +472,7 @@ function LuminCallPanel() {
     try {
       const token = await getSessionToken()
       const res = await fetch(
-        `${LUMIN_GATEWAY}/api/sd-dialer/caller-id/${encodeURIComponent(record.id)}`,
+        `/api/sd-dialer/caller-id/${encodeURIComponent(record.id)}`,
         {
           method: 'DELETE',
           headers: { Authorization: 'Bearer ' + token },
@@ -495,7 +495,7 @@ function LuminCallPanel() {
 
   async function pollCall(callId: string, token: string, leadId?: string) {
     try {
-      const res = await fetch(`${LUMIN_GATEWAY}/api/sd-dialer/call/${callId}`, {
+      const res = await fetch(`/api/sd-dialer/call/${callId}`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store',
       })
@@ -584,7 +584,7 @@ function LuminCallPanel() {
             consent_confirmed: true,
             agent_id: agentId,
           }
-      const res = await fetch(`${LUMIN_GATEWAY}/api/sd-dialer/call`, {
+      const res = await fetch(`/api/sd-dialer/call`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -710,7 +710,7 @@ function LuminCallPanel() {
         <section aria-label="Número de saída" style={{ marginTop: 16, padding: 13, borderRadius: 11, background: '#13110D', border: '1px solid #383228' }}>
           <div style={{ fontSize: 12, fontWeight: 800, color: '#F5EEDC' }}>Número de saída</div>
           <div style={{ fontSize: 11.5, lineHeight: 1.5, color: '#B7AA91', marginTop: 4 }}>
-            Depois de verificado, as chamadas usam o teu próprio número. A Twilio liga-te e pede o código apresentado abaixo; não é preciso comprar ou alugar um número.
+            As chamadas de IA usam o número oficial de saída da empresa{callerIdFallbackNumber ? ` (${callerIdFallbackNumber})` : ''}. Para alterar o número, é necessário atualizar a configuração aprovada da Twilio e da LiveKit.
           </div>
           {callerIdActive && (
             <div style={{ marginTop: 8, fontSize: 12, color: '#86EFAC' }}>
@@ -739,7 +739,7 @@ function LuminCallPanel() {
               A chamada automática é em inglês. O número atual continua ativo até a nova verificação terminar.
             </div>
           )}
-          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: callerIdVerificationAvailable ? 'flex' : 'none', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
             <input
               type="tel"
               autoComplete="tel"
@@ -759,7 +759,7 @@ function LuminCallPanel() {
             </button>
           </div>
           {callerIdLoading && <div style={{ marginTop: 7, fontSize: 11, color: '#B7AA91' }}>A carregar a configuração…</div>}
-          {!callerIdLoading && !callerIdVerificationAvailable && <div style={{ marginTop: 7, fontSize: 11, color: '#B7AA91' }}>A validação automática ainda não está ligada no gateway.</div>}
+          {!callerIdLoading && !callerIdVerificationAvailable && <div style={{ marginTop: 7, fontSize: 11, color: '#B7AA91' }}>A validação de números pessoais não está ativa. As chamadas continuam a usar o número oficial da empresa.</div>}
           {callerIdMessage && <div role="status" style={{ marginTop: 7, fontSize: 11.5, color: '#86EFAC' }}>{callerIdMessage}</div>}
           {callerIdError && <div role="alert" style={{ marginTop: 7, fontSize: 11.5, color: '#FCA5A5' }}>{callerIdError}</div>}
 
