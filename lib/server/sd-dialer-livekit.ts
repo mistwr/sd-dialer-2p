@@ -131,6 +131,7 @@ async function twilioCallerIdRequest(
       },
       body: JSON.stringify({ action, ...payload }),
       cache: "no-store",
+      signal: AbortSignal.timeout(15000),
     })
   } catch {
     throw new SdDialerError("Não foi possível ligar ao serviço de validação Twilio.", 502)
