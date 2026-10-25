@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
       .eq('company_id', auth.profile.company_id)
       .maybeSingle()
     if (settingsError) throw new SdDialerError('Não foi possível consultar os limites de chamadas desta empresa.', 500)
-    if (voiceSettings?.stop_calls === true) {
+    if (voiceSettings?.stop_calls === true && auth.profile.is_super_admin !== true && auth.profile.role !== 'super_admin') {
       throw new SdDialerError('As chamadas de IA estão pausadas pelo superadministrador.', 423)
     }
     const maxCallsPerHour = Number(voiceSettings?.max_calls_per_hour || 0)
