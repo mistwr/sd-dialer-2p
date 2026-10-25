@@ -713,7 +713,7 @@ function LuminCallPanel() {
             <div style={{ marginTop: 8, padding: 9, borderRadius: 8, background: '#211B10', color: '#FFE6B0', fontSize: 11.5, lineHeight: 1.5 }}>
               A Twilio está a ligar para {callerIdPending.phoneNumber}. Atende e marca este código no teclado do telefone:
               <div style={{ fontSize: 20, letterSpacing: '.16em', fontWeight: 900, marginTop: 3 }}>{verificationCode || '— — — — — —'}</div>
-              O teu número atual continua ativo até a nova validação terminar.
+              Se já tinhas um número validado, continua ativo até a nova validação terminar.
             </div>
           )}
           <div style={{ display: callerIdVerificationAvailable ? 'flex' : 'none', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
