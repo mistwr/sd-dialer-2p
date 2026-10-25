@@ -63,7 +63,7 @@ export async function requireSdDialerUser(request: NextRequest) {
 
   const { data: profile, error: profileError } = await admin
     .from('usuarios')
-    .select('id,company_id,role,status,full_name,restricted_admin')
+    .select('id,company_id,role,status,full_name,restricted_admin,is_super_admin')
     .eq('id', data.user.id)
     .maybeSingle()
 
@@ -73,6 +73,99 @@ export async function requireSdDialerUser(request: NextRequest) {
   }
 
   return { admin, user: data.user, profile, accessToken }
+}
+
+export async function requireVoiceCallAccess(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  profile: { role?: string; is_super_admin?: boolean | null },
+) {
+  if (profile.is_super_admin === true || profile.role === 'super_admin') return { active: true, expiresAt: null as string | null }
+  const { data, error } = await admin
+    .from('voice_call_subscriptions')
+    .select('status,expires_at')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error) throw new SdDialerError('Não foi possível verificar a subscrição das chamadas de IA.', 500)
+  const active = data?.status === 'active' && new Date(data.expires_at).getTime() > Date.now()
+  if (!active) {
+    throw new SdDialerError('As chamadas de IA requerem uma subscrição ativa. Introduz o código de acesso fornecido pelo superadministrador.', 402)
+  }
+  return { active: true, expiresAt: String(data.expires_at) }
+}
+
+export async function requireSdDialerSuperAdmin(request: NextRequest) {
+  const auth = await requireSdDialerUser(request)
+  if (auth.profile.is_super_admin !== true && auth.profile.role !== 'super_admin') {
+    throw new SdDialerError('Esta área é apenas para superadministradores.', 403)
+  }
+  return auth
+}
+
+export function isTwilioCallerIdConfigured() {
+  return Boolean(
+    process.env.TWILIO_ACCOUNT_SID &&
+    (process.env.TWILIO_API_KEY_SID || process.env.TWILIO_API_KEY) &&
+    (process.env.TWILIO_API_KEY_SECRET || process.env.TWILIO_API_SECRET)
+  )
+}
+
+function getTwilioCallerIdCredentials() {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID
+  const apiKey = process.env.TWILIO_API_KEY_SID || process.env.TWILIO_API_KEY
+  const apiSecret = process.env.TWILIO_API_KEY_SECRET || process.env.TWILIO_API_SECRET
+  if (!accountSid || !apiKey || !apiSecret) {
+    throw new SdDialerError('A validação de números Twilio não está configurada na Netlify.', 503)
+  }
+  return {
+    accountSid,
+    authorization: 'Basic ' + Buffer.from(apiKey + ':' + apiSecret).toString('base64'),
+  }
+}
+
+async function twilioCallerIdRequest(path: string, init: RequestInit = {}) {
+  const credentials = getTwilioCallerIdCredentials()
+  const response = await fetch('https://api.twilio.com/2010-04-01/Accounts/' + credentials.accountSid + path, {
+    ...init,
+    headers: {
+      Authorization: credentials.authorization,
+      ...(init.headers || {}),
+    },
+    cache: 'no-store',
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    const code = String(data?.code || '')
+    const message = code === '20003'
+      ? 'A chave Twilio não tem permissão para gerir caller IDs.'
+      : 'A Twilio não conseguiu processar a validação deste número.'
+    throw new SdDialerError(message, response.status === 401 || response.status === 403 ? 502 : 400)
+  }
+  return data
+}
+
+export async function findTwilioOutgoingCallerId(phoneNumber: string) {
+  const query = new URLSearchParams({ PhoneNumber: phoneNumber })
+  const data = await twilioCallerIdRequest('/OutgoingCallerIds.json?' + query.toString())
+  const records = Array.isArray(data?.outgoing_caller_ids) ? data.outgoing_caller_ids : []
+  return records.find((record: any) => String(record.phone_number || '') === phoneNumber) ?? null
+}
+
+export async function startTwilioCallerIdVerification(phoneNumber: string, friendlyName: string) {
+  const form = new URLSearchParams({
+    PhoneNumber: phoneNumber,
+    FriendlyName: friendlyName.slice(0, 64) || phoneNumber,
+  })
+  const data = await twilioCallerIdRequest('/OutgoingCallerIds.json', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: form.toString(),
+  })
+  return {
+    validationCode: String(data?.validation_code || ''),
+    callSid: String(data?.call_sid || ''),
+    phoneNumber: String(data?.phone_number || phoneNumber),
+  }
 }
 
 export function normalizePtPhone(input: unknown): string {
@@ -93,9 +186,8 @@ export function getLiveKitConfig() {
   const apiKey = process.env.LIVEKIT_API_KEY
   const secret = process.env.LIVEKIT_API_SECRET
   const trunkId = process.env.LUMIN_OUTBOUND_TRUNK_ID || process.env.LIVEKIT_OUTBOUND_TRUNK_ID
-  const callerId = process.env.LUMIN_CALLER_ID
 
-  if (!configuredUrl || !apiKey || !secret || !trunkId || !callerId) {
+  if (!configuredUrl || !apiKey || !secret || !trunkId) {
     throw new SdDialerError('A ligação LiveKit ainda não está completa nas variáveis da Netlify.', 503)
   }
 
@@ -107,7 +199,6 @@ export function getLiveKitConfig() {
   return {
     api: new LiveKitAPI({ host, apiKey, secret, requestTimeout: 20 }),
     trunkId,
-    callerId,
     agentName: process.env.LIVEKIT_AGENT_NAME || 'lumin-web',
   }
 }
@@ -125,15 +216,17 @@ export async function resolveCallerId(admin: ReturnType<typeof createAdminClient
     .maybeSingle()
 
   if (error) throw new SdDialerError('Não foi possível carregar o número de saída.', 500)
-  const personalNumber = String(data?.phone_number || '').trim()
-  const companyNumber = String(process.env.LUMIN_CALLER_ID || '').trim()
+  if (!data?.phone_number) {
+    throw new SdDialerError('Valida o teu número pessoal antes de iniciar chamadas de IA.', 409)
+  }
   return {
-    phoneNumber: companyNumber || personalNumber,
-    usingPersonalNumber: !companyNumber && Boolean(personalNumber),
+    id: String(data.id),
+    phoneNumber: String(data.phone_number).trim(),
+    usingPersonalNumber: true,
   }
 }
 
-export function buildAgentProfile(agentId: string, companyName: string) {
+export function buildAgentProfile(agentId: string, companyName: string, overrides: Record<string, unknown> = {}) {
   const company = agentId === 'lumin-telecom' ? 'Compara+' : (companyName || 'Lumin')
   const profiles: Record<string, Record<string, string>> = {
     'lumin-telecom': {
@@ -175,13 +268,20 @@ export function buildAgentProfile(agentId: string, companyName: string) {
   }
 
   const selected = profiles[agentId] || profiles['lumin-telecom']
+  const safeOverrides: Record<string, string> = {}
+  for (const key of ['name', 'description', 'objective', 'opening', 'product', 'offer', 'objections', 'notes', 'tone', 'voice', 'voiceEngine', 'voiceSource']) {
+    const value = overrides[key]
+    if (typeof value === 'string') safeOverrides[key] = value.slice(0, key === 'notes' ? 12000 : 3000)
+  }
+  const scriptVersion = Number(overrides.scriptVersion)
   return {
     ...selected,
     company,
     voice: 'clear',
     voiceEngine: 'xai',
     voiceSource: 'system',
-    scriptVersion: agentId === 'lumin-telecom' ? 8 : 1,
-    followUpEnabled: true,
+    scriptVersion: Number.isFinite(scriptVersion) && scriptVersion > 0 ? Math.min(scriptVersion, 9999) : (agentId === 'lumin-telecom' ? 8 : 1),
+    followUpEnabled: overrides.followUpEnabled === false ? false : true,
+    ...safeOverrides,
   }
 }

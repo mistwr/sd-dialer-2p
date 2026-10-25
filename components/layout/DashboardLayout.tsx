@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, Building2, Megaphone, Volume2, VolumeX,
   PhoneCall, BarChart2, LogOut, Menu, X, Bell,
   ChevronRight, PhoneIncoming, History, UserCircle,
-  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag, MessageSquare, Users2, ArrowLeft, ArrowRight, GraduationCap, TrendingUp,
+  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag, MessageSquare, Users2, ArrowLeft, ArrowRight, GraduationCap, TrendingUp, ShieldCheck,
 } from 'lucide-react'
 import useSWR from 'swr'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -22,14 +22,6 @@ interface NavItem {
   icon: React.ElementType
   roles: string[]
 }
-
-// IDs autorizados para o menu "Chamadas IA".
-const AI_CALLS_MENU_USER_IDS = [
-  '8c43ee2a-9c99-4493-a215-abcb0849b8bf',
-  'efff74d7-b3f6-4336-8daa-0d7d13bc2a10',
-  '60bf2363-ec80-4664-aae4-0479c18ce52b',
-  '90c92418-b334-42a7-b64c-9b972c2060d0',
-]
 
 const NAV: NavItem[] = [
   { label: 'Dashboard',    href: '/admin',               icon: LayoutDashboard, roles: ['admin', 'supervisor'] },
@@ -55,6 +47,7 @@ const NAV: NavItem[] = [
   { label: 'Fidelizações', href: '/fidelizacoes', icon: Calendar, roles: ['parceiro', 'admin', 'supervisor'] },
   { label: 'SMS Massa',    href: '/parceiro/sms',         icon: MessageSquare,   roles: ['parceiro', 'admin', 'supervisor'] },
   { label: 'Chamadas IA',  href: '/parceiro/chamadas-ia', icon: AudioLines,      roles: ['parceiro', 'admin', 'supervisor'] },
+  { label: 'Superadmin IA', href: '/admin/chamadas-ia', icon: ShieldCheck, roles: ['admin'] },
   { label: 'IA Dashboard', href: '/parceiro/ia',          icon: Brain,           roles: ['parceiro'] },
   { label: 'Assist. IA',  href: '/parceiro/assistente-ia', icon: Brain,          roles: ['parceiro'] },
   { label: 'Meu Perfil',   href: '/parceiro/perfil',      icon: UserCircle,      roles: ['parceiro'] },
@@ -114,7 +107,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const effectiveRole = canSwitchView ? viewRole : role
   const visibleNav = NAV.filter(n =>
     n.roles.includes(effectiveRole) &&
-    (n.href !== '/parceiro/chamadas-ia' || (!!user?.id && AI_CALLS_MENU_USER_IDS.includes(user.id)))
+    (n.href !== '/admin/chamadas-ia' || profile?.is_super_admin === true)
   )
   const activeNavItem = visibleNav.find(item => pathname === item.href || (item.href !== '/admin' && item.href !== '/parceiro' && pathname.startsWith(item.href)))
 
