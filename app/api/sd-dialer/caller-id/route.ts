@@ -49,8 +49,8 @@ export async function GET(request: NextRequest) {
       : null
     return NextResponse.json({
       active,
-      pending: records.find((record: any) => record.status === 'pending') || null,
-      failed: records.find((record: any) => record.status === 'failed') || null,
+      pending: null,
+      failed: null,
       numbers,
       verificationAvailable: false,
       fallbackAvailable: Boolean(fallbackPhoneNumber),

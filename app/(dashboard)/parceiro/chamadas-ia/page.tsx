@@ -710,11 +710,11 @@ function LuminCallPanel() {
         <section aria-label="Número de saída" style={{ marginTop: 16, padding: 13, borderRadius: 11, background: '#13110D', border: '1px solid #383228' }}>
           <div style={{ fontSize: 12, fontWeight: 800, color: '#F5EEDC' }}>Número de saída</div>
           <div style={{ fontSize: 11.5, lineHeight: 1.5, color: '#B7AA91', marginTop: 4 }}>
-            As chamadas de IA usam o número oficial de saída da empresa{callerIdFallbackNumber ? ` (${callerIdFallbackNumber})` : ''}. Para alterar o número, é necessário atualizar a configuração aprovada da Twilio e da LiveKit.
+            As chamadas de IA usam o número oficial de saída da empresa: <strong>{callerIdFallbackNumber || 'não configurado'}</strong>. Para alterar, é necessário atualizar a configuração aprovada da Twilio e da LiveKit.
           </div>
           {callerIdActive && (
             <div style={{ marginTop: 8, fontSize: 12, color: '#86EFAC' }}>
-              Verificado e ativo: <strong>{callerIdActive.phoneNumber}</strong>
+              Número ativo nas chamadas: <strong>{callerIdActive.phoneNumber}</strong>
             </div>
           )}
           {!callerIdActive && callerIdFallbackAvailable && (
