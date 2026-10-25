@@ -232,7 +232,7 @@ function RecordingRow({ recording, onAnalyse }: { recording: Recording; onAnalys
 
 
 const VOICE_AGENTS = [
-  { id: 'lumin-telecom', label: 'Lumin Telecom', detail: 'Qualifica telecomunicações e fecha interesse para comparação.' },
+  { id: 'lumin-telecom', label: 'Compara+ Telecom', detail: 'Qualifica o interesse em internet e televisão e agenda uma comparação.' },
   { id: 'lumin-energia', label: 'Lumin Energia', detail: 'Qualifica energia e fecha interesse para comparação.' },
   { id: 'lumin-ai', label: 'Lumin AI Comercial', detail: 'Vende a plataforma LUMIN AI de forma consultiva.' },
 ] as const
@@ -511,7 +511,7 @@ function LuminCallPanel() {
         preparing: 'A preparar a chamada...',
         ringing: 'Telefone a tocar...',
         answered: 'Cliente atendeu. A ligar o Lumin...',
-        connected: 'Lumin ligado à chamada.',
+        connected: 'Assistente Compara+ ligado à chamada.',
         ended: 'Chamada terminada. Podes selecionar a próxima lead.',
         failed: json.error || 'A chamada falhou.',
       }
