@@ -289,6 +289,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, status: 'pending', phoneNumber, validationCode: verification.validationCode, callSid: verification.callSid })
     }
 
+    if (action === 'revoke_code') {
+      const codeId = String(body.codeId || '')
+      if (!codeId) throw new SdDialerError('Código inválido.', 400)
+      const { data, error } = await admin
+        .from('voice_call_access_codes')
+        .update({ revoked_at: new Date().toISOString() })
+        .eq('id', codeId)
+        .eq('uses_count', 0)
+        .is('revoked_at', null)
+        .select('id')
+        .maybeSingle()
+      if (error) throw new SdDialerError('Não foi possível revogar o código.', 500)
+      if (!data) throw new SdDialerError('O código já foi utilizado, expirou ou já foi revogado.', 409)
+      return NextResponse.json({ ok: true })
+    }
+
     if (action === 'revoke_subscription') {
       const userId = String(body.userId || '')
       if (!userId) throw new SdDialerError('Utilizador inválido.', 400)
