@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
   try {
     const { admin, user, profile } = await requireSdDialerUser(request)
     if (!isTwilioCallerIdConfigured()) {
-      throw new SdDialerError('A validação de números pessoais não está configurada na Twilia.', 503)
+      throw new SdDialerError('A validação de números pessoais não está configurada na Twilio.', 503)
     }
 
     const body = await request.json().catch(() => ({})) as { phone?: string }
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
           status: 'pending',
           phoneNumber,
           validationCode: String(existing.validation_code),
-          message: 'Atende à chamada da Twilia e introduz o código no teclado do telefone.',
+          message: 'Atende à chamada da Twilio e introduz o código no teclado do telefone.',
         })
       }
     }
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
         p_verification_id: recordId,
         p_twilio_sid: String(alreadyVerified.sid),
       })
-      if (error) throw new SdDialerError('A Twilia já validou este número, mas não foi possível ativá-lo.', 500)
+      if (error) throw new SdDialerError('A Twilio já validou este número, mas não foi possível ativá-lo.', 500)
       return NextResponse.json({ ok: true, status: 'verified', phoneNumber })
     }
 
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
       String(profile.full_name || user.email || phoneNumber),
     )
     if (!verification.validationCode) {
-      throw new SdDialerError('A Twilia iniciou a chamada, mas não devolveu o código de validação.', 502)
+      throw new SdDialerError('A Twilio iniciou a chamada, mas não devolveu o código de validação.', 502)
     }
 
     const values = {
@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
           phone_number: phoneNumber,
           ...values,
         }).select('id').single()
-    if (saved.error) throw new SdDialerError('A Twilia ligou para iniciar a validação, mas não foi possível guardar o pedido.', 500)
+    if (saved.error) throw new SdDialerError('A Twilio ligou para iniciar a validação, mas não foi possível guardar o pedido.', 500)
 
     return NextResponse.json({
       ok: true,
@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
       phoneNumber,
       validationCode: verification.validationCode,
       callSid: verification.callSid,
-      message: 'Atende à chamada da Twilia e introduz o código no teclado do telefone.',
+      message: 'Atende à chamada da Twilio e introduz o código no teclado do telefone.',
     })
   } catch (error) {
     return errorResponse(error, 'caller ID verification POST')
