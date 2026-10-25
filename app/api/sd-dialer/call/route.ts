@@ -90,7 +90,8 @@ export async function POST(request: NextRequest) {
     const destination = normalizePtPhone(phone)
     if (!destination) throw new SdDialerError('Número de telefone inválido. Usa o formato internacional, por exemplo +351912345678.', 400)
 
-    const callerIdentity = await resolveCallerId(admin, auth.user.id, auth.profile.company_id)
+    const isSuperAdmin = auth.profile.is_super_admin === true || auth.profile.role === 'super_admin'
+    const callerIdentity = await resolveCallerId(admin, auth.user.id, auth.profile.company_id, isSuperAdmin)
     const callerId = callerIdentity.phoneNumber
 
     const { data: voiceSettings, error: settingsError } = await admin
