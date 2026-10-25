@@ -155,18 +155,17 @@ export async function POST(request: NextRequest) {
       if (enabled && record.verification_status !== 'verified') {
         throw new SdDialerError('Só podes ativar um número depois de a Twilio o validar.', 409)
       }
-      const now = new Date().toISOString()
       if (enabled) {
         const { error: deactivateError } = await admin
           .from('sd_dialer_caller_ids')
-          .update({ is_active: false, updated_at: now })
+          .update({ is_active: false })
           .eq('user_id', record.user_id)
           .eq('company_id', record.company_id)
         if (deactivateError) throw new SdDialerError('Não foi possível desativar o número anterior.', 500)
       }
       const { error } = await admin
         .from('sd_dialer_caller_ids')
-        .update({ is_active: enabled, updated_at: now })
+        .update({ is_active: enabled })
         .eq('id', callerId)
       if (error) throw new SdDialerError('Não foi possível atualizar a atribuição do número.', 500)
       return NextResponse.json({ ok: true })
@@ -186,51 +185,98 @@ export async function POST(request: NextRequest) {
       if (!target?.id || !target.company_id || target.status !== 'active') {
         throw new SdDialerError('O utilizador escolhido não está ativo.', 400)
       }
+
       const { data: claimed, error: claimedError } = await admin
         .from('sd_dialer_caller_ids')
         .select('id')
         .eq('phone_number', phoneNumber)
-        .eq('verification_status', 'verified')
+        .in('verification_status', ['pending', 'verified'])
         .neq('user_id', userId)
         .limit(1)
         .maybeSingle()
       if (claimedError) throw new SdDialerError('Não foi possível confirmar a associação deste número.', 500)
       if (claimed) throw new SdDialerError('Este número já está associado a outro utilizador.', 409)
+
       const { data: existing, error: existingError } = await admin
         .from('sd_dialer_caller_ids')
-        .select('id,verification_status,is_active,validation_code,requested_at,created_at')
+        .select('id,phone_number,verification_status,is_active,validation_code,requested_at,created_at')
         .eq('user_id', userId)
         .eq('company_id', target.company_id)
         .eq('phone_number', phoneNumber)
         .maybeSingle()
       if (existingError) throw new SdDialerError('Não foi possível consultar o número registado.', 500)
-      if (existing?.verification_status === 'pending' && existing.validation_code) {
-        return NextResponse.json({ ok: true, status: 'pending', phoneNumber, validationCode: existing.validation_code })
-      }
-      const now = new Date().toISOString()
-      const twilioVerified = await findTwilioOutgoingCallerId(phoneNumber)
-      if (twilioVerified) {
-        const { error: deactivateError } = await admin
-          .from('sd_dialer_caller_ids')
-          .update({ is_active: false, updated_at: now })
-          .eq('user_id', userId)
-          .eq('company_id', target.company_id)
-        if (deactivateError) throw new SdDialerError('Não foi possível alterar o número ativo.', 500)
-        const values = {
-          verification_status: 'verified',
-          is_active: true,
-          validation_code: null,
-          twilio_call_sid: null,
-          requested_at: now,
-          verified_at: now,
-          updated_at: now,
+
+      const { data: pendingForUser, error: pendingError } = await admin
+        .from('sd_dialer_caller_ids')
+        .select('id,phone_number,requested_at,created_at')
+        .eq('user_id', userId)
+        .eq('verification_status', 'pending')
+        .maybeSingle()
+      if (pendingError) throw new SdDialerError('Não foi possível consultar outra validação em curso.', 500)
+      if (pendingForUser && pendingForUser.phone_number !== phoneNumber) {
+        const age = Date.now() - new Date(pendingForUser.requested_at || pendingForUser.created_at).getTime()
+        if (age <= 10 * 60 * 1000) {
+          throw new SdDialerError('Este utilizador já tem uma validação em curso. Aguarda até 10 minutos ou termina-a antes de pedir outra.', 409)
         }
-        const result = existing
-          ? await admin.from('sd_dialer_caller_ids').update(values).eq('id', existing.id)
-          : await admin.from('sd_dialer_caller_ids').insert({ user_id: userId, company_id: target.company_id, phone_number: phoneNumber, ...values })
-        if (result.error) throw new SdDialerError('A Twilio já validou este número, mas não foi possível atribuí-lo.', 500)
+        const { error } = await admin.from('sd_dialer_caller_ids')
+          .update({ verification_status: 'failed', is_active: false, validation_code: null })
+          .eq('id', pendingForUser.id)
+        if (error) throw new SdDialerError('Não foi possível fechar a validação anterior.', 500)
+      }
+
+      if (existing?.verification_status === 'verified' && existing.is_active) {
         return NextResponse.json({ ok: true, status: 'verified', phoneNumber })
       }
+      if (existing?.verification_status === 'pending' && existing.validation_code) {
+        const age = Date.now() - new Date(existing.requested_at || existing.created_at).getTime()
+        if (age <= 10 * 60 * 1000) {
+          return NextResponse.json({ ok: true, status: 'pending', phoneNumber, validationCode: existing.validation_code })
+        }
+      }
+
+      const now = new Date().toISOString()
+      const twilioVerified = await findTwilioOutgoingCallerId(phoneNumber)
+      if (twilioVerified?.sid) {
+        if (existing?.verification_status === 'verified') {
+          const { error: offError } = await admin.from('sd_dialer_caller_ids')
+            .update({ is_active: false })
+            .eq('user_id', userId)
+            .eq('company_id', target.company_id)
+          if (offError) throw new SdDialerError('Não foi possível alterar o número ativo.', 500)
+          const { error } = await admin.from('sd_dialer_caller_ids')
+            .update({ is_active: true })
+            .eq('id', existing.id)
+          if (error) throw new SdDialerError('Não foi possível ativar o número validado.', 500)
+        } else {
+          let recordId = existing?.id ? String(existing.id) : ''
+          const pendingValues = {
+            verification_status: 'pending',
+            is_active: false,
+            validation_code: null,
+            twilio_call_sid: null,
+            requested_at: now,
+            verified_at: null,
+          }
+          if (recordId) {
+            const { error } = await admin.from('sd_dialer_caller_ids').update(pendingValues).eq('id', recordId)
+            if (error) throw new SdDialerError('Não foi possível preparar o número para ativação.', 500)
+          } else {
+            const { data: inserted, error } = await admin.from('sd_dialer_caller_ids')
+              .insert({ user_id: userId, company_id: target.company_id, phone_number: phoneNumber, ...pendingValues })
+              .select('id')
+              .single()
+            if (error || !inserted?.id) throw new SdDialerError('Não foi possível associar o número validado.', 500)
+            recordId = String(inserted.id)
+          }
+          const { error } = await admin.rpc('activate_sd_dialer_caller_id', {
+            p_verification_id: recordId,
+            p_twilio_sid: String(twilioVerified.sid),
+          })
+          if (error) throw new SdDialerError('A Twilio já validou este número, mas não foi possível ativá-lo.', 500)
+        }
+        return NextResponse.json({ ok: true, status: 'verified', phoneNumber })
+      }
+
       const verification = await startTwilioCallerIdVerification(phoneNumber, String(target.full_name || phoneNumber))
       if (!verification.validationCode) throw new SdDialerError('A Twilio não devolveu o código de validação.', 502)
       const values = {
@@ -240,19 +286,13 @@ export async function POST(request: NextRequest) {
         twilio_call_sid: verification.callSid || null,
         requested_at: now,
         verified_at: null,
-        updated_at: now,
       }
       const result = existing
         ? await admin.from('sd_dialer_caller_ids').update(values).eq('id', existing.id)
-        : await admin.from('sd_dialer_caller_ids').insert({ user_id: userId, company_id: target.company_id, phone_number: phoneNumber, ...values })
+        : await admin.from('sd_dialer_caller_ids')
+            .insert({ user_id: userId, company_id: target.company_id, phone_number: phoneNumber, ...values })
       if (result.error) throw new SdDialerError('Não foi possível guardar o pedido de validação.', 500)
-      return NextResponse.json({
-        ok: true,
-        status: 'pending',
-        phoneNumber,
-        validationCode: verification.validationCode,
-        callSid: verification.callSid,
-      })
+      return NextResponse.json({ ok: true, status: 'pending', phoneNumber, validationCode: verification.validationCode, callSid: verification.callSid })
     }
 
     if (action === 'revoke_subscription') {
