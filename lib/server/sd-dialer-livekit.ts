@@ -186,9 +186,8 @@ export function getLiveKitConfig() {
   const apiKey = process.env.LIVEKIT_API_KEY
   const secret = process.env.LIVEKIT_API_SECRET
   const trunkId = process.env.LUMIN_OUTBOUND_TRUNK_ID || process.env.LIVEKIT_OUTBOUND_TRUNK_ID
-  const callerId = process.env.LUMIN_CALLER_ID
 
-  if (!configuredUrl || !apiKey || !secret || !trunkId || !callerId) {
+  if (!configuredUrl || !apiKey || !secret || !trunkId) {
     throw new SdDialerError('A ligação LiveKit ainda não está completa nas variáveis da Netlify.', 503)
   }
 
@@ -200,7 +199,6 @@ export function getLiveKitConfig() {
   return {
     api: new LiveKitAPI({ host, apiKey, secret, requestTimeout: 20 }),
     trunkId,
-    callerId,
     agentName: process.env.LIVEKIT_AGENT_NAME || 'lumin-web',
   }
 }
@@ -218,11 +216,13 @@ export async function resolveCallerId(admin: ReturnType<typeof createAdminClient
     .maybeSingle()
 
   if (error) throw new SdDialerError('Não foi possível carregar o número de saída.', 500)
-  const personalNumber = String(data?.phone_number || '').trim()
-  const companyNumber = String(process.env.LUMIN_CALLER_ID || '').trim()
+  if (!data?.phone_number) {
+    throw new SdDialerError('Valida o teu número pessoal antes de iniciar chamadas de IA.', 409)
+  }
   return {
-    phoneNumber: companyNumber || personalNumber,
-    usingPersonalNumber: !companyNumber && Boolean(personalNumber),
+    id: String(data.id),
+    phoneNumber: String(data.phone_number).trim(),
+    usingPersonalNumber: true,
   }
 }
 
