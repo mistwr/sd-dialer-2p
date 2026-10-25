@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
               p_verification_id: pending.id,
               p_twilio_sid: twilioSid,
             })
-            if (error) throw new SdDialerError('A Twilia validou o número, mas não foi possível ativá-lo no SD Dialer.', 500)
+            if (error) throw new SdDialerError('A Twilio validou o número, mas não foi possível ativá-lo no SD Dialer.', 500)
           }
         }
       }
