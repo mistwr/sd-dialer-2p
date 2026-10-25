@@ -300,6 +300,28 @@ export default function AdminVoiceCallsPage() {
               </div>
             )}
           </div>
+          <div style={panel}>
+            <h2 style={{ marginTop: 0 }}>Histórico de códigos</h2>
+            {!data.codes.length ? <p style={{ color: '#64748B' }}>Ainda não foram gerados códigos.</p> : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 650 }}>
+                  <thead><tr>{['Utilizador', 'Duração', 'Estado', 'Expira'].map(label => <th key={label} style={{ padding: 9, textAlign: 'left', borderBottom: '1px solid #E2E8F0', color: '#475569' }}>{label}</th>)}</tr></thead>
+                  <tbody>{data.codes.map((item: any) => {
+                    const expired = item.code_expires_at && new Date(item.code_expires_at).getTime() <= Date.now()
+                    const status = item.revoked_at ? 'Revogado' : item.uses_count > 0 ? 'Utilizado' : expired ? 'Expirado' : 'Disponível'
+                    return (
+                      <tr key={item.id}>
+                        <td style={{ padding: 9, borderBottom: '1px solid #F1F5F9' }}>{item.user_name}<div style={{ color: '#94A3B8', fontSize: 12 }}>{item.company_name}</div></td>
+                        <td style={{ padding: 9, borderBottom: '1px solid #F1F5F9' }}>{item.duration_days} dias</td>
+                        <td style={{ padding: 9, borderBottom: '1px solid #F1F5F9' }}>{status}</td>
+                        <td style={{ padding: 9, borderBottom: '1px solid #F1F5F9' }}>{item.code_expires_at ? new Date(item.code_expires_at).toLocaleDateString('pt-PT') : '—'}</td>
+                      </tr>
+                    )
+                  })}</tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </section>
       )}
 
