@@ -279,6 +279,7 @@ function LuminCallPanel() {
   const [callerIdPending, setCallerIdPending] = useState<CallerIdRecord | null>(null)
   const [callerIdFailed, setCallerIdFailed] = useState<CallerIdRecord | null>(null)
   const [callerIdVerificationAvailable, setCallerIdVerificationAvailable] = useState(false)
+  const [callerIdFallbackPhoneNumber, setCallerIdFallbackPhoneNumber] = useState('')
   const [callerIdLoading, setCallerIdLoading] = useState(true)
   const [callerIdSaving, setCallerIdSaving] = useState(false)
   const [callerIdError, setCallerIdError] = useState('')
@@ -367,6 +368,7 @@ function LuminCallPanel() {
     setCallerIdPending(pending)
     setCallerIdFailed(failed)
     setCallerIdVerificationAvailable(Boolean(json.verificationAvailable))
+    setCallerIdFallbackPhoneNumber(String(json.legacyFallbackPhoneNumber || ''))
     setVerificationCode(pending?.validationCode || '')
     setCallerIdError('')
     return { active, pending, failed, numbers }
@@ -520,7 +522,7 @@ function LuminCallPanel() {
   }
 
   const callIsBusy = Boolean(queue.current?.active) || ['queued', 'preparing', 'ringing', 'answered', 'connected'].includes(callStatus)
-  const canStartCall = agentReady && !callerIdLoading && Boolean(callerIdActive) && (callMode === 'lead'
+  const canStartCall = agentReady && !callerIdLoading && (Boolean(callerIdActive) || Boolean(callerIdFallbackPhoneNumber)) && (callMode === 'lead'
     ? Boolean(selected)
     : Boolean(manualPhone.trim() && manualName.trim() && manualPhone.replace(/\D/g, '').length >= 9))
 
@@ -699,7 +701,12 @@ function LuminCallPanel() {
               Número validado para as tuas chamadas: <strong>{callerIdActive.phoneNumber}</strong>
             </div>
           )}
-          {!callerIdActive && (
+          {!callerIdActive && callerIdFallbackPhoneNumber && (
+            <div style={{ marginTop: 8, fontSize: 11.5, lineHeight: 1.5, color: '#86EFAC' }}>
+              Chamadas do superadministrador: <strong>{callerIdFallbackPhoneNumber}</strong>. Este número não é disponibilizado aos operadores.
+            </div>
+          )}
+          {!callerIdActive && !callerIdFallbackPhoneNumber && (
             <div style={{ marginTop: 8, fontSize: 11.5, lineHeight: 1.5, color: '#FCA5A5' }}>
               Valida o teu número pessoal para desbloquear as chamadas de IA. O número de outros utilizadores não é usado como alternativa.
             </div>
@@ -888,7 +895,7 @@ function LuminCallPanel() {
         <div style={{ fontSize: 11, color: '#A5B4FC', fontWeight: 800, letterSpacing: '.08em' }}>LUMIN VOICE</div>
         <div style={{ fontSize: 20, fontWeight: 800, marginTop: 8 }}>{callMode === 'manual' ? (manualName.trim() || 'Lead manual') : (selected?.nome || 'Escolhe um contacto')}</div>
         <div style={{ fontSize: 13, color: '#CBD5E1', marginTop: 3 }}>{callMode === 'manual' ? (manualPhone.trim() || 'Número manual') : (selected?.telefone || 'Escolhe um contacto para preparar a chamada.')}</div>
-        <div style={{ fontSize: 11, color: '#B7AA91', marginTop: 5 }}>{callerIdLoading ? 'A verificar número de saída…' : callerIdActive ? 'Número pessoal validado' : 'Valida o teu número pessoal'}</div>
+        <div style={{ fontSize: 11, color: '#B7AA91', marginTop: 5 }}>{callerIdLoading ? 'A verificar número de saída…' : callerIdActive ? 'Número pessoal validado' : callerIdFallbackPhoneNumber ? 'Número oficial do superadministrador' : 'Valida o teu número pessoal'}</div>
 
         <div style={{ marginTop: 15, padding: '11px 12px', borderRadius: 10, background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.08)' }}>
           <div style={{ fontSize: 10, color: '#94A3B8', marginBottom: 4 }}>AGENTE SELECIONADO</div>

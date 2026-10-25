@@ -203,7 +203,12 @@ export function getLiveKitConfig() {
   }
 }
 
-export async function resolveCallerId(admin: ReturnType<typeof createAdminClient>, userId: string, companyId: string) {
+export async function resolveCallerId(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  companyId: string,
+  allowSuperAdminLegacyCallerId = false,
+) {
   const { data, error } = await admin
     .from('sd_dialer_caller_ids')
     .select('id,phone_number,verification_status,is_active,requested_at,verified_at')
@@ -217,6 +222,16 @@ export async function resolveCallerId(admin: ReturnType<typeof createAdminClient
 
   if (error) throw new SdDialerError('Não foi possível carregar o número de saída.', 500)
   if (!data?.phone_number) {
+    const legacyCallerId = allowSuperAdminLegacyCallerId
+      ? normalizePtPhone(process.env.LUMIN_CALLER_ID || '')
+      : ''
+    if (legacyCallerId) {
+      return {
+        id: 'superadmin-legacy-caller-id',
+        phoneNumber: legacyCallerId,
+        usingPersonalNumber: false,
+      }
+    }
     throw new SdDialerError('Valida o teu número pessoal antes de iniciar chamadas de IA.', 409)
   }
   return {
