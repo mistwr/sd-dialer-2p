@@ -31,83 +31,72 @@ function publicRecord(row: any, includeCode = false) {
 export async function GET(request: NextRequest) {
   try {
     const { admin, user, profile } = await requireSdDialerUser(request)
-    const scope = () => admin
+    const loadRows = () => admin
       .from('sd_dialer_caller_ids')
-      .select('id,user_id,company_id,phone_number,verification_status,is_active,validation_code,twilio_call_sid,requested_at,verified_at,created_at')
+      .select('id,user_id,company_id,phone_number,verification_status,is_active,validation_code,twilio_call_sid,twilio_outgoing_caller_id_sid,requested_at,verified_at,created_at')
       .eq('user_id', user.id)
       .eq('company_id', profile.company_id)
       .order('created_at', { ascending: false })
 
-    let { data, error } = await scope()
-    if (error) throw new SdDialerError('Não foi possível carregar os números associados a esta conta.', 500)
+    const initial = await loadRows()
+    if (initial.error) throw new SdDialerError('Não foi possível carregar os números associados a esta conta.', 500)
+    let rows: any[] = initial.data || []
+    const pending = rows.find(row => row.verification_status === 'pending')
 
-    const pending = (data || []).find((row: any) => row.verification_status === 'pending')
     if (pending && isTwilioCallerIdConfigured()) {
       const ageMs = Date.now() - new Date(pending.requested_at || pending.created_at).getTime()
       if (ageMs > 10 * 60 * 1000) {
-        await admin
+        const { error } = await admin
           .from('sd_dialer_caller_ids')
-          .update({ verification_status: 'failed', is_active: false, validation_code: null, updated_at: new Date().toISOString() })
+          .update({ verification_status: 'failed', is_active: false, validation_code: null })
           .eq('id', pending.id)
           .eq('user_id', user.id)
-        data = (data || []).map((row: any) => row.id === pending.id
-          ? { ...row, verification_status: 'failed', is_active: false, validation_code: null }
-          : row)
+        if (error) throw new SdDialerError('Não foi possível expirar o pedido de validação.', 500)
       } else {
+        let verified: any = null
         try {
-          const verified = await findTwilioOutgoingCallerId(String(pending.phone_number))
-          if (verified) {
-            const { data: existingOwner, error: ownerError } = await admin
+          verified = await findTwilioOutgoingCallerId(String(pending.phone_number))
+        } catch {
+          // A temporary Twilio lookup failure leaves the existing challenge pending.
+        }
+        const twilioSid = String(verified?.sid || '')
+        if (verified && twilioSid) {
+          const { data: existingOwner, error: ownerError } = await admin
+            .from('sd_dialer_caller_ids')
+            .select('id')
+            .eq('phone_number', pending.phone_number)
+            .eq('verification_status', 'verified')
+            .neq('user_id', user.id)
+            .limit(1)
+            .maybeSingle()
+          if (ownerError) throw new SdDialerError('Não foi possível confirmar a associação do número.', 500)
+          if (existingOwner) {
+            const { error } = await admin
               .from('sd_dialer_caller_ids')
-              .select('id')
-              .eq('phone_number', pending.phone_number)
-              .eq('verification_status', 'verified')
-              .neq('user_id', user.id)
-              .limit(1)
-              .maybeSingle()
-            if (ownerError) throw new SdDialerError('Não foi possível confirmar a associação do número.', 500)
-            if (existingOwner) {
-              await admin
-                .from('sd_dialer_caller_ids')
-                .update({ verification_status: 'failed', is_active: false, validation_code: null, updated_at: new Date().toISOString() })
-                .eq('id', pending.id)
-                .eq('user_id', user.id)
-              data = (data || []).map((row: any) => row.id === pending.id
-                ? { ...row, verification_status: 'failed', is_active: false, validation_code: null }
-                : row)
-            } else {
-              const now = new Date().toISOString()
-              await admin
-                .from('sd_dialer_caller_ids')
-                .update({ is_active: false, updated_at: now })
-                .eq('user_id', user.id)
-                .eq('company_id', profile.company_id)
-              const { error: activateError } = await admin
-                .from('sd_dialer_caller_ids')
-                .update({ verification_status: 'verified', is_active: true, validation_code: null, verified_at: now, updated_at: now })
-                .eq('id', pending.id)
-                .eq('user_id', user.id)
-                .eq('company_id', profile.company_id)
-              if (activateError) throw new SdDialerError('O número foi validado pela Twilio, mas não foi possível ativá-lo no SD Dialer.', 500)
-              data = (data || []).map((row: any) => row.id === pending.id
-                ? { ...row, verification_status: 'verified', is_active: true, validation_code: null, verified_at: now }
-                : { ...row, is_active: false })
-            }
+              .update({ verification_status: 'failed', is_active: false, validation_code: null })
+              .eq('id', pending.id)
+              .eq('user_id', user.id)
+            if (error) throw new SdDialerError('Não foi possível rejeitar uma associação duplicada.', 500)
+          } else {
+            const { error } = await admin.rpc('activate_sd_dialer_caller_id', {
+              p_verification_id: pending.id,
+              p_twilio_sid: twilioSid,
+            })
+            if (error) throw new SdDialerError('A Twilia validou o número, mas não foi possível ativá-lo no SD Dialer.', 500)
           }
-        } catch (error) {
-          if (error instanceof SdDialerError) throw error
-          // Keep the verification pending if the Twilio status check is temporarily unavailable.
         }
       }
+      const refreshed = await loadRows()
+      if (refreshed.error) throw new SdDialerError('Não foi possível atualizar o estado do número.', 500)
+      rows = refreshed.data || []
     }
 
-    const rows = data || []
-    const activeRow = rows.find((row: any) => row.verification_status === 'verified' && row.is_active)
-    const pendingRow = rows.find((row: any) => row.verification_status === 'pending')
-    const failedRow = rows.find((row: any) => row.verification_status === 'failed')
+    const activeRow = rows.find(row => row.verification_status === 'verified' && row.is_active)
+    const pendingRow = rows.find(row => row.verification_status === 'pending')
+    const failedRow = rows.find(row => row.verification_status === 'failed')
     const numbers = rows
-      .filter((row: any) => row.verification_status === 'verified')
-      .map((row: any) => publicRecord(row))
+      .filter(row => row.verification_status === 'verified')
+      .map(row => publicRecord(row))
 
     return NextResponse.json({
       active: activeRow ? publicRecord(activeRow) : null,
