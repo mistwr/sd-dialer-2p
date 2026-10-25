@@ -5,6 +5,8 @@ import {
   getLiveKitConfig,
   normalizePtPhone,
   requireSdDialerUser,
+  requireVoiceCallAccess,
+  resolveCallerId,
   SdDialerError,
 } from '@/lib/server/sd-dialer-livekit'
 
@@ -41,6 +43,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const auth = await requireSdDialerUser(request)
+    await requireVoiceCallAccess(auth.admin, auth.user.id, auth.profile)
     admin = auth.admin
     const body = await request.json().catch(() => ({})) as {
       lead_id?: string
@@ -87,6 +90,33 @@ export async function POST(request: NextRequest) {
     const destination = normalizePtPhone(phone)
     if (!destination) throw new SdDialerError('Número de telefone inválido. Usa o formato internacional, por exemplo +351912345678.', 400)
 
+    const callerIdentity = await resolveCallerId(admin, auth.user.id, auth.profile.company_id)
+    const callerId = callerIdentity.phoneNumber
+
+    const { data: voiceSettings, error: settingsError } = await admin
+      .from('voice_settings')
+      .select('stop_calls,max_calls_per_hour')
+      .eq('company_id', auth.profile.company_id)
+      .maybeSingle()
+    if (settingsError) throw new SdDialerError('Não foi possível consultar os limites de chamadas desta empresa.', 500)
+    if (voiceSettings?.stop_calls === true) {
+      throw new SdDialerError('As chamadas de IA estão pausadas pelo superadministrador.', 423)
+    }
+    const maxCallsPerHour = Number(voiceSettings?.max_calls_per_hour || 0)
+    if (Number.isFinite(maxCallsPerHour) && maxCallsPerHour > 0) {
+      const cutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+      const { count, error: rateError } = await admin
+        .from('voice_calls')
+        .select('id', { count: 'exact', head: true })
+        .eq('company_id', auth.profile.company_id)
+        .eq('created_by', auth.user.id)
+        .gte('created_at', cutoff)
+      if (rateError) throw new SdDialerError('Não foi possível consultar o limite horário de chamadas.', 500)
+      if ((count || 0) >= maxCallsPerHour) {
+        throw new SdDialerError('Atingiste o limite de chamadas de IA por hora definido pelo superadministrador.', 429)
+      }
+    }
+
     const { data: company } = await admin
       .from('companies')
       .select('name')
@@ -114,8 +144,13 @@ export async function POST(request: NextRequest) {
       leadId = String(newLead.id)
     }
 
-    const callerId = String(process.env.LUMIN_CALLER_ID || '').trim()
-    if (!callerId) throw new SdDialerError('O número de saída da empresa não está configurado.', 503)
+    const { data: savedAgent, error: agentConfigError } = await admin
+      .from('voice_call_agent_configs')
+      .select('config,active')
+      .eq('agent_id', agentId)
+      .maybeSingle()
+    if (agentConfigError) throw new SdDialerError('Não foi possível carregar a configuração do agente.', 500)
+    if (savedAgent?.active === false) throw new SdDialerError('Este agente está temporariamente desativado pelo superadministrador.', 409)
 
     const livekit = getLiveKitConfig()
     api = livekit.api
@@ -124,7 +159,7 @@ export async function POST(request: NextRequest) {
     roomName = 'sd-dialer-' + callId
     sipIdentity = 'sip-' + callId
     const source = body.lead_id ? 'sd-dialer' : 'sd-dialer-manual'
-    const agentProfile = buildAgentProfile(agentId, companyName)
+    const agentProfile = buildAgentProfile(agentId, companyName, (savedAgent?.config || {}) as Record<string, unknown>)
     const metadata = {
       mode: 'outbound',
       callId,
@@ -196,7 +231,6 @@ export async function POST(request: NextRequest) {
         callId,
         status: 'ringing',
         roomName,
-        callerId,
       })
     } catch (error) {
       console.error('[sd-dialer] LiveKit outbound call failed', error instanceof Error ? error.message : 'unknown error')
