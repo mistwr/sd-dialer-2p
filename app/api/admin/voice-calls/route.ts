@@ -122,22 +122,16 @@ export async function POST(request: NextRequest) {
       if (!companyId || !Number.isInteger(maxCallsPerHour) || maxCallsPerHour < 1 || maxCallsPerHour > 1000) {
         throw new SdDialerError('Indica a empresa e um limite horário entre 1 e 1000 chamadas.', 400)
       }
-      const { data: existing, error: readError } = await admin
+      const { error } = await admin
         .from('voice_settings')
-        .select('id')
-        .eq('company_id', companyId)
-        .maybeSingle()
-      if (readError) throw new SdDialerError('Não foi possível consultar as definições da empresa.', 500)
-      const values = {
-        company_id: companyId,
-        stop_calls: stopCalls,
-        max_calls_per_hour: maxCallsPerHour,
-        updated_at: new Date().toISOString(),
-      }
-      const result = existing?.id
-        ? await admin.from('voice_settings').update(values).eq('id', existing.id)
-        : await admin.from('voice_settings').insert(values)
-      if (result.error) throw new SdDialerError('Não foi possível guardar os limites de chamadas.', 500)
+        .upsert({
+          company_id: companyId,
+          stop_calls: stopCalls,
+          max_calls_per_hour: maxCallsPerHour,
+          updated_by: actor.id,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'company_id' })
+      if (error) throw new SdDialerError('Não foi possível guardar os limites de chamadas.', 500)
       return NextResponse.json({ ok: true })
     }
 
