@@ -306,12 +306,12 @@ export default function AdminVoiceCallsPage() {
       {!loading && data && tab === 'limits' && (
         <section style={panel}>
           <h2 style={{ marginTop: 0 }}>Limites de chamadas</h2>
-          <p style={{ color: '#64748B', lineHeight: 1.5 }}>Os limites aplicam-se a todos os utilizadores da empresa. Pausar bloqueia novas chamadas imediatamente.</p>
+          <p style={{ color: '#64748B', lineHeight: 1.5 }}>O bloqueio aplica-se aos operadores da empresa; o superadministrador continua a poder testar chamadas.</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12, alignItems: 'center' }}>
             <select value={selectedCompany} onChange={event => setSelectedCompany(event.target.value)} style={field}>
               {data.companies.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={stopCalls} onChange={event => setStopCalls(event.target.checked)} /> Pausar chamadas IA</label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={stopCalls} onChange={event => setStopCalls(event.target.checked)} /> Pausar chamadas dos operadores</label>
             <label>Máximo por utilizador, por hora
               <input type="number" min={1} max={1000} value={maxCallsPerHour} onChange={event => setMaxCallsPerHour(Number(event.target.value))} style={field} />
             </label>
