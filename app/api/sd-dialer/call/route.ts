@@ -210,7 +210,7 @@ export async function POST(request: NextRequest) {
           participantName: name || 'Contacto',
           participantMetadata: JSON.stringify(metadata),
           waitUntilAnswered: false,
-          ringingTimeout: 45,
+          ringingTimeout: 80,
           maxCallDuration: 900,
         },
       )
