@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
   let roomName = ''
   let sipIdentity = ''
   let participantCreated = false
+  let dispatchId = ''
   let api: ReturnType<typeof getLiveKitConfig>['api'] | null = null
 
   try {
@@ -157,6 +158,12 @@ export async function POST(request: NextRequest) {
     }
 
     try {
+      // Dispatch the agent first so it is already in the room when the callee answers.
+      const dispatch = await api.agentDispatch.createDispatch(roomName, livekit.agentName, {
+        metadata: JSON.stringify(metadata),
+      })
+      dispatchId = dispatch.id
+
       const sipParticipant = await api.sip.createSipParticipant(
         livekit.trunkId,
         destination,
@@ -184,10 +191,6 @@ export async function POST(request: NextRequest) {
         .eq('id', callId)
       if (updateCallError) console.error('[sd-dialer] Could not attach SIP call ID to call history.')
 
-      await api.agentDispatch.createDispatch(roomName, livekit.agentName, {
-        metadata: JSON.stringify(metadata),
-      })
-
       return NextResponse.json({
         ok: true,
         callId,
@@ -203,6 +206,14 @@ export async function POST(request: NextRequest) {
           await api.room.removeParticipant(roomName, sipIdentity)
         } catch {
           // The call may already have ended.
+        }
+      }
+
+      if (dispatchId && api) {
+        try {
+          await api.agentDispatch.deleteDispatch(dispatchId, roomName)
+        } catch {
+          // The agent job may already have finished.
         }
       }
 
