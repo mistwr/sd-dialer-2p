@@ -279,8 +279,6 @@ function LuminCallPanel() {
   const [callerIdPending, setCallerIdPending] = useState<CallerIdRecord | null>(null)
   const [callerIdFailed, setCallerIdFailed] = useState<CallerIdRecord | null>(null)
   const [callerIdVerificationAvailable, setCallerIdVerificationAvailable] = useState(false)
-  const [callerIdFallbackAvailable, setCallerIdFallbackAvailable] = useState(false)
-  const [callerIdFallbackNumber, setCallerIdFallbackNumber] = useState('')
   const [callerIdLoading, setCallerIdLoading] = useState(true)
   const [callerIdSaving, setCallerIdSaving] = useState(false)
   const [callerIdError, setCallerIdError] = useState('')
@@ -369,8 +367,6 @@ function LuminCallPanel() {
     setCallerIdPending(pending)
     setCallerIdFailed(failed)
     setCallerIdVerificationAvailable(Boolean(json.verificationAvailable))
-    setCallerIdFallbackAvailable(Boolean(json.fallbackAvailable))
-    setCallerIdFallbackNumber(String(json.fallbackPhoneNumber || ''))
     setVerificationCode(pending?.validationCode || '')
     setCallerIdError('')
     return { active, pending, failed, numbers }
@@ -415,7 +411,7 @@ function LuminCallPanel() {
   async function startCallerIdVerification() {
     if (!callerPhone.trim() || callerIdSaving || callerIdRemoving || callIsBusy) return
     if (!callerIdVerificationAvailable) {
-      setCallerIdError('A validação do número pessoal ainda não está configurada. Podes continuar a fazer chamadas pelo número atual da empresa.')
+      setCallerIdError('A validação de números pessoais ainda não está configurada. Pede ao superadministrador para ativar a integração Twilio.')
       return
     }
     setCallerIdSaving(true)
@@ -451,18 +447,8 @@ function LuminCallPanel() {
 
   async function removeCallerIdNumber(record: CallerIdRecord) {
     if (!record.id || callerIdRemoving || callerIdSaving || callIsBusy) return
-    const digits = (value: string) => value.replace(/\D/g, '')
-    const isCompanyFallback = Boolean(
-      callerIdFallbackNumber &&
-      digits(record.phoneNumber) === digits(callerIdFallbackNumber)
-    )
-    const activeNote = record.isActive && !isCompanyFallback
-      ? ' Se removeres o número ativo, as chamadas passam a usar o número de saída da empresa.'
-      : ''
     const confirmation = window.confirm(
-      isCompanyFallback
-        ? `Remover ${record.phoneNumber} das associações do teu utilizador? Este número também é o fallback da empresa, por isso continuará verificado na Twilio para as chamadas da empresa.`
-        : `Remover ${record.phoneNumber} da conta Twilio? O número deixa de estar disponível como Caller ID nas chamadas feitas por esta conta Twilio.${activeNote}`
+      'Remover ' + record.phoneNumber + ' da associação ao teu utilizador? A validação na Twilio mantém-se, mas este número deixa de poder ser usado nas tuas chamadas de IA.'
     )
     if (!confirmation) return
 
@@ -472,7 +458,7 @@ function LuminCallPanel() {
     try {
       const token = await getSessionToken()
       const res = await fetch(
-        `/api/sd-dialer/caller-id/${encodeURIComponent(record.id)}`,
+        '/api/sd-dialer/caller-id/' + encodeURIComponent(record.id),
         {
           method: 'DELETE',
           headers: { Authorization: 'Bearer ' + token },
@@ -481,11 +467,7 @@ function LuminCallPanel() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.detail || 'Não foi possível remover o número.')
       await fetchCallerIdentity(token)
-      setCallerIdMessage(
-        json.twilioCallerIdRetained
-          ? 'Número removido das associações do teu utilizador; mantido na Twilio como saída da empresa.'
-          : 'Número removido da conta Twilio.'
-      )
+      setCallerIdMessage('Número removido da tua associação. A validação da Twilio mantém-se.')
     } catch (err: any) {
       setCallerIdError(err?.message || 'Falha ao remover o número.')
     } finally {
@@ -538,7 +520,7 @@ function LuminCallPanel() {
   }
 
   const callIsBusy = Boolean(queue.current?.active) || ['queued', 'preparing', 'ringing', 'answered', 'connected'].includes(callStatus)
-  const canStartCall = agentReady && !callerIdLoading && (Boolean(callerIdActive) || callerIdFallbackAvailable) && (callMode === 'lead'
+  const canStartCall = agentReady && !callerIdLoading && Boolean(callerIdActive) && (callMode === 'lead'
     ? Boolean(selected)
     : Boolean(manualPhone.trim() && manualName.trim() && manualPhone.replace(/\D/g, '').length >= 9))
 
@@ -710,21 +692,16 @@ function LuminCallPanel() {
         <section aria-label="Número de saída" style={{ marginTop: 16, padding: 13, borderRadius: 11, background: '#13110D', border: '1px solid #383228' }}>
           <div style={{ fontSize: 12, fontWeight: 800, color: '#F5EEDC' }}>Número de saída</div>
           <div style={{ fontSize: 11.5, lineHeight: 1.5, color: '#B7AA91', marginTop: 4 }}>
-            As chamadas de IA usam o número oficial de saída da empresa: <strong>{callerIdFallbackNumber || 'não configurado'}</strong>. Para alterar, é necessário atualizar a configuração aprovada da Twilio e da LiveKit.
+            Cada utilizador faz chamadas apenas a partir do seu próprio número validado na Twilio.
           </div>
           {callerIdActive && (
             <div style={{ marginTop: 8, fontSize: 12, color: '#86EFAC' }}>
-              Número ativo nas chamadas: <strong>{callerIdActive.phoneNumber}</strong>
+              Número validado para as tuas chamadas: <strong>{callerIdActive.phoneNumber}</strong>
             </div>
           )}
-          {!callerIdActive && callerIdFallbackAvailable && (
-            <div style={{ marginTop: 8, fontSize: 11.5, lineHeight: 1.5, color: '#FFE6B0' }}>
-              Até validares o teu número, as chamadas continuam a sair pelo número atual da empresa{callerIdFallbackNumber ? ` (${callerIdFallbackNumber})` : ''}.
-            </div>
-          )}
-          {!callerIdActive && !callerIdFallbackAvailable && (
+          {!callerIdActive && (
             <div style={{ marginTop: 8, fontSize: 11.5, lineHeight: 1.5, color: '#FCA5A5' }}>
-              Ainda não existe um número de saída. Verifica o teu número ou pede ao administrador para configurar o número da empresa.
+              Valida o teu número pessoal para desbloquear as chamadas de IA. O número de outros utilizadores não é usado como alternativa.
             </div>
           )}
           {callerIdFailed && !callerIdPending && (
@@ -734,9 +711,9 @@ function LuminCallPanel() {
           )}
           {callerIdPending && (
             <div style={{ marginTop: 8, padding: 9, borderRadius: 8, background: '#211B10', color: '#FFE6B0', fontSize: 11.5, lineHeight: 1.5 }}>
-              A verificar {callerIdPending.phoneNumber}. Quando atenderes à chamada da Twilio, introduz este código:
+              A Twilio está a ligar para {callerIdPending.phoneNumber}. Atende e marca este código no teclado do telefone:
               <div style={{ fontSize: 20, letterSpacing: '.16em', fontWeight: 900, marginTop: 3 }}>{verificationCode || '— — — — — —'}</div>
-              A chamada automática é em inglês. O número atual continua ativo até a nova verificação terminar.
+              O teu número atual continua ativo até a nova validação terminar.
             </div>
           )}
           <div style={{ display: callerIdVerificationAvailable ? 'flex' : 'none', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
@@ -759,7 +736,7 @@ function LuminCallPanel() {
             </button>
           </div>
           {callerIdLoading && <div style={{ marginTop: 7, fontSize: 11, color: '#B7AA91' }}>A carregar a configuração…</div>}
-          {!callerIdLoading && !callerIdVerificationAvailable && <div style={{ marginTop: 7, fontSize: 11, color: '#B7AA91' }}>A validação de números pessoais não está ativa. As chamadas continuam a usar o número oficial da empresa.</div>}
+          {!callerIdLoading && !callerIdVerificationAvailable && <div style={{ marginTop: 7, fontSize: 11, color: '#B7AA91' }}>A integração Twilio para validar números pessoais ainda não está ativa. Pede ajuda ao superadministrador.</div>}
           {callerIdMessage && <div role="status" style={{ marginTop: 7, fontSize: 11.5, color: '#86EFAC' }}>{callerIdMessage}</div>}
           {callerIdError && <div role="alert" style={{ marginTop: 7, fontSize: 11.5, color: '#FCA5A5' }}>{callerIdError}</div>}
 
@@ -911,7 +888,7 @@ function LuminCallPanel() {
         <div style={{ fontSize: 11, color: '#A5B4FC', fontWeight: 800, letterSpacing: '.08em' }}>LUMIN VOICE</div>
         <div style={{ fontSize: 20, fontWeight: 800, marginTop: 8 }}>{callMode === 'manual' ? (manualName.trim() || 'Lead manual') : (selected?.nome || 'Escolhe um contacto')}</div>
         <div style={{ fontSize: 13, color: '#CBD5E1', marginTop: 3 }}>{callMode === 'manual' ? (manualPhone.trim() || 'Número manual') : (selected?.telefone || 'Escolhe um contacto para preparar a chamada.')}</div>
-        <div style={{ fontSize: 11, color: '#B7AA91', marginTop: 5 }}>Sai por: {callerIdActive?.phoneNumber || (callerIdLoading ? 'a carregar…' : callerIdFallbackNumber || 'número por configurar')}</div>
+        <div style={{ fontSize: 11, color: '#B7AA91', marginTop: 5 }}>{callerIdLoading ? 'A verificar número de saída…' : callerIdActive ? 'Número pessoal validado' : 'Valida o teu número pessoal'}</div>
 
         <div style={{ marginTop: 15, padding: '11px 12px', borderRadius: 10, background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.08)' }}>
           <div style={{ fontSize: 10, color: '#94A3B8', marginBottom: 4 }}>AGENTE SELECIONADO</div>
@@ -1057,7 +1034,7 @@ function AssistenteComercial() {
   )
 }
 
-export default function ChamadasIAPage() {
+function ChamadasIAPageContent() {
   const [tab, setTab] = useState<'ligar' | 'historico' | 'assistente'>('ligar')
   const { data, isLoading, mutate } = useSWR(
     '/api/recordings?limit=50',
@@ -1211,5 +1188,100 @@ export default function ChamadasIAPage() {
         </>
       )}
     </div>
+  )
+}
+
+
+export default function ChamadasIAPage() {
+  const [accessState, setAccessState] = useState<'loading' | 'active' | 'locked'>('loading')
+  const [accessCode, setAccessCode] = useState('')
+  const [accessError, setAccessError] = useState('')
+  const [submittingCode, setSubmittingCode] = useState(false)
+
+  async function accessToken() {
+    const client = createClient()
+    const { data, error } = await client.auth.getSession()
+    if (error || !data.session?.access_token) throw new Error('Entra novamente no SD Dialer.')
+    return data.session.access_token
+  }
+
+  useEffect(() => {
+    let mounted = true
+    async function checkAccess() {
+      try {
+        const token = await accessToken()
+        const response = await fetch('/api/sd-dialer/voice-access', {
+          headers: { Authorization: 'Bearer ' + token },
+          cache: 'no-store',
+        })
+        const json = await response.json()
+        if (!response.ok) throw new Error(json.detail || 'Não foi possível consultar o acesso.')
+        if (mounted) setAccessState(json.active ? 'active' : 'locked')
+      } catch (error) {
+        if (mounted) {
+          setAccessState('locked')
+          setAccessError(error instanceof Error ? error.message : 'Não foi possível consultar o acesso.')
+        }
+      }
+    }
+    void checkAccess()
+    return () => { mounted = false }
+  }, [])
+
+  async function redeemCode(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!accessCode.trim() || submittingCode) return
+    setSubmittingCode(true)
+    setAccessError('')
+    try {
+      const token = await accessToken()
+      const response = await fetch('/api/sd-dialer/voice-access', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + token,
+        },
+        body: JSON.stringify({ code: accessCode }),
+      })
+      const json = await response.json()
+      if (!response.ok) throw new Error(json.detail || 'Código inválido ou já utilizado.')
+      setAccessState('active')
+      setAccessCode('')
+    } catch (error) {
+      setAccessError(error instanceof Error ? error.message : 'Não foi possível ativar a subscrição.')
+    } finally {
+      setSubmittingCode(false)
+    }
+  }
+
+  if (accessState === 'loading') {
+    return <main style={{ minHeight: '60vh', display: 'grid', placeItems: 'center', color: '#64748B' }}>A verificar o acesso às chamadas de IA…</main>
+  }
+  if (accessState === 'active') return <ChamadasIAPageContent />
+
+  return (
+    <main style={{ minHeight: '100vh', padding: 24, background: '#F8FAFC', display: 'grid', placeItems: 'center' }}>
+      <section style={{ width: 'min(100%, 520px)', background: '#11100D', color: '#F5EEDC', border: '1px solid #383228', borderRadius: 20, padding: 26, boxShadow: '0 20px 55px rgba(0,0,0,.25)' }}>
+        <div style={{ color: '#E7C77D', fontSize: 12, fontWeight: 800, letterSpacing: '.12em' }}>SD DIALER · CHAMADAS IA</div>
+        <h1 style={{ fontSize: 28, lineHeight: 1.15, margin: '10px 0' }}>Ativa o acesso às chamadas</h1>
+        <p style={{ color: '#C5BDAE', lineHeight: 1.6, margin: '0 0 22px' }}>
+          Introduz o código de subscrição fornecido pelo superadministrador. Cada código é de utilização única e fica associado a esta conta.
+        </p>
+        <form onSubmit={redeemCode} style={{ display: 'grid', gap: 12 }}>
+          <input
+            value={accessCode}
+            onChange={event => setAccessCode(event.target.value)}
+            placeholder="Ex.: ABCD-EFGH-IJKL"
+            autoComplete="one-time-code"
+            aria-label="Código de acesso às chamadas de IA"
+            style={{ padding: '13px 14px', borderRadius: 10, border: '1px solid #504733', background: '#191710', color: '#F5EEDC', fontSize: 16 }}
+          />
+          <button type="submit" disabled={submittingCode || !accessCode.trim()} style={{ padding: 13, border: 0, borderRadius: 10, background: '#F4C96B', color: '#17130C', fontWeight: 900, fontSize: 15, opacity: submittingCode ? .7 : 1 }}>
+            {submittingCode ? 'A validar…' : 'Ativar chamadas IA'}
+          </button>
+        </form>
+        {accessError && <div role="alert" style={{ marginTop: 12, color: '#FCA5A5', lineHeight: 1.5 }}>{accessError}</div>}
+      </section>
+    </main>
   )
 }
