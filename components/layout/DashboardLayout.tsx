@@ -28,6 +28,7 @@ const AI_CALLS_MENU_USER_IDS = [
   '8c43ee2a-9c99-4493-a215-abcb0849b8bf',
   'efff74d7-b3f6-4336-8daa-0d7d13bc2a10',
   '60bf2363-ec80-4664-aae4-0479c18ce52b',
+  '90c92418-b334-42a7-b64c-9b972c2060d0',
 ]
 
 const NAV: NavItem[] = [
