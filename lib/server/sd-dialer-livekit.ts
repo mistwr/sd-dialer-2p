@@ -284,6 +284,16 @@ export function buildAgentProfile(agentId: string, companyName: string, override
     const value = overrides[key]
     if (typeof value === 'string') safeOverrides[key] = value.slice(0, key === 'notes' ? 12000 : 3000)
   }
+  // Compatibility for the saved legacy Energy script, which repeats the introduction
+  // already spoken by the call flow and jumps to scheduling before understanding the need.
+  if (
+    agentId === 'lumin-energia' &&
+    safeOverrides.opening === 'Boa tarde, [nome]. Sou o Lumin, assistente virtual da Compara+. Posso fazer-lhe uma pergunta rápida sobre a energia da sua empresa?'
+  ) {
+    safeOverrides.opening = 'O que gostaria de melhorar na energia da sua empresa?'
+    safeOverrides.objective = 'Compreender primeiro a necessidade de energia da empresa. Se houver uma necessidade concreta e interesse explícito, apresentar a possibilidade de comparar soluções Compara+ EDP Empresarial e solar; só marcar contacto depois de a pessoa aceitar e indicar dia e hora.'
+    safeOverrides.notes = 'A apresentação inicial já foi dita pelo fluxo da chamada; não cumprimentes novamente nem repitas o teu nome, a Lumin ou a Compara+. Continua diretamente com uma pergunta sobre o que a pessoa gostaria de melhorar na energia da empresa. Uma resposta como “sim, posso” autoriza apenas a pergunta seguinte e não significa interesse numa marcação. Faz uma pergunta de cada vez e ouve a resposta antes de avançar; não saltes para a agenda. Só quando compreenderes uma necessidade concreta e a pessoa mostrar interesse explícito em explorar soluções Compara+ EDP Empresarial ou solar, oferece contacto com um consultor. Agenda apenas após a pessoa aceitar e indicar dia e hora; se faltar um deles, pergunta só pelo que falta. Usa schedule_follow_up uma vez, com Europe/Lisbon, e confirma apenas se a ferramenta indicar sucesso. Se a resposta parecer repetida ou não fizer sentido, pede para repetir uma vez; não inventes nem confirmes dados. Respeita recusas e pedidos para não voltar a contactar. Usa frases curtas e português de Portugal.'
+  }
   const scriptVersion = Number(overrides.scriptVersion)
   return {
     ...selected,
