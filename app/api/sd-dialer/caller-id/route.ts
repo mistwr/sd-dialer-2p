@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { resolveSharedCallerId } from '@/lib/server/sd-dialer-shared-caller'
 import {
   errorResponse,
   findTwilioOutgoingCallerId,
@@ -103,12 +104,17 @@ export async function GET(request: NextRequest) {
       ? normalizePtPhone(process.env.LUMIN_CALLER_ID || '')
       : ''
     const legacyFallbackPhoneNumber = !activeRow ? legacyCallerId : ''
+    // Only availability reaches the browser; the shared phone stays on the server.
+    const sharedCallerIdAvailable = !activeRow && !isSuperAdmin && Boolean(await resolveSharedCallerId(
+      admin, user.id, profile.company_id, normalizePtPhone(process.env.LUMIN_CALLER_ID || ''),
+    ))
 
     return NextResponse.json({
       active: activeRow ? publicRecord(activeRow) : null,
       pending: pendingRow ? publicRecord(pendingRow, true) : null,
       failed: failedRow ? publicRecord(failedRow) : null,
       numbers,
+      sharedCallerIdAvailable,
       legacyFallbackPhoneNumber: legacyFallbackPhoneNumber || null,
       verificationAvailable: isTwilioCallerIdConfigured(),
     })

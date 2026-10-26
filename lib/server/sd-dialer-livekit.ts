@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { LiveKitAPI } from 'livekit-server-sdk'
 import { NextRequest, NextResponse } from 'next/server'
+import { resolveSharedCallerId } from './sd-dialer-shared-caller'
 
 const ALLOWED_ROLES = new Set(['parceiro', 'admin', 'supervisor', 'super_admin'])
 
@@ -225,6 +226,16 @@ export async function resolveCallerId(
       return {
         id: 'superadmin-legacy-caller-id',
         phoneNumber: legacyCallerId,
+        usingPersonalNumber: false,
+      }
+    }
+    const sharedCallerId = await resolveSharedCallerId(
+      admin, userId, companyId, normalizePtPhone(process.env.LUMIN_CALLER_ID || ''),
+    )
+    if (sharedCallerId) {
+      return {
+        id: 'authorized-system-caller-id',
+        phoneNumber: sharedCallerId,
         usingPersonalNumber: false,
       }
     }
