@@ -309,7 +309,7 @@ export function buildAgentProfile(agentId: string, companyName: string, override
   return {
     ...selected,
     company,
-    voice: 'clear',
+    voice: agentId === 'lumin-telecom' ? 'natural' : 'clear',
     voiceEngine: 'xai',
     voiceSource: 'system',
     scriptVersion: Number.isFinite(scriptVersion) && scriptVersion > 0 ? Math.min(scriptVersion, 9999) : (agentId === 'lumin-telecom' ? 8 : 1),
