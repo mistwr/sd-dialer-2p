@@ -305,6 +305,18 @@ export function buildAgentProfile(agentId: string, companyName: string, override
     safeOverrides.objective = 'Compreender primeiro a necessidade de energia da empresa. Se houver uma necessidade concreta e interesse explícito, apresentar a possibilidade de comparar soluções Compara+ EDP Empresarial e solar; só marcar contacto depois de a pessoa aceitar e indicar dia e hora.'
     safeOverrides.notes = 'A apresentação inicial já foi dita pelo fluxo da chamada; não cumprimentes novamente nem repitas o teu nome, a Lumin ou a Compara+. Continua diretamente com uma pergunta sobre o que a pessoa gostaria de melhorar na energia da empresa. Uma resposta como “sim, posso” autoriza apenas a pergunta seguinte e não significa interesse numa marcação. Faz uma pergunta de cada vez e ouve a resposta antes de avançar; não saltes para a agenda. Só quando compreenderes uma necessidade concreta e a pessoa mostrar interesse explícito em explorar soluções Compara+ EDP Empresarial ou solar, oferece contacto com um consultor. Agenda apenas após a pessoa aceitar e indicar dia e hora; se faltar um deles, pergunta só pelo que falta. Usa schedule_follow_up uma vez, com Europe/Lisbon, e confirma apenas se a ferramenta indicar sucesso. Se a resposta parecer repetida ou não fizer sentido, pede para repetir uma vez; não inventes nem confirmes dados. Respeita recusas e pedidos para não voltar a contactar. Usa frases curtas e português de Portugal.'
   }
+  // Keep saved voice/engine settings untouched. Upgrade only the default Telecom dialogue
+  // when an older saved configuration overrides its text fields.
+  if (agentId === 'lumin-telecom') {
+    const legacy = Object.keys(safeOverrides).filter(key =>
+      ['description', 'objective', 'opening', 'product', 'offer', 'objections', 'notes', 'tone'].includes(key)
+    )
+    if (legacy.length > 0) {
+      // Saved custom scripts remain authoritative until reviewed by the superadmin.
+      // Report this explicitly rather than claiming the v9 dialogue is active.
+      console.info('[sd-dialer] Telecom uses saved script overrides:', legacy.join(','))
+    }
+  }
   const scriptVersion = Number(overrides.scriptVersion)
   return {
     ...selected,
