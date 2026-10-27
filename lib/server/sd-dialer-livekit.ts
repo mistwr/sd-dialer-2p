@@ -260,7 +260,7 @@ export function buildAgentProfile(agentId: string, companyName: string, override
       product: 'A Compara+ ajuda a comparar opções residenciais de internet e televisão. Não inventes preços, cobertura, poupanças, condições ou resultados. Usa a necessidade descrita pela pessoa para propor, se fizer sentido, uma conversa com um consultor.',
       offer: 'Se a pessoa revelar uma necessidade ou interesse, oferece um contacto sem compromisso com um consultor da Compara+ para comparar opções. Pergunta o melhor dia e hora. Nunca prometas uma poupança, preço, cobertura ou mudança de operador.',
       objections: 'RECUSA: agradece e termina sem insistir. PESSOA SATISFEITA: reconhece e oferece uma comparação sem compromisso uma única vez; se não quiser, termina. PREÇO OU COBERTURA: explica brevemente que o consultor pode confirmar as opções para o caso concreto; não inventes. PEDIDO PARA NÃO VOLTAR A CONTACTAR: confirma brevemente e termina.',
-      notes: 'CONVERSA: Usa apenas o nome recebido da lead ou do campo manual. A abertura já é dita; não a repitas. Se a pessoa aceitar conversar, pergunta o que gostaria de melhorar no serviço atual. Ouve e reconhece a resposta em poucas palavras; faz apenas a pergunta seguinte necessária, sem transformar a chamada num questionário. Não peças dados de conta, morada completa, email ou dados de pagamento. Se a pessoa disser operadora, mensalidade, fidelização ou problema, aproveita a informação e não voltes a perguntar. Relaciona a necessidade com uma comparação da Compara+, sem prometer preço, poupança, cobertura, mudança ou resultado. Se houver interesse, oferece contacto com consultor sem compromisso e pergunta dia e hora. Se ambos forem indicados, chama schedule_follow_up uma vez, com Europe/Lisbon; se faltar um, pergunta só pelo dado em falta. Só confirmes a marcação se a ferramenta indicar sucesso. Se não houver interesse, agradece e termina. Respeita de imediato um pedido para não voltar a contactar. Usa frases curtas e português de Portugal.',
+      notes: 'CONVERSA: Usa apenas o nome recebido da lead ou do campo manual. A abertura já é dita; não a repitas. Se a pessoa aceitar conversar, conduz três perguntas de forma flexível: (1) qual é a operadora atual e, se souber, o valor mensal; (2) que serviços tem (internet, televisão, telefone e móveis); (3) se ainda tem fidelização. Faz apenas uma pergunta de cada vez, salta perguntas já respondidas e não forces respostas desconhecidas. Se a pessoa fizer uma pergunta ou pedir um agendamento a meio, responde ao pedido antes de retomar. Nunca interpretes um agradecimento ou uma pausa como autorização para desligar; perante uma resposta ambígua, pergunta brevemente se pretende continuar ou agendar. Não declares a conversa terminada enquanto houver uma pergunta pendente do contacto. Quando houver interesse, pergunta dia e hora e repete-os para confirmação; só anuncia agendamento concluído após sucesso de schedule_follow_up. Se não existir vaga confirmada ou a ferramenta falhar, oferece contacto posterior sem prometer marcação.  Ouve e reconhece a resposta em poucas palavras; faz apenas a pergunta seguinte necessária, sem transformar a chamada num questionário. Não peças dados de conta, morada completa, email ou dados de pagamento. Se a pessoa disser operadora, mensalidade, fidelização ou problema, aproveita a informação e não voltes a perguntar. Relaciona a necessidade com uma comparação da Compara+, sem prometer preço, poupança, cobertura, mudança ou resultado. Se houver interesse, oferece contacto com consultor sem compromisso e pergunta dia e hora. Se ambos forem indicados, chama schedule_follow_up uma vez, com Europe/Lisbon; se faltar um, pergunta só pelo dado em falta. Só confirmes a marcação se a ferramenta indicar sucesso. Se não houver interesse, agradece e termina. Respeita de imediato um pedido para não voltar a contactar. Usa frases curtas e português de Portugal.',
       tone: 'Português de Portugal, natural, próximo e profissional. Uma pergunta de cada vez, sem pressão, sem monólogo e sem tom de questionário.',
     },
     'lumin-energia': {
@@ -305,6 +305,18 @@ export function buildAgentProfile(agentId: string, companyName: string, override
     safeOverrides.objective = 'Compreender primeiro a necessidade de energia da empresa. Se houver uma necessidade concreta e interesse explícito, apresentar a possibilidade de comparar soluções Compara+ EDP Empresarial e solar; só marcar contacto depois de a pessoa aceitar e indicar dia e hora.'
     safeOverrides.notes = 'A apresentação inicial já foi dita pelo fluxo da chamada; não cumprimentes novamente nem repitas o teu nome, a Lumin ou a Compara+. Continua diretamente com uma pergunta sobre o que a pessoa gostaria de melhorar na energia da empresa. Uma resposta como “sim, posso” autoriza apenas a pergunta seguinte e não significa interesse numa marcação. Faz uma pergunta de cada vez e ouve a resposta antes de avançar; não saltes para a agenda. Só quando compreenderes uma necessidade concreta e a pessoa mostrar interesse explícito em explorar soluções Compara+ EDP Empresarial ou solar, oferece contacto com um consultor. Agenda apenas após a pessoa aceitar e indicar dia e hora; se faltar um deles, pergunta só pelo que falta. Usa schedule_follow_up uma vez, com Europe/Lisbon, e confirma apenas se a ferramenta indicar sucesso. Se a resposta parecer repetida ou não fizer sentido, pede para repetir uma vez; não inventes nem confirmes dados. Respeita recusas e pedidos para não voltar a contactar. Usa frases curtas e português de Portugal.'
   }
+  // Keep saved voice/engine settings untouched. Upgrade only the default Telecom dialogue
+  // when an older saved configuration overrides its text fields.
+  if (agentId === 'lumin-telecom') {
+    const legacy = Object.keys(safeOverrides).filter(key =>
+      ['description', 'objective', 'opening', 'product', 'offer', 'objections', 'notes', 'tone'].includes(key)
+    )
+    if (legacy.length > 0) {
+      // Saved custom scripts remain authoritative until reviewed by the superadmin.
+      // Report this explicitly rather than claiming the v9 dialogue is active.
+      console.info('[sd-dialer] Telecom uses saved script overrides:', legacy.join(','))
+    }
+  }
   const scriptVersion = Number(overrides.scriptVersion)
   return {
     ...selected,
@@ -312,7 +324,7 @@ export function buildAgentProfile(agentId: string, companyName: string, override
     voice: agentId === 'lumin-telecom' ? 'natural' : 'clear',
     voiceEngine: 'xai',
     voiceSource: 'system',
-    scriptVersion: Number.isFinite(scriptVersion) && scriptVersion > 0 ? Math.min(scriptVersion, 9999) : (agentId === 'lumin-telecom' ? 8 : 1),
+    scriptVersion: Number.isFinite(scriptVersion) && scriptVersion > 0 ? Math.min(scriptVersion, 9999) : (agentId === 'lumin-telecom' ? 9 : 1),
     followUpEnabled: overrides.followUpEnabled === false ? false : true,
     ...safeOverrides,
   }
