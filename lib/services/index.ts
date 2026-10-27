@@ -669,14 +669,24 @@ export const doorCaptureService = {
    */
   async findDuplicateLead(companyId: string, telefone: string, email?: string | null, morada?: string | null) {
     const sb = createClient()
-    let q = sb.from('leads').select('id,nome,telefone,email,morada,status').eq('company_id', companyId)
-    const orParts = [`telefone.eq.${telefone}`]
-    if (email) orParts.push(`email.eq.${email}`)
-    if (morada) orParts.push(`morada.eq.${morada}`)
-    q = q.or(orParts.join(','))
-    const { data, error } = await q.limit(1)
-    if (error) throw error
-    return data?.[0] ?? null
+    // Query each field with .eq() rather than interpolating user input into
+    // PostgREST .or() syntax. Addresses containing commas/parentheses otherwise
+    // produce HTTP 400 and prevent the door capture from being saved.
+    const checks = [
+      { column: 'telefone', value: telefone },
+      ...(email ? [{ column: 'email', value: email }] : []),
+      ...(morada ? [{ column: 'morada', value: morada }] : []),
+    ] as const
+    for (const { column, value } of checks) {
+      const { data, error } = await sb.from('leads')
+        .select('id,nome,telefone,email,morada,status')
+        .eq('company_id', companyId)
+        .eq(column, value)
+        .limit(1)
+      if (error) throw error
+      if (data?.length) return data[0]
+    }
+    return null
   },
 
   /**
