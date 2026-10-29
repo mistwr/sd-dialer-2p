@@ -48,6 +48,20 @@ function formatDuration(seconds: number | null) {
   return minutes ? `${minutes} min ${remainder} s` : `${remainder} s`
 }
 
+function formatTranscriptTime(spokenAt: string, callStartedAt: string) {
+  const spokenMs = Date.parse(spokenAt)
+  const startedMs = Date.parse(callStartedAt)
+  if (!Number.isFinite(spokenMs)) return 'Hora indisponível'
+  const clock = new Date(spokenMs).toLocaleTimeString('pt-PT', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  })
+  if (!Number.isFinite(startedMs) || spokenMs < startedMs) return clock
+  const elapsed = Math.floor((spokenMs - startedMs) / 1000)
+  const minutes = Math.floor(elapsed / 60)
+  const seconds = String(elapsed % 60).padStart(2, '0')
+  return `${clock} · +${minutes}:${seconds}`
+}
+
 function consentLabel(status: VoiceCall['transcript_consent_status']) {
   if (status === 'granted') return 'Transcrição autorizada'
   if (status === 'denied') return 'Transcrição não autorizada'
@@ -203,6 +217,9 @@ export default function VoiceCallHistory() {
                           <div key={line.id} style={{ display: 'grid', gridTemplateColumns: '70px minmax(0, 1fr)', gap: 9 }}>
                             <span style={{ color: '#64748B', fontSize: 12, fontWeight: 700 }}>
                               {line.speaker === 'agent' ? 'Lumin' : 'Contacto'}
+                              <span style={{ display: 'block', fontSize: 10, fontWeight: 500, marginTop: 3, fontVariantNumeric: 'tabular-nums' }} title="Hora da intervenção e tempo desde o início da chamada">
+                                {formatTranscriptTime(line.spoken_at, call.created_at)}
+                              </span>
                             </span>
                             <p style={{ margin: 0, color: '#1E293B', fontSize: 13, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
                               {line.text}
