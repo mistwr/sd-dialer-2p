@@ -204,12 +204,9 @@ export default function DistribuicaoPage() {
         throw new Error(`Foi possível encontrar apenas ${rows.length} das ${quantidadeAtribuir} leads pedidas. Atualiza a página e tenta novamente.`)
       }
 
-      if (!pipelineDestino) {
-        const semPipeline = rows.filter(r => !r.pipeline_etapa_id).length
-        if (semPipeline > 0) {
-          throw new Error(`${semPipeline} das leads escolhidas ainda não têm pipeline. Escolhe uma Pipeline de destino antes de distribuir.`)
-        }
-      }
+      // A atribuição de responsável não exige pipeline. Quando não há
+      // pipeline de destino, preserva a etapa existente (incluindo null).
+      // A seleção de uma pipeline continua opcional.
 
       const ids = rows.map(r => r.id)
 
