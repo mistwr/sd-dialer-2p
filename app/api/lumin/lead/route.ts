@@ -91,11 +91,17 @@ export async function POST(req: NextRequest) {
     const utm = clean(body.utm, 1000)
     const resultTitle = clean(body.resultado, 220)
     const sessionId = clean(body.session_id, 120)
+    const consentGiven = body.consentimento_rgpd === true
+    const consentText = clean(body.consentimento_texto, 500)
     const utmParams = new URLSearchParams(utm)
     const utmSource = clean(utmParams.get('utm_source'), 120)
     const utmMedium = clean(utmParams.get('utm_medium'), 120)
     const utmCampaign = clean(utmParams.get('utm_campaign'), 160)
     const utmContent = clean(utmParams.get('utm_content'), 160)
+
+    if (!consentGiven) {
+      return NextResponse.json({ error: 'consentimento necessário para contacto' }, { status: 400, headers })
+    }
 
     if (!nome || !telefone) {
       return NextResponse.json({ error: 'nome e telefone required' }, { status: 400, headers })
@@ -138,6 +144,8 @@ export async function POST(req: NextRequest) {
       utm_content: utmContent || null,
       page_url: pageUrl,
       session_id: sessionId || null,
+      consentimento_texto: consentText || null,
+      consentimento_origem: 'formulario_luminai_pt',
     }
 
     const observacoes = [
@@ -160,6 +168,7 @@ export async function POST(req: NextRequest) {
       .from('leads')
       .select('id, telefone, email')
       .eq('telefone', telefone)
+      .eq('company_id', companyId)
       .limit(1)
 
     let leadId: string | null = duplicate?.[0]?.id ?? null
@@ -172,6 +181,9 @@ export async function POST(req: NextRequest) {
           email,
           telefone,
           status: 'novo',
+          origem: 'website',
+          consentimento_rgpd: true,
+          data_consentimento: new Date().toISOString(),
           observacoes,
           custom_fields: customFields,
         })
@@ -186,6 +198,9 @@ export async function POST(req: NextRequest) {
           telefone,
           company_id: companyId,
           status: 'novo',
+          origem: 'website',
+          consentimento_rgpd: true,
+          data_consentimento: new Date().toISOString(),
           imported_at: new Date().toISOString(),
           observacoes,
           custom_fields: customFields,
