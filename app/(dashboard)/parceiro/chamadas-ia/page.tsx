@@ -524,7 +524,7 @@ function LuminCallPanel() {
   }
 
   const callIsBusy = Boolean(queue.current?.active) || ['queued', 'preparing', 'ringing', 'answered', 'connected'].includes(callStatus)
-  const canStartCall = agentReady && !callerIdLoading && (Boolean(callerIdActive) || Boolean(callerIdFallbackPhoneNumber) || sharedCallerIdAvailable) && (callMode === 'lead'
+  const canStartCall = agentReady && (callMode === 'lead'
     ? Boolean(selected)
     : Boolean(manualPhone.trim() && manualName.trim() && manualPhone.replace(/\D/g, '').length >= 9))
 
@@ -693,103 +693,9 @@ function LuminCallPanel() {
           </div>
         </div>
 
-        <section aria-label="Número de saída" style={{ marginTop: 16, padding: 13, borderRadius: 11, background: '#13110D', border: '1px solid #383228' }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: '#F5EEDC' }}>Número de saída</div>
-          <div style={{ fontSize: 11.5, lineHeight: 1.5, color: '#B7AA91', marginTop: 4 }}>
-            {sharedCallerIdAvailable ? 'A tua conta está autorizada a utilizar o número de saída configurado pelo superadministrador.' : 'Usa um número validado na Twilio para fazer chamadas.'}
-          </div>
-          {callerIdActive && (
-            <div style={{ marginTop: 8, fontSize: 12, color: '#86EFAC' }}>
-              Número validado para as tuas chamadas: <strong>{callerIdActive.phoneNumber}</strong>
-            </div>
-          )}
-          {!callerIdActive && callerIdFallbackPhoneNumber && (
-            <div style={{ marginTop: 8, fontSize: 11.5, lineHeight: 1.5, color: '#86EFAC' }}>
-              Chamadas do superadministrador: <strong>{callerIdFallbackPhoneNumber}</strong>. Este número não é disponibilizado aos operadores.
-            </div>
-          )}
-          {sharedCallerIdAvailable && (
-            <div role="status" style={{ marginTop: 8, fontSize: 12, color: '#86EFAC' }}>
-              Número autorizado ativo. Podes iniciar as chamadas de IA.
-            </div>
-          )}
-          {!callerIdActive && !callerIdFallbackPhoneNumber && !sharedCallerIdAvailable && (
-            <div style={{ marginTop: 8, fontSize: 11.5, lineHeight: 1.5, color: '#FCA5A5' }}>
-              Valida o teu número pessoal para desbloquear as chamadas de IA. O número de outros utilizadores não é usado como alternativa.
-            </div>
-          )}
-          {callerIdFailed && !callerIdPending && (
-            <div role="alert" style={{ marginTop: 8, padding: 9, borderRadius: 8, background: '#281414', color: '#FCA5A5', fontSize: 11.5, lineHeight: 1.5 }}>
-              A última verificação falhou. Confirma que atendeste à chamada da Twilio e introduziste o código corretamente; depois podes tentar novamente.
-            </div>
-          )}
-          {callerIdPending && (
-            <div style={{ marginTop: 8, padding: 9, borderRadius: 8, background: '#211B10', color: '#FFE6B0', fontSize: 11.5, lineHeight: 1.5 }}>
-              A Twilio está a ligar para {callerIdPending.phoneNumber}. Atende e marca este código no teclado do telefone:
-              <div style={{ fontSize: 20, letterSpacing: '.16em', fontWeight: 900, marginTop: 3 }}>{verificationCode || '— — — — — —'}</div>
-              Se já tinhas um número validado, continua ativo até a nova validação terminar.
-            </div>
-          )}
-          <div style={{ display: callerIdVerificationAvailable && !sharedCallerIdAvailable ? 'flex' : 'none', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-            <input
-              type="tel"
-              autoComplete="tel"
-              value={callerPhone}
-              onChange={e => setCallerPhone(e.target.value)}
-              placeholder="+351 912 345 678"
-              aria-label="O teu número de telefone"
-              style={{ flex: '1 1 190px', minWidth: 0, padding: '9px 10px', border: '1px solid #383228', borderRadius: 8, fontSize: 12.5, boxSizing: 'border-box' }}
-            />
-            <button
-              type="button"
-              onClick={startCallerIdVerification}
-              disabled={callerIdLoading || !callerIdVerificationAvailable || callerIdSaving || Boolean(callerIdRemoving) || callIsBusy || !callerPhone.trim()}
-              style={{ padding: '0 12px', border: '1px solid #D5AA56', borderRadius: 8, color: '#FFE6B0', fontSize: 11.5, fontWeight: 800, cursor: callerIdLoading || !callerIdVerificationAvailable || callerIdSaving || callerIdRemoving || callIsBusy || !callerPhone.trim() ? 'not-allowed' : 'pointer', opacity: !callerIdVerificationAvailable ? 0.55 : 1 }}
-            >
-              {callerIdSaving ? 'A iniciar…' : !callerIdVerificationAvailable ? 'Verificação indisponível' : callerIdActive ? 'Verificar outro número' : 'Verificar número'}
-            </button>
-          </div>
-          {callerIdLoading && <div style={{ marginTop: 7, fontSize: 11, color: '#B7AA91' }}>A carregar a configuração…</div>}
-          {!callerIdLoading && !callerIdVerificationAvailable && !sharedCallerIdAvailable && <div style={{ marginTop: 7, fontSize: 11, color: '#B7AA91' }}>A integração Twilio para validar números pessoais ainda não está ativa. Pede ajuda ao superadministrador.</div>}
-          {callerIdMessage && <div role="status" style={{ marginTop: 7, fontSize: 11.5, color: '#86EFAC' }}>{callerIdMessage}</div>}
-          {callerIdError && <div role="alert" style={{ marginTop: 7, fontSize: 11.5, color: '#FCA5A5' }}>{callerIdError}</div>}
-
-          {!callerIdLoading && !sharedCallerIdAvailable && (
-            <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #352F24' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 7 }}>
-                <span style={{ fontSize: 11.5, fontWeight: 800, color: '#F5EEDC' }}>Números associados</span>
-                <span style={{ fontSize: 10.5, color: '#B7AA91' }}>{callerIdNumbers.length} verificado{callerIdNumbers.length === 1 ? '' : 's'}</span>
-              </div>
-              {callerIdNumbers.length === 0 ? (
-                <div style={{ fontSize: 11, lineHeight: 1.45, color: '#B7AA91' }}>Ainda não tens números pessoais verificados nesta conta.</div>
-              ) : (
-                <div style={{ display: 'grid', gap: 6 }}>
-                  {callerIdNumbers.map(record => (
-                    <div key={record.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 9px', borderRadius: 8, background: '#1A1711', border: '1px solid #383228', flexWrap: 'wrap' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
-                        <strong style={{ fontSize: 12, color: '#F5EEDC' }}>{record.phoneNumber}</strong>
-                        <span style={{ fontSize: 10, padding: '3px 7px', borderRadius: 99, background: record.isActive ? '#15351F' : '#252118', color: record.isActive ? '#86EFAC' : '#D8CEBA' }}>
-                          {record.isActive ? 'Ativo para chamadas' : 'Verificado'}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        aria-label={`Remover ${record.phoneNumber} da conta Twilio`}
-                        title="Remover número"
-                        onClick={() => void removeCallerIdNumber(record)}
-                        disabled={Boolean(callerIdRemoving) || callerIdSaving || callIsBusy}
-                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '6px 8px', borderRadius: 7, fontSize: 10.5, fontWeight: 700, cursor: callerIdRemoving || callIsBusy ? 'not-allowed' : 'pointer', opacity: callerIdRemoving || callIsBusy ? 0.6 : 1 }}
-                      >
-                        {callerIdRemoving === record.id ? <Loader2 size={13} /> : <Trash2 size={13} color="#FCA5A5" />}
-                        {callerIdRemoving === record.id ? 'A remover…' : 'Remover'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </section>
+        <div role="status" style={{marginTop:12,padding:'10px 12px',borderRadius:9,background:'#F1F5F9',color:'#334155',fontSize:12}}>
+          O número de saída e a autorização das chamadas são geridos pelo Superuser. Escolhe a lead e carrega em Ligar.
+        </div>
 
         <div style={{ marginTop: 18 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: 4, borderRadius: 10, background: '#F1F5F9', marginBottom: 14 }}>
