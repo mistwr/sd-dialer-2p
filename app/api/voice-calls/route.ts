@@ -72,10 +72,11 @@ export async function GET(req: NextRequest) {
         'id, company_id, lead_id, source, client_name, phone_number, status, duration_seconds, recording_enabled, transcript_consent_at, transcript_consent_status, created_by, started_at, ended_at, created_at',
         { count: 'exact' }
       )
-      .eq('company_id', me.company_id)
       .in('source', ['sd-dialer', 'sd-dialer-manual'])
       .order('created_at', { ascending: false })
       .limit(limit)
+
+    if (!isSuperAdmin) query = query.eq('company_id', me.company_id)
 
     if (!canSeeCompany && (me.role === 'supervisor' || me.role === 'admin')) {
       query = query.in('created_by', allowedUserIds)
@@ -106,7 +107,6 @@ export async function GET(req: NextRequest) {
       const { data: transcripts, error: transcriptError } = await admin
         .from('voice_call_transcripts')
         .select('id, call_id, speaker, text, is_interruption, spoken_at')
-        .eq('company_id', me.company_id)
         .in('call_id', callIds)
         .order('spoken_at', { ascending: true })
         .order('id', { ascending: true })
