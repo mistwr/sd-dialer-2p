@@ -15,6 +15,8 @@ const EVENT_TYPES = new Set([
   'simulation_click',
   'simulation_result',
   'analysis_click',
+  'product_click',
+  'simulation_form_view',
   'lead_submit',
 ])
 
