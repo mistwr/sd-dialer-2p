@@ -196,7 +196,7 @@ export async function POST(request: NextRequest) {
     try {
       // Dispatch the agent first so it is already in the room when the callee answers.
       // Telecom uses the Ricardo agent validated over a real SIP call. Other campaigns retain their configured agent.
-      const selectedAgentName = agentId === 'lumin-telecom'
+      const selectedAgentName = (agentId === 'lumin-telecom' || agentId === 'lumin-energia')
         ? (process.env.LIVEKIT_TELECOM_AGENT_NAME || 'lumin-compara-lab')
         : livekit.agentName
       const dispatch = await api.agentDispatch.createDispatch(roomName, selectedAgentName, {
