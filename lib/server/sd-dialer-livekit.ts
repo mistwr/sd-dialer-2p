@@ -206,46 +206,23 @@ export async function resolveCallerId(
   companyId: string,
   allowSuperAdminLegacyCallerId = false,
 ) {
-  const { data, error } = await admin
-    .from('sd_dialer_caller_ids')
-    .select('id,phone_number,verification_status,is_active,requested_at,verified_at')
+  // Caller ID is managed centrally. Operators are authorised by their voice subscription,
+  // not by registering or verifying personal telephone numbers.
+  const { data: subscription, error } = await admin
+    .from('voice_call_subscriptions')
+    .select('status,expires_at,company_id')
     .eq('user_id', userId)
     .eq('company_id', companyId)
-    .eq('verification_status', 'verified')
-    .eq('is_active', true)
-    .order('created_at', { ascending: false })
-    .limit(1)
     .maybeSingle()
-
-  if (error) throw new SdDialerError('Não foi possível carregar o número de saída.', 500)
-  if (!data?.phone_number) {
-    const legacyCallerId = allowSuperAdminLegacyCallerId
-      ? normalizePtPhone(process.env.LUMIN_CALLER_ID || '')
-      : ''
-    if (legacyCallerId) {
-      return {
-        id: 'superadmin-legacy-caller-id',
-        phoneNumber: legacyCallerId,
-        usingPersonalNumber: false,
-      }
-    }
-    const sharedCallerId = await resolveSharedCallerId(
-      admin, userId, companyId, normalizePtPhone(process.env.LUMIN_CALLER_ID || ''),
-    )
-    if (sharedCallerId) {
-      return {
-        id: 'authorized-system-caller-id',
-        phoneNumber: sharedCallerId,
-        usingPersonalNumber: false,
-      }
-    }
-    throw new SdDialerError('Valida o teu número pessoal antes de iniciar chamadas de IA.', 409)
-  }
-  return {
-    id: String(data.id),
-    phoneNumber: String(data.phone_number).trim(),
-    usingPersonalNumber: true,
-  }
+  if (error) throw new SdDialerError('Não foi possível consultar o acesso de voz.', 500)
+  const authorised = allowSuperAdminLegacyCallerId || (
+    subscription?.status === 'active' &&
+    new Date(subscription.expires_at).getTime() > Date.now()
+  )
+  if (!authorised) throw new SdDialerError('Acesso às chamadas de IA não autorizado pelo superadministrador.', 403)
+  const systemNumber = normalizePtPhone(process.env.LUMIN_CALLER_ID || '')
+  if (!systemNumber) throw new SdDialerError('O número de saída da empresa não está configurado.', 503)
+  return { id: 'superuser-managed-caller-id', phoneNumber: systemNumber, usingPersonalNumber: false }
 }
 
 export function buildAgentProfile(agentId: string, companyName: string, overrides: Record<string, unknown> = {}) {
