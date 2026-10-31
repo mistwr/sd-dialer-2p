@@ -12,15 +12,16 @@ export async function POST(req:NextRequest){
   const clean=(v:unknown,n=160)=>String(v??'').trim().slice(0,n)
   const nome=clean(body.nome,120), telefone=clean(body.telemovel,40), cp=clean(body.codigo_postal,8)
   const servico=clean(body.servico,80), operador=clean(body.operador,80), mensalidade=clean(body.mensalidade,30)
+  if(body['bot-field']) return NextResponse.json({ok:true},{headers})
   if(!nome || !/^(?:\+351)?9\d{8}$/.test(telefone.replace(/\s/g,'')) || !/^\d{4}-\d{3}$/.test(cp) || !servico || body.consentimento_contacto!=='sim') return NextResponse.json({error:'invalid submission'},{status:400,headers})
-  const url=process.env.NEXT_PUBLIC_SUPABASE_URL, key=process.env.SUPABASE_SERVICE_ROLE_KEY, companyId=process.env.SOLUCOES_DIFERENTES_COMPANY_ID
+  const url=process.env.NEXT_PUBLIC_SUPABASE_URL, key=process.env.SUPABASE_SERVICE_ROLE_KEY, companyId=process.env.SOLUCOES_DIFERENTES_COMPANY_ID || '32a7d6bf-cba3-4f7d-a536-4c9e49fda95d'
   if(!url||!key||!companyId) return NextResponse.json({error:'lead integration not configured'},{status:503,headers})
   const db=createClient(url,key,{auth:{autoRefreshToken:false,persistSession:false}})
   const normalized=telefone.replace(/\s/g,'')
   const {data:duplicate,error:lookupError}=await db.from('leads').select('id').eq('company_id',companyId).eq('telefone',normalized).limit(1)
   if(lookupError) throw lookupError
   if(duplicate?.length) return NextResponse.json({ok:true,duplicate:true},{headers})
-  const {data,error}=await db.from('leads').insert({company_id:companyId,nome,telefone:normalized,status:'novo',imported_at:new Date().toISOString(),observacoes:['Origem: solucoesdiferentes.pt','Serviço: '+servico,'Operador: '+operador,'Mensalidade: '+mensalidade,'Código postal: '+cp,'Consentimento: sim'].join('\n'),custom_fields:{source:'solucoesdiferentes.pt',service:servico,operator:operador,monthly_amount:mensalidade,postal_code:cp,consent:true,consent_at:new Date().toISOString()}}).select('id').single()
+  const {data,error}=await db.from('leads').insert({company_id:companyId,nome,telefone:normalized,codigo_postal:cp,operador,origem:'solucoesdiferentes.pt',consentimento_rgpd:true,data_consentimento:new Date().toISOString(),assigned_to:null,skip_auto_assign:true,status:'novo',imported_at:new Date().toISOString(),observacoes:['Origem: solucoesdiferentes.pt','Serviço: '+servico,'Operador: '+operador,'Mensalidade: '+mensalidade,'Código postal: '+cp,'Consentimento: sim'].join('\n'),custom_fields:{source:'solucoesdiferentes.pt',service:servico,operator:operador,monthly_amount:mensalidade,postal_code:cp,consent:true,consent_at:new Date().toISOString()}}).select('id').single()
   if(error) throw error
   const apiKey=process.env.RESEND_API_KEY
   if(apiKey){
