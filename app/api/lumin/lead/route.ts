@@ -160,6 +160,7 @@ export async function POST(req: NextRequest) {
       .from('leads')
       .select('id, telefone, email')
       .eq('telefone', telefone)
+      .eq('company_id', companyId) // só procura duplicados na empresa LUMIN AI, nunca nas leads dos clientes
       .limit(1)
 
     let leadId: string | null = duplicate?.[0]?.id ?? null
