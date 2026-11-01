@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, errorResponse, SdDialerError } from '@/lib/server/sd-dialer-livekit'
-import { startOutboundCall } from '@/lib/server/sd-dialer-call'
+import { reconcileCall, startOutboundCall } from '@/lib/server/sd-dialer-call'
 
 // Chamadas de IA iniciadas pelo LUMIN Comando (servidor a servidor).
 // Protegido por COMANDO_CALL_SECRET; age como o super-admin COMANDO_CALL_USER_ID e só liga a leads existentes.
@@ -58,5 +58,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result)
   } catch (error) {
     return errorResponse(error, 'internal call POST')
+  }
+}
+
+// Estado de uma chamada iniciada pelo Comando (para mostrar "a tocar / em chamada / terminou").
+export async function GET(request: NextRequest) {
+  try {
+    if (!secretOk(request.headers.get('x-comando-secret'))) throw new SdDialerError('Não autorizado.', 401)
+    const callId = request.nextUrl.searchParams.get('callId') || ''
+    if (!/^[0-9a-f-]{36}$/i.test(callId)) throw new SdDialerError('Identificador inválido.', 400)
+    const admin = createAdminClient()
+    const { data: call } = await admin
+      .from('voice_calls')
+      .select('id,status,livekit_room,started_at,created_at,ended_at,duration_seconds,error_message,summary,interest_level,next_action')
+      .eq('id', callId)
+      .maybeSingle()
+    if (!call) throw new SdDialerError('Chamada não encontrada.', 404)
+    let status = await reconcileCall(admin, call).catch(() => String(call.status || ''))
+    const began = new Date(call.started_at || call.created_at).getTime()
+    if ((status === 'ringing' || status === 'dialing') && Date.now() - began > 95_000) {
+      await admin.from('voice_calls').update({ status: 'failed', error_message: 'A chamada não foi atendida ou expirou.', ended_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', call.id)
+      status = 'failed'
+    }
+    const { data: fresh } = await admin.from('voice_calls').select('status,duration_seconds,error_message,summary,interest_level,next_action').eq('id', callId).maybeSingle()
+    return NextResponse.json({ callId, ...(fresh || {}), status })
+  } catch (error) {
+    return errorResponse(error, 'internal call GET')
   }
 }

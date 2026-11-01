@@ -1,3 +1,4 @@
+import { reconcileCall } from '@/lib/server/sd-dialer-call'
 import { NextRequest, NextResponse } from 'next/server'
 import {
   errorResponse,
@@ -42,6 +43,13 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const privileged = ['admin', 'supervisor', 'super_admin'].includes(String(profile.role))
     if (call.created_by && call.created_by !== user.id && !privileged) {
       throw new SdDialerError('Não tens acesso a esta chamada.', 403)
+    }
+
+    // Estado real a partir do LiveKit (o agente na cloud não escreve no histórico).
+    const liveStatus = await reconcileCall(admin, call).catch(() => String(call.status || ''))
+    if (liveStatus !== call.status) {
+      call.status = liveStatus
+      if (liveStatus === 'answered') call.ended_at = new Date().toISOString()
     }
 
     let status = 'ringing'
