@@ -27,6 +27,55 @@ function normalizedStatus(value: unknown) {
     .toLowerCase()
 }
 
+const AGENT_KIND = 4 // ParticipantInfo_Kind.AGENT
+const SIP_KIND = 3 // ParticipantInfo_Kind.SIP
+
+async function waitForAgent(api: any, roomName: string, timeoutMs: number) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      const participants = await api.room.listParticipants(roomName)
+      if (participants.some((p: any) => Number(p.kind) === AGENT_KIND || String(p.identity || '').startsWith('agent-'))) return true
+    } catch {
+      // a sala pode ainda não existir
+    }
+    await new Promise(resolve => setTimeout(resolve, 700))
+  }
+  return false
+}
+
+/** Atualiza o estado de uma chamada a partir do LiveKit (funciona mesmo que o agente não escreva no Supabase). */
+export async function reconcileCall(admin: any, call: { id: string; status?: string | null; livekit_room?: string | null; started_at?: string | null; created_at?: string | null; ended_at?: string | null }) {
+  const status = String(call.status || '')
+  if (call.ended_at || !call.livekit_room || !['ringing', 'dialing', 'queued', 'active'].includes(status)) return status
+  let sipStatus = ''
+  let roomExists = true
+  try {
+    const { api } = getLiveKitConfig()
+    const participants = await api.room.listParticipants(call.livekit_room)
+    const sip = participants.find((p: any) => Number(p.kind) === SIP_KIND || String(p.identity || '').startsWith('sip-'))
+    sipStatus = String(sip?.attributes?.['sip.callStatus'] || (sip ? 'present' : ''))
+  } catch {
+    roomExists = false
+  }
+  const now = new Date().toISOString()
+  if (sipStatus === 'active' && status !== 'active') {
+    await admin.from('voice_calls').update({ status: 'active', started_at: now, updated_at: now }).eq('id', call.id)
+    return 'active'
+  }
+  if (status === 'active' && (!roomExists || !sipStatus || sipStatus === 'hangup')) {
+    const began = new Date(call.started_at || call.created_at || now).getTime()
+    await admin.from('voice_calls').update({
+      status: 'answered',
+      ended_at: now,
+      duration_seconds: Math.max(0, Math.round((Date.now() - began) / 1000)),
+      updated_at: now,
+    }).eq('id', call.id)
+    return 'answered'
+  }
+  return status
+}
+
 export type OutboundCallBody = {
   lead_id?: string
   phone?: string
@@ -177,6 +226,7 @@ export async function startOutboundCall(
     status: 'ringing',
     livekit_room: roomName,
     livekit_participant: sipIdentity,
+    agent_id: agentId,
     created_by: userId,
     lead_id: leadId,
     source,
@@ -192,13 +242,34 @@ export async function startOutboundCall(
   try {
     // Dispatch the agent first so it is already in the room when the callee answers.
     // Telecom uses the Ricardo agent validated over a real SIP call. Other campaigns retain their configured agent.
-    const selectedAgentName = (agentId === 'lumin-telecom' || agentId === 'lumin-energia')
-      ? (process.env.LIVEKIT_TELECOM_AGENT_NAME || 'lumin-compara-lab')
-      : livekit.agentName
+    // Todos os perfis vão para o agente validado no LiveKit Cloud (o worker antigo "lumin-web" pode não estar a correr).
+    // Para voltar a usar o worker próprio: LIVEKIT_USE_WEB_AGENT=1.
+    const selectedAgentName = process.env.LIVEKIT_USE_WEB_AGENT === '1'
+      ? livekit.agentName
+      : (process.env.LIVEKIT_PRIMARY_AGENT_NAME || process.env.LIVEKIT_TELECOM_AGENT_NAME || 'lumin-compara-lab')
+    await api.room.createRoom({ name: roomName, emptyTimeout: 120, departureTimeout: 20 }).catch(() => null)
     const dispatch = await api.agentDispatch.createDispatch(roomName, selectedAgentName, {
       metadata: JSON.stringify(metadata),
     })
     dispatchId = dispatch.id
+
+    // Só marca o número depois de o agente estar na sala: evita chamadas em silêncio quando o agente não arranca.
+    const agentReady = await waitForAgent(api, roomName, 15_000)
+    if (!agentReady) {
+      await api.agentDispatch.deleteDispatch(dispatchId, roomName).catch(() => null)
+      await api.room.deleteRoom(roomName).catch(() => null)
+      dispatchId = ''
+      await admin
+        .from('voice_calls')
+        .update({
+          status: 'failed',
+          error_message: `O agente de voz "${selectedAgentName}" não entrou na chamada a tempo. Nenhum número foi marcado.`,
+          ended_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', callId)
+      throw new SdDialerError('O agente de voz não arrancou a tempo, por isso não liguei ao cliente. Tenta daqui a um minuto; se repetir, o agente está desligado no LiveKit.', 503)
+    }
 
     const sipParticipant = await api.sip.createSipParticipant(
       livekit.trunkId,
@@ -234,6 +305,7 @@ export async function startOutboundCall(
       roomName,
     }
   } catch (error) {
+    if (error instanceof SdDialerError) throw error
     console.error('[sd-dialer] LiveKit outbound call failed', error instanceof Error ? error.message : 'unknown error')
 
     if (participantCreated && api) {
