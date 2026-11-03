@@ -226,7 +226,8 @@ export async function startOutboundCall(
     status: 'ringing',
     livekit_room: roomName,
     livekit_participant: sipIdentity,
-    agent_id: agentId,
+    // agent_id e uma coluna uuid (FK voice_agents); o agentId aqui e um slug ('lumin-telecom'), por isso guarda-se no estado da conversa.
+    conversation_state: { agent_slug: agentId },
     created_by: userId,
     lead_id: leadId,
     source,
