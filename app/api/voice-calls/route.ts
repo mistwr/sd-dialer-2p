@@ -70,7 +70,7 @@ export async function GET(req: NextRequest) {
     let query = admin
       .from('voice_calls')
       .select(
-        'id, company_id, lead_id, source, client_name, phone_number, status, duration_seconds, recording_enabled, transcript_consent_at, transcript_consent_status, created_by, started_at, ended_at, created_at, summary, interest_level, next_action',
+        'id, company_id, lead_id, source, client_name, phone_number, status, duration_seconds, recording_enabled, transcript_consent_at, transcript_consent_status, created_by, started_at, ended_at, created_at, summary, interest_level, next_action, recording_url',
         { count: 'exact' }
       )
       .in('source', ['sd-dialer', 'sd-dialer-manual'])
@@ -155,8 +155,9 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({
-      calls: (calls ?? []).map((call) => ({
+      calls: (calls ?? []).map(({ recording_url, ...call }) => ({
         ...call,
+        has_recording: typeof recording_url === 'string' && recording_url.startsWith('voice-recordings/'),
         transcripts: transcriptsByCall.get(call.id) ?? [],
       })),
       total: count ?? 0,

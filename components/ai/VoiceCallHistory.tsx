@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import useSWR from 'swr'
-import { ChevronDown, ChevronUp, Loader2, PhoneCall, RefreshCw } from 'lucide-react'
+import { ChevronDown, ChevronUp, Loader2, PhoneCall, Play, RefreshCw } from 'lucide-react'
 
 type VoiceTranscriptLine = {
   id: string
@@ -25,6 +25,7 @@ type VoiceCall = {
   summary?: string | null
   interest_level?: string | null
   next_action?: string | null
+  has_recording?: boolean
   transcripts: VoiceTranscriptLine[]
 }
 
@@ -41,6 +42,50 @@ async function fetcher(url: string) {
   const response = await fetch(url)
   if (!response.ok) throw new Error('Erro ao carregar o histórico')
   return response.json() as Promise<{ calls: VoiceCall[]; total: number }>
+}
+
+function RecordingPlayer({ callId }: { callId: string }) {
+  const [url, setUrl] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function load() {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/voice-calls/${callId}/recording`)
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.url) throw new Error(data.error || 'Não foi possível abrir a gravação')
+      setUrl(data.url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível abrir a gravação')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (url) {
+    return <audio controls autoPlay src={url} style={{ width: '100%', marginBottom: 12 }} />
+  }
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <button
+        type="button"
+        onClick={() => void load()}
+        disabled={loading}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 7,
+          border: '1px solid #BFDBFE', background: '#EFF6FF', color: '#1D4ED8',
+          borderRadius: 8, padding: '7px 12px', fontSize: 12.5, fontWeight: 600,
+          cursor: loading ? 'wait' : 'pointer',
+        }}
+      >
+        {loading ? <Loader2 size={14} style={{ animation: 'spin 0.75s linear infinite' }} /> : <Play size={14} />}
+        Ouvir gravação
+      </button>
+      {error && <span style={{ marginLeft: 10, color: '#B91C1C', fontSize: 12 }}>{error}</span>}
+    </div>
+  )
 }
 
 function formatDate(value: string) {
@@ -138,7 +183,7 @@ export default function VoiceCallHistory({ leadId }: { leadId?: string } = {}) {
             {leadId ? 'Chamadas de IA desta lead' : 'Chamadas da Lumin'}
           </h2>
           <p style={{ margin: 0, color: '#64748B', fontSize: 12.5, lineHeight: 1.5 }}>
-            O áudio não é gravado. A transcrição em texto só é guardada após autorização da pessoa.
+            Gravações e transcrições só ficam acessíveis a quem tem acesso à chamada. Os links de áudio expiram em 10 minutos.
           </p>
         </div>
         <button
@@ -250,6 +295,7 @@ export default function VoiceCallHistory({ leadId }: { leadId?: string } = {}) {
 
                 {expanded && (
                   <div style={{ padding: '12px 14px', borderTop: '1px solid #E2E8F0', background: '#fff' }}>
+                    {call.has_recording && <RecordingPlayer callId={call.id} />}
                     {call.transcript_consent_status === 'granted' && call.transcripts.length > 0 ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {call.transcripts.map((line) => (

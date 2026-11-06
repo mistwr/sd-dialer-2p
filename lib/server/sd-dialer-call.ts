@@ -5,6 +5,7 @@ import {
   resolveCallerId,
   SdDialerError,
 } from '@/lib/server/sd-dialer-livekit'
+import { startCallRecording } from '@/lib/server/voice-call-recording'
 
 // Lógica comum para iniciar uma chamada de IA (usada pela app SD Dialer e pelo LUMIN Comando).
 
@@ -298,6 +299,16 @@ export async function startOutboundCall(
       })
       .eq('id', callId)
     if (updateCallError) console.error('[sd-dialer] Could not attach SIP call ID to call history.')
+
+    // Gravação de áudio (opcional, desligada por defeito). Nunca faz falhar a chamada.
+    const recording = await startCallRecording(api, roomName, profile.company_id, callId)
+    if (recording) {
+      const { error: recordingError } = await admin
+        .from('voice_calls')
+        .update({ recording_enabled: true, recording_url: recording.recordingUrl, updated_at: new Date().toISOString() })
+        .eq('id', callId)
+      if (recordingError) console.error('[sd-dialer] Could not attach recording to call history.')
+    }
 
     return {
       ok: true as const,
