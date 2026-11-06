@@ -4,7 +4,7 @@ import { AccessToken } from 'livekit-server-sdk'
 import { buildAgentProfile, createAdminClient, getLiveKitConfig } from '@/lib/server/sd-dialer-livekit'
 
 // Demonstração pública de voz do luminai.pt: o visitante fala no browser com o agente validado no LiveKit Cloud.
-// Sem chamadas telefónicas. Limites: 3 sessões/10 min por IP e 40/hora no total.
+// Sem chamadas telefónicas. Limites: 10 sessões/10 min por IP e 120/hora no total.
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -44,8 +44,8 @@ export async function POST(request: NextRequest) {
       admin.from('voice_demo_sessions').select('id', { count: 'exact', head: true }).eq('ip_hash', ipHash).gte('created_at', since10),
       admin.from('voice_demo_sessions').select('id', { count: 'exact', head: true }).gte('created_at', since60),
     ])
-    if ((mine || 0) >= 3) return reply(origin, { error: 'Fizeste vários testes seguidos. Espera uns minutos e tenta outra vez.' }, 429)
-    if ((all || 0) >= 40) return reply(origin, { error: 'Muitas pessoas a testar agora. Tenta daqui a pouco ou pede uma demonstração.' }, 429)
+    if ((mine || 0) >= 10) return reply(origin, { error: 'Fizeste vários testes seguidos. Espera uns minutos e tenta outra vez.' }, 429)
+    if ((all || 0) >= 120) return reply(origin, { error: 'Muitas pessoas a testar agora. Tenta daqui a pouco ou pede uma demonstração.' }, 429)
 
     const name = clean(a.name, 48) || 'Lumin'
     const company = clean(a.company, 64) || 'LUMIN AI'
@@ -73,9 +73,9 @@ export async function POST(request: NextRequest) {
     })
     await admin.from('voice_demo_sessions').insert({ ip_hash: ipHash, room: roomName, origin })
 
-    const at = new AccessToken(process.env.LIVEKIT_API_KEY!, process.env.LIVEKIT_API_SECRET!, { identity, name: 'Visitante', ttl: '5m' })
+    const at = new AccessToken(process.env.LIVEKIT_API_KEY!, process.env.LIVEKIT_API_SECRET!, { identity, name: 'Visitante', ttl: '10m' })
     at.addGrant({ room: roomName, roomJoin: true, canPublish: true, canSubscribe: true, canPublishData: true })
-    return reply(origin, { serverUrl, token: await at.toJwt(), roomName, maxDurationSeconds: 180 })
+    return reply(origin, { serverUrl, token: await at.toJwt(), roomName, maxDurationSeconds: 300 })
   } catch (error) {
     console.error('[voz-demo]', error instanceof Error ? error.message : error)
     return reply(origin, { error: 'O agente de voz não ficou disponível. Tenta daqui a um minuto.' }, 503)
