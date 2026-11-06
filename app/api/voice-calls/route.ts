@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { after, NextRequest, NextResponse } from 'next/server'
+import { ensureCallSummary } from '@/lib/server/voice-call-summary'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
 import { canViewVoiceSeller, type VoiceSeller } from '@/lib/utils/voice-leads'
@@ -69,7 +70,7 @@ export async function GET(req: NextRequest) {
     let query = admin
       .from('voice_calls')
       .select(
-        'id, company_id, lead_id, source, client_name, phone_number, status, duration_seconds, recording_enabled, transcript_consent_at, transcript_consent_status, created_by, started_at, ended_at, created_at',
+        'id, company_id, lead_id, source, client_name, phone_number, status, duration_seconds, recording_enabled, transcript_consent_at, transcript_consent_status, created_by, started_at, ended_at, created_at, summary, interest_level, next_action',
         { count: 'exact' }
       )
       .in('source', ['sd-dialer', 'sd-dialer-manual'])
@@ -77,6 +78,14 @@ export async function GET(req: NextRequest) {
       .limit(limit)
 
     if (!isSuperAdmin) query = query.eq('company_id', me.company_id)
+
+    const leadId = searchParams.get('lead_id')
+    if (leadId) {
+      if (!/^[0-9a-f-]{36}$/i.test(leadId)) {
+        return NextResponse.json({ error: 'lead_id invalido' }, { status: 400 })
+      }
+      query = query.eq('lead_id', leadId)
+    }
 
     if (!canSeeCompany && (me.role === 'supervisor' || me.role === 'admin')) {
       query = query.in('created_by', allowedUserIds)
@@ -132,6 +141,17 @@ export async function GET(req: NextRequest) {
 
       if (rows.length < 1000) break
       transcriptOffset += rows.length
+    }
+
+    // Chamadas terminadas com transcrição mas ainda sem resumo: gera-o depois da resposta (máx. 3 por pedido).
+    const missingSummary = (calls ?? [])
+      .filter((call) => !call.summary && call.ended_at && (transcriptsByCall.get(call.id)?.length ?? 0) > 0)
+      .slice(0, 3)
+      .map((call) => call.id)
+    if (missingSummary.length) {
+      after(async () => {
+        for (const id of missingSummary) await ensureCallSummary(admin, id).catch(() => false)
+      })
     }
 
     return NextResponse.json({

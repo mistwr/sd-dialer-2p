@@ -1,5 +1,6 @@
 import { reconcileCall } from '@/lib/server/sd-dialer-call'
-import { NextRequest, NextResponse } from 'next/server'
+import { ensureCallSummary } from '@/lib/server/voice-call-summary'
+import { after, NextRequest, NextResponse } from 'next/server'
 import {
   errorResponse,
   requireSdDialerUser,
@@ -80,6 +81,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
         })
         .eq('id', call.id)
       return NextResponse.json({ callId, status: 'failed', error: message })
+    }
+
+    // Chamada terminada: gera o resumo a partir da transcrição real (idempotente, nunca bloqueia o estado).
+    if (status === 'ended' || status === 'answered') {
+      after(() => ensureCallSummary(admin, call.id).catch(() => false))
     }
 
     return NextResponse.json({

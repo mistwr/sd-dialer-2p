@@ -20,6 +20,7 @@ import type { Lead, CallResult, CallHistory } from '@/lib/types'
 import CallRecorder from '@/components/ai/CallRecorder'
 import AssistenteIA from '@/components/ai/AssistenteIA'
 import VendaIAChat from '@/components/ai/VendaIAChat'
+import VoiceCallHistory from '@/components/ai/VoiceCallHistory'
 
 // ---- Call Results Config ----
 const RESULTS: { key: CallResult; label: string; color: string; bg: string; Icon: React.ElementType }[] = [
@@ -914,6 +915,7 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
         {/* History Tab */}
         {tab === 'history' && (
           <div>
+            <VoiceCallHistory leadId={lead.id} />
             {history.length === 0 ? (
               <div style={{
                 background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0',

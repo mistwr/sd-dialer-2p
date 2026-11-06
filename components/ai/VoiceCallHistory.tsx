@@ -22,7 +22,19 @@ type VoiceCall = {
   transcript_consent_at: string | null
   ended_at: string | null
   created_at: string
+  summary?: string | null
+  interest_level?: string | null
+  next_action?: string | null
   transcripts: VoiceTranscriptLine[]
+}
+
+const INTEREST_LABELS: Record<string, { label: string; color: string; bg: string }> = {
+  alto: { label: 'Interesse alto', color: '#166534', bg: '#DCFCE7' },
+  medio: { label: 'Interesse médio', color: '#854D0E', bg: '#FEF9C3' },
+  baixo: { label: 'Interesse baixo', color: '#9A3412', bg: '#FFEDD5' },
+  sem_interesse: { label: 'Sem interesse', color: '#991B1B', bg: '#FEE2E2' },
+  correio_voz: { label: 'Correio de voz', color: '#475569', bg: '#F1F5F9' },
+  indeterminado: { label: 'Sem conversa útil', color: '#475569', bg: '#F1F5F9' },
 }
 
 async function fetcher(url: string) {
@@ -92,9 +104,12 @@ function callStatusLabel(status: string, endedAt: string | null) {
   return labels[status] ?? status
 }
 
-export default function VoiceCallHistory() {
+export default function VoiceCallHistory({ leadId }: { leadId?: string } = {}) {
   const [openCallId, setOpenCallId] = useState<string | null>(null)
-  const { data, error, isLoading, mutate } = useSWR('/api/voice-calls?limit=50', fetcher, {
+  const url = leadId
+    ? `/api/voice-calls?limit=50&lead_id=${encodeURIComponent(leadId)}`
+    : '/api/voice-calls?limit=50'
+  const { data, error, isLoading, mutate } = useSWR(url, fetcher, {
     refreshInterval: 15000,
     revalidateOnFocus: true,
   })
@@ -120,7 +135,7 @@ export default function VoiceCallHistory() {
         <div>
           <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 17, margin: '0 0 5px', color: '#0F172A' }}>
             <PhoneCall size={18} color="#2563EB" />
-            Chamadas da Lumin
+            {leadId ? 'Chamadas de IA desta lead' : 'Chamadas da Lumin'}
           </h2>
           <p style={{ margin: 0, color: '#64748B', fontSize: 12.5, lineHeight: 1.5 }}>
             O áudio não é gravado. A transcrição em texto só é guardada após autorização da pessoa.
@@ -159,7 +174,7 @@ export default function VoiceCallHistory() {
         </div>
       ) : calls.length === 0 ? (
         <div style={{ padding: '18px 0', color: '#64748B', fontSize: 13 }}>
-          Ainda não há chamadas da Lumin registadas. As chamadas feitas antes desta atualização não podem ser recuperadas.
+          {leadId ? 'Esta lead ainda não tem chamadas de IA registadas.' : 'Ainda não há chamadas da Lumin registadas.'}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -206,8 +221,32 @@ export default function VoiceCallHistory() {
                   }}>
                     {consentLabel(call.transcript_consent_status)}
                   </span>
+                  {call.interest_level && INTEREST_LABELS[call.interest_level] && (
+                    <span style={{
+                      color: INTEREST_LABELS[call.interest_level].color,
+                      background: INTEREST_LABELS[call.interest_level].bg,
+                      padding: '4px 8px',
+                      borderRadius: 999,
+                      fontSize: 11,
+                      fontWeight: 600,
+                    }}>
+                      {INTEREST_LABELS[call.interest_level].label}
+                    </span>
+                  )}
                   {expanded ? <ChevronUp size={16} color="#64748B" /> : <ChevronDown size={16} color="#64748B" />}
                 </button>
+                {call.summary && (
+                  <div style={{ padding: '0 14px 12px', background: expanded ? '#F8FAFC' : '#fff' }}>
+                    <p style={{ margin: 0, color: '#334155', fontSize: 12.5, lineHeight: 1.5 }}>
+                      <strong>Resumo:</strong> {call.summary}
+                    </p>
+                    {call.next_action && (
+                      <p style={{ margin: '4px 0 0', color: '#334155', fontSize: 12.5, lineHeight: 1.5 }}>
+                        <strong>Próxima ação:</strong> {call.next_action}
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {expanded && (
                   <div style={{ padding: '12px 14px', borderTop: '1px solid #E2E8F0', background: '#fff' }}>
