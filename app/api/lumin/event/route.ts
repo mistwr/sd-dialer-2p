@@ -16,6 +16,7 @@ const EVENT_TYPES = new Set([
   'simulation_result',
   'analysis_click',
   'lead_submit',
+  'product_click',
 ])
 
 function corsHeaders(origin: string | null) {
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = adminClient()
-    const { error } = await supabase.from('lumin_analytics_events').insert(payload)
+    const { error } = await supabase.from('lumin_events').insert(payload)
     if (error) throw error
 
     return NextResponse.json({ ok: true }, { headers })
