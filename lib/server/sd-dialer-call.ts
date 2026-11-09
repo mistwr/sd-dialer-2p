@@ -29,6 +29,15 @@ function normalizedStatus(value: unknown) {
     .toLowerCase()
 }
 
+// Nome a usar em voz: só o primeiro nome, com maiúscula inicial ("ANA SOFIA COSTA" -> "Ana").
+// Ler o nome completo em maiúsculas soa a chamada automática e faz desligar.
+export function spokenFirstName(fullName: string) {
+  const first = String(fullName || '').trim().split(/\s+/)[0] || ''
+  if (!first) return ''
+  const lower = first.toLocaleLowerCase('pt-PT')
+  return lower.charAt(0).toLocaleUpperCase('pt-PT') + lower.slice(1)
+}
+
 const AGENT_KIND = 4 // ParticipantInfo_Kind.AGENT
 const SIP_KIND = 3 // ParticipantInfo_Kind.SIP
 
@@ -217,7 +226,7 @@ export async function startOutboundCall(
     mode: 'outbound',
     callId,
     phone: destination,
-    name,
+    name: spokenFirstName(name) || name,
     source,
     leadId,
     companyId: profile.company_id,
