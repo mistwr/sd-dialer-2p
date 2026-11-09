@@ -18,6 +18,7 @@ import {
 import AIAnalysisPanel from '@/components/ai/AIAnalysisPanel'
 import VoiceLeadPicker from '@/components/ai/VoiceLeadPicker'
 import VoiceCallHistory from '@/components/ai/VoiceCallHistory'
+import RobotMinutesCard from '@/components/ai/RobotMinutesCard'
 import { VoiceCallQueue } from '@/lib/utils/voice-call-queue'
 import type { VoiceLead } from '@/lib/utils/voice-leads'
 import { createClient } from '@/lib/supabase/client'
@@ -1015,6 +1016,8 @@ function ChamadasIAPageContent() {
           Atualizar
         </button>
       </div>
+
+      <RobotMinutesCard />
 
       {/* Tabs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4, marginBottom: 20, width: '100%', boxSizing: 'border-box' }}>
