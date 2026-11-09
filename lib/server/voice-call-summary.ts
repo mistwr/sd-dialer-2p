@@ -3,6 +3,8 @@
 // guardada em voice_call_transcripts. Nunca inventa: sem transcrição, não faz nada.
 // Idempotente: só escreve se a chamada ainda não tiver resumo.
 
+import { applyCallOutcome } from '@/lib/server/voice-call-outcome'
+
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const GROQ_MODEL = 'openai/gpt-oss-120b'
 const INTEREST_LEVELS = new Set(['alto', 'medio', 'baixo', 'sem_interesse', 'correio_voz', 'indeterminado'])
@@ -11,7 +13,8 @@ const SYSTEM_PROMPT =
   'És um analista de chamadas comerciais (telecomunicações/energia, Portugal). Recebes a transcrição REAL de uma chamada entre um agente virtual e um cliente. ' +
   'Usa APENAS o que está na transcrição; não inventes nada. Se a chamada caiu no correio de voz, num menu automático ou não houve conversa útil, diz isso. ' +
   'A transcrição automática escreve mal alguns nomes de operadoras: "Mel", "Meu", "Tocomel" ou "Meio" como operadora é a MEO; "Nós" é a NOS; "Digui" é a DIGI. Usa sempre o nome correto. ' +
-  'Responde só com JSON: {"summary":"1-2 frases em português de Portugal","interest_level":"alto|medio|baixo|sem_interesse|correio_voz|indeterminado","next_action":"próximo passo concreto e curto"}'
+  'do_not_call = true só se o cliente pedir claramente para não voltar a ser contactado (ex.: "não me liguem mais", "tirem o meu número"). ' +
+  'Responde só com JSON: {"summary":"1-2 frases em português de Portugal","interest_level":"alto|medio|baixo|sem_interesse|correio_voz|indeterminado","next_action":"próximo passo concreto e curto","do_not_call":false}'
 
 export async function ensureCallSummary(admin: any, callId: string, timeoutMs = 9000): Promise<boolean> {
   const groqKey = process.env.GROQ_API_KEY
@@ -75,6 +78,7 @@ export async function ensureCallSummary(admin: any, callId: string, timeoutMs = 
       console.error('[voice-call-summary] update failed', error.message)
       return false
     }
+    await applyCallOutcome(admin, callId, { doNotCall: parsed.do_not_call === true })
     return true
   } catch (err) {
     console.error('[voice-call-summary] failed', err instanceof Error ? err.name : 'unknown')
