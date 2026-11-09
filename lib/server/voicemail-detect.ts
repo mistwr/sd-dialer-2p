@@ -1,3 +1,5 @@
+import { applyCallOutcome } from '@/lib/server/voice-call-outcome'
+
 // Deteção de correio de voz nas chamadas de IA + desligar de imediato.
 //
 // O agente LUMIN já reconhece o correio de voz ("Vou terminar a chamada"), mas não tem
@@ -99,6 +101,7 @@ export async function hangupIfVoicemail(
       })
       .eq('id', call.id)
       .is('ended_at', null)
+    await applyCallOutcome(admin, call.id)
     return true
   } catch (error) {
     console.error('[sd-dialer] voicemail hangup failed', error instanceof Error ? error.message : 'unknown')

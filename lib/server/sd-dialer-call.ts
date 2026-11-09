@@ -7,6 +7,7 @@ import {
 } from '@/lib/server/sd-dialer-livekit'
 import { startCallRecording } from '@/lib/server/voice-call-recording'
 import { hangupIfVoicemail } from '@/lib/server/voicemail-detect'
+import { isOptedOut } from '@/lib/server/voice-call-outcome'
 
 // Lógica comum para iniciar uma chamada de IA (usada pela app SD Dialer e pelo LUMIN Comando).
 
@@ -150,6 +151,9 @@ export async function startOutboundCall(
 
   const destination = normalizePtPhone(phone)
   if (!destination) throw new SdDialerError('Número de telefone inválido. Usa o formato internacional, por exemplo +351912345678.', 400)
+  if (await isOptedOut(admin, String(profile.company_id), destination)) {
+    throw new SdDialerError('Este cliente pediu para não voltar a ser contactado.', 409)
+  }
 
   const isSuperAdmin = profile.is_super_admin === true || profile.role === 'super_admin'
   const callerIdentity = await resolveCallerId(admin, userId, profile.company_id, isSuperAdmin)
