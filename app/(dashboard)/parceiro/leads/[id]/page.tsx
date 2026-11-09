@@ -18,6 +18,7 @@ import { CustomFieldsRenderer, fetchCustomFieldDefs, type CustomFieldDef } from 
 import { DateInputPT } from '@/components/common/DateInputPT'
 import type { Lead, CallResult, CallHistory } from '@/lib/types'
 import CallRecorder from '@/components/ai/CallRecorder'
+import PhoneHistoryCard from '@/components/leads/PhoneHistoryCard'
 import AssistenteIA from '@/components/ai/AssistenteIA'
 import VendaIAChat from '@/components/ai/VendaIAChat'
 import VoiceCallHistory from '@/components/ai/VoiceCallHistory'
@@ -616,25 +617,28 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
             </button>
           </div>
 
-          {/* ── Chamada Inteligente IA (additive module — CRM unaffected) ── */}
-          <div style={{ padding: '0 20px 16px' }}>
-            <CallRecorder
-              callActive={timerActive}
-              leadId={lead.id}
-              leadName={lead.nome}
-              campanhaId={lead.campanha_id ?? null}
-            />
-          </div>
+          {/* Gravação manual escondida (quase não usada); fica disponível com ?gravar=1 */}
+          {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('gravar') === '1' && (
+            <div style={{ padding: '0 20px 16px' }}>
+              <CallRecorder
+                callActive={timerActive}
+                leadId={lead.id}
+                leadName={lead.nome}
+                campanhaId={lead.campanha_id ?? null}
+              />
+            </div>
+          )}
+          <PhoneHistoryCard leadId={lead.id} />
         </div>
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4, marginBottom: 16 }}>
           {[
-            { key: 'info'       as const, label: 'Informacao' },
+            { key: 'info'       as const, label: 'Informação' },
             { key: 'assistente' as const, label: 'Assistente IA' },
             { key: 'porta'      as const, label: 'Relatório Porta' },
             ...(mostrarVendaIA ? [{ key: 'venda-ia' as const, label: 'Venda IA' }] : []),
-            { key: 'history'    as const, label: `Historico (${history.length})` },
+            { key: 'history'    as const, label: `Histórico (${history.length})` },
           ].map(t => (
             <button
               key={t.key}
@@ -1063,6 +1067,21 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
                 Notas adicionais <span style={{ fontWeight: 400, color: '#94A3B8' }}>(opcional)</span>
               </label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                {['Acha caro', 'Fidelizado', 'Já é cliente', 'Falar com o titular', 'Pediu proposta', 'Ligar à noite', 'Sem tempo', 'Satisfeito com a operadora'].map(chip => {
+                  const on = notes.split(' · ').includes(chip)
+                  return (
+                    <button key={chip} type="button"
+                      onClick={() => setNotes(prev => {
+                        const parts = prev.split(' · ').map(x => x.trim()).filter(Boolean)
+                        return (parts.includes(chip) ? parts.filter(x => x !== chip) : [...parts, chip]).join(' · ')
+                      })}
+                      style={{ border: `1px solid ${on ? '#2563EB' : '#E2E8F0'}`, background: on ? '#EFF6FF' : '#fff', color: on ? '#1D4ED8' : '#475569', borderRadius: 999, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      {chip}
+                    </button>
+                  )
+                })}
+              </div>
               <textarea
                 placeholder="Ex: Cliente interessado, pedir proposta..."
                 value={notes}

@@ -168,7 +168,7 @@ export default function RelatoriosPage() {
     <div className="anim-fade-in" style={{ maxWidth: 1100 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: 0 }}>Relatorios</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: 0 }}>Relatórios</h1>
           <p style={{ color: '#64748B', fontSize: 14, margin: '3px 0 0' }}>Chamadas do SD Dialer + vendas reais do CRM Mae</p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>

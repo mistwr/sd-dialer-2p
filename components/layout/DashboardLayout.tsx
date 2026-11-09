@@ -337,7 +337,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 zIndex: 50, overflow: 'hidden',
               }}>
                 <div style={{ padding: '14px 16px', borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Notificacoes</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Notificações</span>
                   {unread > 0 && (
                     <span style={{ fontSize: 11, background: '#EFF6FF', color: '#2563EB', padding: '2px 8px', borderRadius: 12, fontWeight: 600 }}>
                       {unread} novas
@@ -355,7 +355,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   {notifications.length === 0 ? (
                     <div style={{ padding: '32px 20px', textAlign: 'center' }}>
                       <BellOff size={28} color="#CBD5E1" style={{ margin: '0 auto 10px' }} />
-                      <p style={{ color: '#94A3B8', fontSize: 13, margin: 0 }}>Sem notificacoes</p>
+                      <p style={{ color: '#94A3B8', fontSize: 13, margin: 0 }}>Sem notificações</p>
                     </div>
                   ) : (
                     notifications.slice(0, 20).map(n => (
