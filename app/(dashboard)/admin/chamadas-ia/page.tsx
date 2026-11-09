@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { RefreshCw, Save, PhoneCall, KeyRound, SlidersHorizontal, AudioLines, ShieldCheck } from 'lucide-react'
+import { RefreshCw, Save, PhoneCall, KeyRound, SlidersHorizontal, AudioLines, ShieldCheck, History, Download } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 type AdminData = {
@@ -23,7 +23,12 @@ const AGENT_NAMES: Record<string, string> = {
 
 export default function AdminVoiceCallsPage() {
   const [data, setData] = useState<AdminData | null>(null)
-  const [tab, setTab] = useState<'agents' | 'numbers' | 'access' | 'limits'>('agents')
+  const [tab, setTab] = useState<'history' | 'agents' | 'numbers' | 'access' | 'limits'>('history')
+  const [histFrom, setHistFrom] = useState(() => new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10))
+  const [histTo, setHistTo] = useState(() => new Date().toISOString().slice(0, 10))
+  const [histCompany, setHistCompany] = useState('')
+  const [history, setHistory] = useState<{ total: number; rows: any[] } | null>(null)
+  const [histBusy, setHistBusy] = useState(false)
   const [agentId, setAgentId] = useState('lumin-telecom')
   const [agentJson, setAgentJson] = useState('{}')
   const [agentActive, setAgentActive] = useState(true)
@@ -175,6 +180,58 @@ export default function AdminVoiceCallsPage() {
     }, 'Código revogado.')
   }
 
+  function historyQuery(extra = '') {
+    const params = new URLSearchParams()
+    if (histFrom) params.set('from', histFrom)
+    if (histTo) params.set('to', histTo)
+    if (histCompany) params.set('company_id', histCompany)
+    return '/api/admin/voice-calls/history?' + params.toString() + extra
+  }
+
+  async function loadHistory() {
+    setHistBusy(true)
+    setError('')
+    try {
+      const token = await getToken()
+      const response = await fetch(historyQuery(), { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' })
+      const json = await response.json()
+      if (!response.ok) throw new Error(json.detail || 'Não foi possível carregar o histórico.')
+      setHistory(json)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível carregar o histórico.')
+    } finally {
+      setHistBusy(false)
+    }
+  }
+
+  async function downloadHistory() {
+    setHistBusy(true)
+    setError('')
+    try {
+      const token = await getToken()
+      const response = await fetch(historyQuery('&format=csv'), { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' })
+      if (!response.ok) {
+        const json = await response.json().catch(() => ({}))
+        throw new Error(json.detail || 'Não foi possível descarregar o histórico.')
+      }
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `chamadas-ia_${histFrom || 'inicio'}_${histTo || 'hoje'}.csv`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 10_000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível descarregar o histórico.')
+    } finally {
+      setHistBusy(false)
+    }
+  }
+
+  useEffect(() => { if (tab === 'history') void loadHistory() }, [tab, histFrom, histTo, histCompany])
+
   const panel: React.CSSProperties = { background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 20 }
   const field: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1px solid #CBD5E1', borderRadius: 8, boxSizing: 'border-box', fontSize: 14 }
   const button: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 14px', border: 0, borderRadius: 8, background: '#2563EB', color: 'white', fontWeight: 700, cursor: 'pointer' }
@@ -192,6 +249,7 @@ export default function AdminVoiceCallsPage() {
 
       <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 18 }}>
         {([
+          ['history', 'Histórico', History],
           ['agents', 'Agentes e guião', AudioLines],
           ['numbers', 'Números Twilio', PhoneCall],
           ['access', 'Subscrições e códigos', KeyRound],
@@ -206,6 +264,54 @@ export default function AdminVoiceCallsPage() {
       {message && <div role="status" style={{ ...panel, marginBottom: 14, padding: 12, borderColor: '#86EFAC', color: '#166534' }}>{message}</div>}
       {error && <div role="alert" style={{ ...panel, marginBottom: 14, padding: 12, borderColor: '#FCA5A5', color: '#B91C1C' }}>{error}</div>}
       {loading && <div style={{ ...panel, color: '#64748B' }}>A carregar a configuração…</div>}
+
+      {!loading && data && tab === 'history' && (
+        <section style={panel}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end', marginBottom: 14 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>De
+              <input type="date" value={histFrom} onChange={e => setHistFrom(e.target.value)} style={{ ...field, marginTop: 4 }} />
+            </label>
+            <label style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Até
+              <input type="date" value={histTo} onChange={e => setHistTo(e.target.value)} style={{ ...field, marginTop: 4 }} />
+            </label>
+            <label style={{ fontSize: 12, fontWeight: 700, color: '#475569', minWidth: 180 }}>Empresa
+              <select value={histCompany} onChange={e => setHistCompany(e.target.value)} style={{ ...field, marginTop: 4 }}>
+                <option value="">Todas as empresas</option>
+                {data.companies.map((company: any) => <option key={company.id} value={company.id}>{company.name}</option>)}
+              </select>
+            </label>
+            <button type="button" onClick={() => void downloadHistory()} disabled={histBusy} style={button}>
+              <Download size={15} /> {histBusy ? 'A preparar…' : 'Descarregar Excel (CSV)'}
+            </button>
+          </div>
+          <p style={{ margin: '0 0 10px', color: '#64748B', fontSize: 13 }}>
+            {history ? `${history.total} chamadas${history.total > history.rows.length ? ` · a mostrar as ${history.rows.length} mais recentes (o ficheiro inclui todas, com transcrição)` : ' · o ficheiro inclui a transcrição completa'}` : 'A carregar…'}
+          </p>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ textAlign: 'left', color: '#64748B', borderBottom: '1px solid #E2E8F0' }}>
+                  {['Data', 'Empresa', 'Comercial', 'Cliente', 'Telefone', 'Duração', 'Resultado', 'Resumo'].map(h => <th key={h} style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {(history?.rows || []).map((row: any) => (
+                  <tr key={row.id} style={{ borderBottom: '1px solid #F1F5F9', verticalAlign: 'top' }}>
+                    <td style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}>{new Date(row.created_at).toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon', dateStyle: 'short', timeStyle: 'short' })}</td>
+                    <td style={{ padding: '8px 6px' }}>{row.company}</td>
+                    <td style={{ padding: '8px 6px' }}>{row.user}</td>
+                    <td style={{ padding: '8px 6px' }}>{row.client_name}</td>
+                    <td style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}>{row.phone_number}</td>
+                    <td style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}>{row.duration_seconds != null ? `${Math.floor(row.duration_seconds / 60)}m ${row.duration_seconds % 60}s` : '—'}</td>
+                    <td style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}>{row.interest || row.status}</td>
+                    <td style={{ padding: '8px 6px', color: '#475569', minWidth: 220 }}>{row.summary || row.error_message}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {!loading && data && tab === 'agents' && (
         <section style={panel}>
