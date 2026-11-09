@@ -1,3 +1,4 @@
+import { getHiddenUserIds } from '@/lib/server/hidden-users'
 import { after, NextRequest, NextResponse } from 'next/server'
 import { ensureCallSummary } from '@/lib/server/voice-call-summary'
 import { createClient } from '@/lib/supabase/server'
@@ -91,6 +92,10 @@ export async function GET(req: NextRequest) {
       query = query.in('created_by', allowedUserIds)
     } else if (!canSeeCompany) {
       query = query.eq('created_by', userId)
+    } else if (!isSuperAdmin) {
+      // Admin da empresa: tudo menos as equipas criadas por um superadmin.
+      const hidden = [...(await getHiddenUserIds(admin, me as any))]
+      if (hidden.length) query = query.not('created_by', 'in', `(${hidden.join(',')})`)
     }
 
     const { data: calls, count, error: callsError } = await query

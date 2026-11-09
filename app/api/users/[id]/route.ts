@@ -1,3 +1,4 @@
+import { getHiddenUserIds } from '@/lib/server/hidden-users'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 
@@ -71,7 +72,8 @@ export async function PATCH(
     .eq('id', id)
     .single()
 
-  if (!target || !canManageTarget(caller as any, target as any)) {
+  if (!target || !canManageTarget(caller as any, target as any) ||
+      (!caller.profile.is_super_admin && (await getHiddenUserIds(admin, { id: caller.user.id, ...caller.profile } as any)).has(String(target.id)))) {
     return NextResponse.json({ error: 'Sem permissao para gerir este utilizador' }, { status: 403 })
   }
 
@@ -168,7 +170,8 @@ export async function DELETE(
     .eq('id', id)
     .single()
 
-  if (!target || !canManageTarget(caller as any, target as any)) {
+  if (!target || !canManageTarget(caller as any, target as any) ||
+      (!caller.profile.is_super_admin && (await getHiddenUserIds(admin, { id: caller.user.id, ...caller.profile } as any)).has(String(target.id)))) {
     return NextResponse.json({ error: 'Sem permissao para apagar este utilizador' }, { status: 403 })
   }
 

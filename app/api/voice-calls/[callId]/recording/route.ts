@@ -1,3 +1,4 @@
+import { getHiddenUserIds } from '@/lib/server/hidden-users'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
@@ -64,6 +65,12 @@ export async function GET(req: NextRequest, context: { params: Promise<{ callId:
 
     // Mesmas regras de visibilidade do historico de chamadas (/api/voice-calls).
     const canSeeCompany = isSuperAdmin || (me.role === 'admin' && !me.restricted_admin)
+    if (!isSuperAdmin && call.created_by && call.created_by !== userId) {
+      const hidden = await getHiddenUserIds(admin, me as any)
+      if (hidden.has(String(call.created_by))) {
+        return NextResponse.json({ error: 'Sem permissao para esta gravacao' }, { status: 403 })
+      }
+    }
     if (!canSeeCompany && call.created_by !== userId) {
       const { data: owner } = await admin
         .from('usuarios')
