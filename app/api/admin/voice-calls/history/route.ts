@@ -45,7 +45,9 @@ export async function GET(request: NextRequest) {
     const from = parseDay(params.get('from'))
     const to = parseDay(params.get('to'))
     const companyId = params.get('company_id') || ''
-    const asCsv = params.get('format') === 'csv'
+    const format = params.get('format') || ''
+    const asCsv = format === 'csv'
+    const asMinutesCsv = format === 'minutes-csv'
     if (companyId && !/^[0-9a-f-]{36}$/i.test(companyId)) throw new SdDialerError('Empresa inválida.', 400)
 
     const columns = 'id,company_id,created_by,client_name,phone_number,status,duration_seconds,interest_level,summary,next_action,source,error_message,conversation_state,started_at,ended_at,created_at'
@@ -86,6 +88,50 @@ export async function GET(request: NextRequest) {
       error_message: call.error_message || '',
     }))
 
+    // Minutos por parceiro (todas as chamadas do filtro, não só as 300 da lista).
+    async function minutesByUser() {
+      const totals = new Map<string, { user: string; company: string; calls: number; answered: number; seconds: number; billed_minutes: number }>()
+      for (let offset = 0; ; offset += PAGE) {
+        let q = admin.from('voice_calls').select('created_by,company_id,duration_seconds').order('created_at', { ascending: false })
+        if (from) q = q.gte('created_at', from + 'T00:00:00Z')
+        if (to) q = q.lt('created_at', new Date(new Date(to + 'T00:00:00Z').getTime() + 86_400_000).toISOString())
+        if (companyId) q = q.eq('company_id', companyId)
+        const { data, error } = await q.range(offset, offset + PAGE - 1)
+        if (error) throw new SdDialerError('Não foi possível calcular os minutos.', 500)
+        for (const call of data || []) {
+          const key = String(call.created_by || 'sem-utilizador') + '|' + String(call.company_id || '')
+          const seconds = Math.max(0, Number(call.duration_seconds) || 0)
+          const entry = totals.get(key) || {
+            user: userName.get(String(call.created_by)) || 'Sem utilizador',
+            company: companyName.get(String(call.company_id)) || '',
+            calls: 0, answered: 0, seconds: 0, billed_minutes: 0,
+          }
+          entry.calls += 1
+          if (seconds > 0) entry.answered += 1
+          entry.seconds += seconds
+          entry.billed_minutes += Math.ceil(seconds / 60)
+          totals.set(key, entry)
+        }
+        if (!data || data.length < PAGE) break
+      }
+      return [...totals.values()].sort((a, b) => b.seconds - a.seconds)
+    }
+
+    if (asMinutesCsv) {
+      const list = await minutesByUser()
+      const out = [['Comercial', 'Empresa', 'Chamadas', 'Com duração', 'Minutos (exatos)', 'Minutos (arredondados por chamada)'].join(';')]
+      for (const r of list) out.push([r.user, r.company, r.calls, r.answered, (r.seconds / 60).toFixed(1).replace('.', ','), r.billed_minutes].map(csvCell).join(';'))
+      const t = list.reduce((a, r) => ({ calls: a.calls + r.calls, answered: a.answered + r.answered, seconds: a.seconds + r.seconds, billed: a.billed + r.billed_minutes }), { calls: 0, answered: 0, seconds: 0, billed: 0 })
+      out.push(['TOTAL', '', t.calls, t.answered, (t.seconds / 60).toFixed(1).replace('.', ','), t.billed].map(csvCell).join(';'))
+      return new NextResponse('\uFEFF' + out.join('\r\n'), {
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="minutos-ia_${from || 'inicio'}_${to || 'hoje'}.csv"`,
+          'Cache-Control': 'no-store',
+        },
+      })
+    }
+
     if (!asCsv) {
       const { count } = await (() => {
         let q = admin.from('voice_calls').select('id', { count: 'exact', head: true })
@@ -94,7 +140,7 @@ export async function GET(request: NextRequest) {
         if (companyId) q = q.eq('company_id', companyId)
         return q
       })()
-      return NextResponse.json({ total: count ?? rows.length, rows: rows.slice(0, LIST_LIMIT) })
+      return NextResponse.json({ total: count ?? rows.length, rows: rows.slice(0, LIST_LIMIT), byUser: await minutesByUser() })
     }
 
     // Transcrições completas, agrupadas por chamada.
