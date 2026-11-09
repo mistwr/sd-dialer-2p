@@ -33,7 +33,7 @@ const AGENT_VOICEMAIL = new RegExp(
     'voicemail',
     'correio de voz',
     'atendedor',
-    'gravador de mensagens',
+    'gravador',
     'menu (autom[áa]tico|telef[óo]nico|de voicemail)',
     'sistema autom[áa]tico',
     'n[ãa]o vou (deixar|gravar)',
