@@ -21,6 +21,19 @@ export async function GET(request: NextRequest) {
   try {
     const { admin, profile } = await requireSdDialerUser(request)
     const isManager = ['admin', 'supervisor'].includes(String(profile.role))
+    const seesWholeCompany = Boolean(profile.is_super_admin) || (profile.role === 'admin' && !profile.restricted_admin)
+    let allowed: Set<string> | null = null
+    if (isManager && !seesWholeCompany) {
+      const { data: mine } = await admin
+        .from('usuarios')
+        .select('id,supervisor_id,created_by')
+        .eq('company_id', profile.company_id)
+      allowed = new Set(
+        (mine || [])
+          .filter((u: any) => u.id === profile.id || u.supervisor_id === profile.id || (!u.supervisor_id && u.created_by === profile.id))
+          .map((u: any) => String(u.id)),
+      )
+    }
     const now = new Date()
     const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
 
@@ -44,7 +57,7 @@ export async function GET(request: NextRequest) {
         add(me.total, seconds)
         if (inMonth) add(me.month, seconds)
       }
-      if (isManager) {
+      if (isManager && (!allowed || allowed.has(userId))) {
         const entry = team.get(userId) || { month: { seconds: 0, billed_minutes: 0, calls: 0 }, total: { seconds: 0, billed_minutes: 0, calls: 0 } }
         add(entry.total, seconds)
         if (inMonth) add(entry.month, seconds)
