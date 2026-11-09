@@ -107,7 +107,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const effectiveRole = canSwitchView ? viewRole : role
   const visibleNav = NAV.filter(n =>
     n.roles.includes(effectiveRole) &&
-    (n.href !== '/admin/chamadas-ia' || profile?.is_super_admin === true)
+    (!['/admin/chamadas-ia', '/admin/empresas', '/admin/utilizadores'].includes(n.href) || profile?.is_super_admin === true)
   )
   const activeNavItem = visibleNav.find(item => pathname === item.href || (item.href !== '/admin' && item.href !== '/parceiro' && pathname.startsWith(item.href)))
 
