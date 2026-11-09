@@ -8,7 +8,7 @@ import {
   Phone, MessageCircle, MapPin, ChevronLeft, ChevronRight, Clock,
   User, MapPinned, Hash, Wifi, FileText, CheckCircle2,
   PhoneOff, PhoneMissed, AlertCircle, Calendar,
-  HelpCircle, Plus, History, X, Sparkles, Brain, Trash2, Pencil,
+  HelpCircle, Plus, History, X, Sparkles, Brain, Trash2, Pencil, ShoppingBag,
 } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -582,6 +582,17 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
               <MapPin size={16} />
               Navegar
             </button>
+            <Link
+              href={`/parceiro/vendas/nova?lead_id=${lead.id}`}
+              style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                background: '#FFF7ED', color: '#C2410C', border: '1px solid #FED7AA',
+                borderRadius: 10, padding: '10px 0', fontSize: 13, fontWeight: 600, textDecoration: 'none',
+              }}
+            >
+              <ShoppingBag size={16} />
+              Venda
+            </Link>
             {/* Registar manually */}
             <button
               onClick={() => { setResultForced(false); setShowResult(true) }}

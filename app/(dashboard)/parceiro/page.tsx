@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { leadService, followUpService } from '@/lib/services'
 import { createClient } from '@/lib/supabase/client'
+import FollowUpsTodayCard from '@/components/agenda/FollowUpsTodayCard'
 import { formatDateTimeShort } from '@/lib/utils/formatters'
 import { CustomFieldsRenderer, fetchCustomFieldDefs, type CustomFieldDef } from '@/components/common/CustomFields'
 import type { Lead, LeadStatus } from '@/lib/types'
@@ -336,6 +337,8 @@ function ParceiroDashboardInner() {
             <Plus size={15} /> Nova Lead
           </button>
         </div>
+
+        <FollowUpsTodayCard userId={profile?.id} />
 
         {/* Next Lead CTA */}
         {nextLead && (
