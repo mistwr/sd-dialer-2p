@@ -399,14 +399,24 @@ export default function ParceirosPage() {
     { revalidateOnMount: true, dedupingInterval: 0 }
   )
 
+  // Equipas criadas por um superadmin não aparecem a admins/supervisores da empresa.
+  const { data: hiddenIds = [] } = useSWR(
+    profile && !(profile as any).is_super_admin ? ['hidden-user-ids', profile.id] : null,
+    async () => {
+      const { data } = await createClient().rpc('get_hidden_user_ids')
+      return ((data as any[]) || []).map((v: any) => String(typeof v === 'string' ? v : v?.get_hidden_user_ids ?? v))
+    },
+  )
+  const hiddenSet = new Set(hiddenIds)
   // Admin restrito só vê os parceiros/supervisores que criou ou supervisiona (e a si próprio).
   const isRestricted = Boolean((profile as any)?.restricted_admin) && !(profile as any)?.is_super_admin
+  const visibleUsers = allUsers.filter((u: any) => !hiddenSet.has(String(u.id)))
   const users = isRestricted
-    ? allUsers.filter((u: any) =>
+    ? visibleUsers.filter((u: any) =>
         u.id === profile?.id ||
         u.supervisor_id === profile?.id ||
         (!u.supervisor_id && u.created_by === profile?.id))
-    : allUsers
+    : visibleUsers
   const supervisors = users.filter(u => u.role === 'supervisor')
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState<ModalState>({ type: null })

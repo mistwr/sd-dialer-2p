@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { errorResponse, requireSdDialerUser, SdDialerError } from '@/lib/server/sd-dialer-livekit'
+import { getHiddenUserIds } from '@/lib/server/hidden-users'
 
 // Minutos gastos nas chamadas do robot de IA.
 // Cada utilizador vê os seus; admin/supervisor veem também a equipa da própria empresa.
@@ -37,6 +38,7 @@ export async function GET(request: NextRequest) {
     const now = new Date()
     const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
 
+    const hidden = isManager ? await getHiddenUserIds(admin, profile as any) : new Set<string>()
     const rows: any[] = []
     for (let offset = 0; ; offset += PAGE) {
       let query = admin.from('voice_calls').select('created_by,duration_seconds,created_at').eq('company_id', profile.company_id)
@@ -57,7 +59,7 @@ export async function GET(request: NextRequest) {
         add(me.total, seconds)
         if (inMonth) add(me.month, seconds)
       }
-      if (isManager && (!allowed || allowed.has(userId))) {
+      if (isManager && (!allowed || allowed.has(userId)) && !hidden.has(userId)) {
         const entry = team.get(userId) || { month: { seconds: 0, billed_minutes: 0, calls: 0 }, total: { seconds: 0, billed_minutes: 0, calls: 0 } }
         add(entry.total, seconds)
         if (inMonth) add(entry.month, seconds)
