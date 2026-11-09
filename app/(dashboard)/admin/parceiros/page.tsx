@@ -381,7 +381,7 @@ type ModalState =
 
 export default function ParceirosPage() {
   const { profile } = useAuth()
-  const { data: users = [], isLoading, mutate } = useSWR(
+  const { data: allUsers = [], isLoading, mutate } = useSWR(
     'usuarios-list-v2',
     () => usuarioService.getAll(),
     { revalidateOnMount: true, dedupingInterval: 0 }
@@ -399,6 +399,14 @@ export default function ParceirosPage() {
     { revalidateOnMount: true, dedupingInterval: 0 }
   )
 
+  // Admin restrito só vê os parceiros/supervisores que criou ou supervisiona (e a si próprio).
+  const isRestricted = Boolean((profile as any)?.restricted_admin) && !(profile as any)?.is_super_admin
+  const users = isRestricted
+    ? allUsers.filter((u: any) =>
+        u.id === profile?.id ||
+        u.supervisor_id === profile?.id ||
+        (!u.supervisor_id && u.created_by === profile?.id))
+    : allUsers
   const supervisors = users.filter(u => u.role === 'supervisor')
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState<ModalState>({ type: null })

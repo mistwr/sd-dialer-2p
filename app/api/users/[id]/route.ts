@@ -17,7 +17,7 @@ async function verifyCallerIsAdmin(request: NextRequest) {
   if (error || !data.user) return null
   const { data: profile } = await admin
     .from('usuarios')
-    .select('role, company_id, is_super_admin')
+    .select('role, company_id, is_super_admin, restricted_admin')
     .eq('id', data.user.id)
     .single()
   if (!profile || (profile.role !== 'admin' && profile.role !== 'supervisor')) return null
@@ -25,7 +25,7 @@ async function verifyCallerIsAdmin(request: NextRequest) {
 }
 
 function canManageTarget(
-  caller: { user: { id: string }; profile: { role: string; company_id: string | null; is_super_admin: boolean } },
+  caller: { user: { id: string }; profile: { role: string; company_id: string | null; is_super_admin: boolean; restricted_admin?: boolean | null } },
   target: { id: string; company_id: string | null; role: string; created_by: string | null; supervisor_id: string | null; is_super_admin: boolean }
 ) {
   if (caller.profile.is_super_admin) return true
@@ -33,6 +33,11 @@ function canManageTarget(
   if (target.is_super_admin) return false
 
   if (caller.profile.role === 'admin') {
+    if (caller.profile.restricted_admin) {
+      // Admin restrito: só gere quem criou ou supervisiona.
+      return (target.role === 'supervisor' || target.role === 'parceiro') &&
+        (target.supervisor_id === caller.user.id || (!target.supervisor_id && target.created_by === caller.user.id))
+    }
     return target.role === 'supervisor' || target.role === 'parceiro'
   }
 
