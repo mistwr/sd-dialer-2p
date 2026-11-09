@@ -10,6 +10,7 @@ const INTEREST_LEVELS = new Set(['alto', 'medio', 'baixo', 'sem_interesse', 'cor
 const SYSTEM_PROMPT =
   'És um analista de chamadas comerciais (telecomunicações/energia, Portugal). Recebes a transcrição REAL de uma chamada entre um agente virtual e um cliente. ' +
   'Usa APENAS o que está na transcrição; não inventes nada. Se a chamada caiu no correio de voz, num menu automático ou não houve conversa útil, diz isso. ' +
+  'A transcrição automática escreve mal alguns nomes de operadoras: "Mel", "Meu", "Tocomel" ou "Meio" como operadora é a MEO; "Nós" é a NOS; "Digui" é a DIGI. Usa sempre o nome correto. ' +
   'Responde só com JSON: {"summary":"1-2 frases em português de Portugal","interest_level":"alto|medio|baixo|sem_interesse|correio_voz|indeterminado","next_action":"próximo passo concreto e curto"}'
 
 export async function ensureCallSummary(admin: any, callId: string, timeoutMs = 9000): Promise<boolean> {

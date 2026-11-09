@@ -27,7 +27,7 @@ export default function AdminVoiceCallsPage() {
   const [histFrom, setHistFrom] = useState(() => new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10))
   const [histTo, setHistTo] = useState(() => new Date().toISOString().slice(0, 10))
   const [histCompany, setHistCompany] = useState('')
-  const [history, setHistory] = useState<{ total: number; rows: any[] } | null>(null)
+  const [history, setHistory] = useState<{ total: number; rows: any[]; byUser?: any[] } | null>(null)
   const [histBusy, setHistBusy] = useState(false)
   const [agentId, setAgentId] = useState('lumin-telecom')
   const [agentJson, setAgentJson] = useState('{}')
@@ -204,12 +204,12 @@ export default function AdminVoiceCallsPage() {
     }
   }
 
-  async function downloadHistory() {
+  async function downloadHistory(format: 'csv' | 'minutes-csv' = 'csv') {
     setHistBusy(true)
     setError('')
     try {
       const token = await getToken()
-      const response = await fetch(historyQuery('&format=csv'), { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' })
+      const response = await fetch(historyQuery('&format=' + format), { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' })
       if (!response.ok) {
         const json = await response.json().catch(() => ({}))
         throw new Error(json.detail || 'Não foi possível descarregar o histórico.')
@@ -218,7 +218,7 @@ export default function AdminVoiceCallsPage() {
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `chamadas-ia_${histFrom || 'inicio'}_${histTo || 'hoje'}.csv`
+      link.download = `${format === 'csv' ? 'chamadas-ia' : 'minutos-ia'}_${histFrom || 'inicio'}_${histTo || 'hoje'}.csv`
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -284,6 +284,45 @@ export default function AdminVoiceCallsPage() {
               <Download size={15} /> {histBusy ? 'A preparar…' : 'Descarregar Excel (CSV)'}
             </button>
           </div>
+          {history?.byUser && history.byUser.length > 0 && (
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+                <h3 style={{ margin: 0, fontSize: 15, color: '#0F172A' }}>Minutos por parceiro</h3>
+                <button type="button" onClick={() => void downloadHistory('minutes-csv')} disabled={histBusy} style={{ ...button, background: '#334155' }}>
+                  <Download size={15} /> Descarregar minutos (CSV)
+                </button>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', color: '#64748B', borderBottom: '1px solid #E2E8F0' }}>
+                      {['Comercial', 'Empresa', 'Chamadas', 'Com duração', 'Minutos', 'Min. arredondados'].map(h => <th key={h} style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}>{h}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {history.byUser.map((r: any) => (
+                      <tr key={r.user + r.company} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                        <td style={{ padding: '8px 6px', fontWeight: 700 }}>{r.user}</td>
+                        <td style={{ padding: '8px 6px' }}>{r.company}</td>
+                        <td style={{ padding: '8px 6px' }}>{r.calls}</td>
+                        <td style={{ padding: '8px 6px' }}>{r.answered}</td>
+                        <td style={{ padding: '8px 6px', fontWeight: 700 }}>{(r.seconds / 60).toLocaleString('pt-PT', { maximumFractionDigits: 1 })}</td>
+                        <td style={{ padding: '8px 6px' }}>{r.billed_minutes}</td>
+                      </tr>
+                    ))}
+                    <tr style={{ borderTop: '2px solid #E2E8F0', fontWeight: 800 }}>
+                      <td style={{ padding: '8px 6px' }}>Total</td>
+                      <td />
+                      <td style={{ padding: '8px 6px' }}>{history.byUser.reduce((a: number, r: any) => a + r.calls, 0)}</td>
+                      <td style={{ padding: '8px 6px' }}>{history.byUser.reduce((a: number, r: any) => a + r.answered, 0)}</td>
+                      <td style={{ padding: '8px 6px' }}>{(history.byUser.reduce((a: number, r: any) => a + r.seconds, 0) / 60).toLocaleString('pt-PT', { maximumFractionDigits: 1 })}</td>
+                      <td style={{ padding: '8px 6px' }}>{history.byUser.reduce((a: number, r: any) => a + r.billed_minutes, 0)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
           <p style={{ margin: '0 0 10px', color: '#64748B', fontSize: 13 }}>
             {history ? `${history.total} chamadas${history.total > history.rows.length ? ` · a mostrar as ${history.rows.length} mais recentes (o ficheiro inclui todas, com transcrição)` : ' · o ficheiro inclui a transcrição completa'}` : 'A carregar…'}
           </p>
