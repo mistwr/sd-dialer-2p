@@ -59,7 +59,7 @@ export default function SupervisorPage() {
     <div className="anim-fade-in">
         <div style={{ marginBottom: 24, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div>
-            <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', margin: 0 }}>Supervisao</h1>
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', margin: 0 }}>Supervisão</h1>
             <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748B' }}>
               Monitorizacao em tempo real da equipa
             </p>

@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Badge } from '@/components/ui/Badge'
+import GotaCard from '@/components/leads/GotaCard'
 
 export default function DistribuicaoPage() {
   const { profile } = useAuth()
@@ -242,7 +243,7 @@ export default function DistribuicaoPage() {
   return (
     <div className="anim-fade-in" style={{ maxWidth: 900 }}>
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: 0 }}>Distribuicao de Leads</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: 0 }}>Distribuição de Leads</h1>
         <p style={{ color: '#64748B', fontSize: 14, margin: '4px 0 0' }}>Escolha a quantidade exata e atribua-a a supervisores ou parceiros ativos</p>
       </div>
 
@@ -250,13 +251,14 @@ export default function DistribuicaoPage() {
         <>
           {unassignedError && (
             <div style={{ background: '#FEE2E2', border: '1px solid #FECACA', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#991B1B', marginBottom: 16 }}>
-              Erro ao contar leads por atribuir: {unassignedError.message || 'erro desconhecido'}. Tenta atualizar a pagina.
+              Erro ao contar leads por atribuir: {unassignedError.message || 'erro desconhecido'}. Tenta atualizar a página.
             </div>
           )}
+          <GotaCard companyId={empresaAtiva} />
           {/* Filtros: que base de dados distribuir */}
           <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: '20px 24px', marginBottom: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <h2 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700, color: '#0F172A' }}>Que base de dados distribuir?</h2>
-            <p style={{ color: '#64748B', fontSize: 13, margin: '0 0 14px' }}>Filtra por campanha para distribuir só um lote especifico (ex: uma importacao recente).</p>
+            <p style={{ color: '#64748B', fontSize: 13, margin: '0 0 14px' }}>Filtra por campanha para distribuir só um lote específico (ex: uma importação recente).</p>
             {profile?.is_super_admin && (
               <div style={{ marginBottom: 12 }}>
                 <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Empresa</label>

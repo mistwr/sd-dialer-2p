@@ -1051,7 +1051,7 @@ function ChamadasIAPageContent() {
       {recordings.length > 0 && (
         <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
           {[
-            { label: 'Total de gravacoes', value: recordings.length },
+            { label: 'Total de gravações', value: recordings.length },
             { label: 'Analisadas', value: recordings.filter(r => r.status === 'analysed').length },
             {
               label: 'Score medio',
@@ -1079,7 +1079,7 @@ function ChamadasIAPageContent() {
       {isLoading ? (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 0', gap: 10 }}>
           <Loader2 size={22} color="#2563EB" style={{ animation: 'spin 0.75s linear infinite' }} />
-          <span style={{ color: '#64748B', fontSize: 14 }}>A carregar gravacoes...</span>
+          <span style={{ color: '#64748B', fontSize: 14 }}>A carregar gravações...</span>
         </div>
       ) : recordings.length === 0 ? (
         <div style={{
@@ -1094,11 +1094,11 @@ function ChamadasIAPageContent() {
             <Mic size={28} color="#93C5FD" />
           </div>
           <div style={{ fontWeight: 700, fontSize: 16, color: '#0F172A', marginBottom: 8 }}>
-            Sem gravacoes ainda
+            Sem gravações ainda
           </div>
           <div style={{ fontSize: 13, color: '#64748B', maxWidth: 320, margin: '0 auto' }}>
-            As suas gravacoes de chamadas aparecem aqui apos gravar e enviar uma chamada.
-            Use o botao Gravar Chamada durante uma chamada ativa.
+            As suas gravações de chamadas aparecem aqui depois de gravar e enviar uma chamada.
+            
           </div>
         </div>
       ) : (

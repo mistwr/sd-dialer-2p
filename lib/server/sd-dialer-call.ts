@@ -101,6 +101,15 @@ export type OutboundCallBody = {
   agent_id?: string
 }
 
+// Chamadas automáticas só em horário razoável (hora de Lisboa).
+function withinCallingHours(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Lisbon', weekday: 'short', hour: '2-digit', hour12: false }).formatToParts(now)
+  const wd = parts.find(p => p.type === 'weekday')?.value
+  const h = Number(parts.find(p => p.type === 'hour')?.value)
+  if (wd === 'Sun') return false
+  return h >= 9 && h < 21
+}
+
 export async function startOutboundCall(
   admin: any,
   userId: string,
@@ -151,6 +160,9 @@ export async function startOutboundCall(
 
   const destination = normalizePtPhone(phone)
   if (!destination) throw new SdDialerError('Número de telefone inválido. Usa o formato internacional, por exemplo +351912345678.', 400)
+  if (!withinCallingHours()) {
+    throw new SdDialerError('Fora do horário permitido para chamadas do robot (seg–sáb, 09:00–21:00).', 409)
+  }
   if (await isOptedOut(admin, String(profile.company_id), destination)) {
     throw new SdDialerError('Este cliente pediu para não voltar a ser contactado.', 409)
   }

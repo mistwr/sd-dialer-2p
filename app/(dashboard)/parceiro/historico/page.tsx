@@ -71,7 +71,7 @@ export default function HistoricoPage() {
   return (
     <div className="anim-fade-in" style={{ maxWidth: 800 }}>
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: 0 }}>Historico de Chamadas</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: 0 }}>Histórico de Chamadas</h1>
         <p style={{ color: '#64748B', fontSize: 14, margin: '3px 0 0' }}>Todas as chamadas registadas</p>
       </div>
 
