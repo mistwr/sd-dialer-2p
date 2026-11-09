@@ -6,6 +6,7 @@ import {
   SdDialerError,
 } from '@/lib/server/sd-dialer-livekit'
 import { startCallRecording } from '@/lib/server/voice-call-recording'
+import { hangupIfVoicemail } from '@/lib/server/voicemail-detect'
 
 // Lógica comum para iniciar uma chamada de IA (usada pela app SD Dialer e pelo LUMIN Comando).
 
@@ -58,6 +59,11 @@ export async function reconcileCall(admin: any, call: { id: string; status?: str
     sipStatus = String(sip?.attributes?.['sip.callStatus'] || (sip ? 'present' : ''))
   } catch {
     roomExists = false
+  }
+  // Correio de voz: o agente reconhece-o mas não consegue desligar — desligamos nós.
+  if (roomExists && sipStatus === 'active') {
+    const { api } = getLiveKitConfig()
+    if (await hangupIfVoicemail(admin, api, call)) return 'voicemail'
   }
   const now = new Date().toISOString()
   if (sipStatus === 'active' && status !== 'active') {
