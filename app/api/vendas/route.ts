@@ -44,8 +44,20 @@ export async function POST(req: NextRequest) {
     const sellerId = text('seller_id') || actor.id
     const { data: seller } = await db.from('usuarios').select('id,company_id,supervisor_id,created_by').eq('id',sellerId).eq('status','active').maybeSingle()
     if (!seller || !canAssignSeller(actor,seller)) return reply({ error: 'Não podes atribuir esta venda a esse vendedor.' },403)
-    const leadId = text('lead_id') || null
-    if (leadId) {
+    let leadId = text('lead_id') || null
+    if (!leadId) {
+      // Sem lead escolhida: procura na empresa uma lead com o mesmo telefone (últimos 9 dígitos),
+      // preferindo a do vendedor. Assim as vendas ficam sempre ligadas à lead de onde vieram.
+      const digits = phone.replace(/\D/g, '').slice(-9)
+      if (digits.length === 9) {
+        const { data: matches } = await getSignatureAdminClient()
+          .from('leads').select('id,assigned_to').eq('company_id', actor.company_id)
+          .like('telefone', `%${digits}`).limit(5)
+        const best = (matches || []).find((l: any) => l.assigned_to === sellerId) || (matches || [])[0]
+        if (best) leadId = String(best.id)
+      }
+    }
+    if (leadId && text('lead_id')) {
       const {data: lead} = await db.from('leads').select('id').eq('id',leadId).eq('company_id',actor.company_id).maybeSingle()
       if (!lead) return reply({ error: 'Lead não disponível nesta empresa.' },403)
     }
@@ -74,7 +86,7 @@ export async function POST(req: NextRequest) {
       fidelizacao_inicio:start,fidelizacao_meses:months||null,fidelizacao_fim:end,cc_status:cc,
     }).select().single()
     if (error) throw error
-    if (leadId) await db.from('leads').update({status:'vendido'}).eq('id',leadId)
+    if (leadId) await admin.from('leads').update({status:'vendido'}).eq('id',leadId).eq('company_id',actor.company_id)
     return reply({venda},201)
   } catch (error) {
     console.error('[vendas:create]',error)
