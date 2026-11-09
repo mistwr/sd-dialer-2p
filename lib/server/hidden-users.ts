@@ -2,10 +2,14 @@
 // (mesma regra da função get_hidden_user_ids() na base de dados).
 // Escondidos: utilizadores criados por um superadmin (exceto o próprio) e os parceiros que eles supervisionam.
 
+const HIDE_SUPERADMIN_TEAMS = false as boolean
+
 type Actor = { id: string; company_id: string | null; is_super_admin?: boolean | null; role?: string | null }
 
 export async function getHiddenUserIds(admin: any, actor: Actor): Promise<Set<string>> {
   const hidden = new Set<string>()
+  // Regra desativada (o admin vê a empresa toda); a separação entre empresas é feita por company_id.
+  if (HIDE_SUPERADMIN_TEAMS === false) return hidden
   if (!actor?.company_id || actor.is_super_admin || actor.role === 'super_admin') return hidden
 
   const [{ data: superAdmins }, { data: users }] = await Promise.all([
