@@ -20,37 +20,45 @@ interface NavItem {
   href: string
   icon: React.ElementType
   roles: string[]
+  section: string
 }
 
 const NAV: NavItem[] = [
-  { label: 'Dashboard',    href: '/admin',               icon: LayoutDashboard, roles: ['admin', 'supervisor'] },
-  { label: 'Chat',         href: '/chat',                 icon: MessageCircle,   roles: ['admin', 'supervisor', 'parceiro'] },
-  { label: 'Empresas',     href: '/admin/empresas',       icon: Building2,       roles: ['admin'] },
-  { label: 'Utilizadores', href: '/admin/utilizadores',   icon: Users2,          roles: ['admin'] },
-  { label: 'Parceiros',    href: '/admin/parceiros',      icon: Users,           roles: ['admin', 'supervisor'] },
-  { label: 'Campanhas',    href: '/admin/campanhas',      icon: Megaphone,       roles: ['admin', 'supervisor'] },
-  { label: 'Formação',     href: '/formacao',             icon: GraduationCap,   roles: ['admin', 'supervisor', 'parceiro'] },
-  { label: 'Leads',        href: '/admin/leads',          icon: PhoneCall,       roles: ['admin', 'supervisor'] },
-  { label: 'Distribuicao', href: '/admin/distribuicao',   icon: Shuffle,         roles: ['admin', 'supervisor'] },
-  { label: 'Relatorios',   href: '/admin/relatorios',     icon: BarChart2,       roles: ['admin', 'supervisor'] },
-  { label: 'LUMIN Growth', href: '/admin/lumin-growth',   icon: TrendingUp,      roles: ['admin', 'supervisor'] },
-  { label: 'Relatório',    href: '/admin/relatorio-porta', icon: MapPin,         roles: ['admin', 'supervisor'] },
-  { label: 'Comando IA',   href: '/admin/comando',        icon: Sparkles,        roles: ['admin', 'supervisor'] },
-  { label: 'IA Dashboard', href: '/admin/ia',             icon: Brain,           roles: ['admin', 'supervisor'] },
-  { label: 'Assist. IA',  href: '/admin/assistente-ia',  icon: Brain,           roles: ['admin', 'supervisor'] },
-  { label: 'Supervisor',   href: '/supervisor',           icon: LayoutDashboard, roles: ['supervisor'] },
-  { label: 'Minhas Leads', href: '/parceiro',             icon: PhoneIncoming,   roles: ['parceiro', 'admin', 'supervisor'] },
-  { label: 'Agenda',       href: '/parceiro/agenda',      icon: Calendar,        roles: ['parceiro', 'admin', 'supervisor'] },
-  { label: 'Porta → Lead', href: '/parceiro/porta',       icon: MapPin,          roles: ['parceiro', 'admin', 'supervisor'] },
-  { label: 'Historico',    href: '/parceiro/historico',   icon: History,         roles: ['parceiro', 'admin', 'supervisor'] },
-  { label: 'Vendas',       href: '/parceiro/vendas',      icon: ShoppingBag,     roles: ['parceiro', 'admin', 'supervisor'] },
-  { label: 'Fidelizações', href: '/fidelizacoes', icon: Calendar, roles: ['parceiro', 'admin', 'supervisor'] },
-  { label: 'SMS Massa',    href: '/parceiro/sms',         icon: MessageSquare,   roles: ['parceiro', 'admin', 'supervisor'] },
-  { label: 'Chamadas IA',  href: '/parceiro/chamadas-ia', icon: AudioLines,      roles: ['parceiro', 'admin', 'supervisor'] },
-  { label: 'Superadmin IA', href: '/admin/chamadas-ia', icon: ShieldCheck, roles: ['admin'] },
-  { label: 'IA Dashboard', href: '/parceiro/ia',          icon: Brain,           roles: ['parceiro'] },
-  { label: 'Assist. IA',  href: '/parceiro/assistente-ia', icon: Brain,          roles: ['parceiro'] },
-  { label: 'Meu Perfil',   href: '/parceiro/perfil',      icon: UserCircle,      roles: ['parceiro'] },
+  // Geral
+  { section: 'Geral', label: 'Dashboard',       href: '/admin',                  icon: LayoutDashboard, roles: ['admin', 'supervisor'] },
+  { section: 'Geral', label: 'Supervisor',      href: '/supervisor',             icon: LayoutDashboard, roles: ['supervisor'] },
+  { section: 'Geral', label: 'Chat',            href: '/chat',                   icon: MessageCircle,   roles: ['admin', 'supervisor', 'parceiro'] },
+  // Trabalho diário
+  { section: 'Leads e chamadas', label: 'Minhas Leads',   href: '/parceiro',             icon: PhoneIncoming, roles: ['parceiro', 'admin', 'supervisor'] },
+  { section: 'Leads e chamadas', label: 'Agenda',         href: '/parceiro/agenda',      icon: Calendar,      roles: ['parceiro', 'admin', 'supervisor'] },
+  { section: 'Leads e chamadas', label: 'Chamadas IA',    href: '/parceiro/chamadas-ia', icon: AudioLines,    roles: ['parceiro', 'admin', 'supervisor'] },
+  { section: 'Leads e chamadas', label: 'Histórico',      href: '/parceiro/historico',   icon: History,       roles: ['parceiro', 'admin', 'supervisor'] },
+  { section: 'Leads e chamadas', label: 'SMS em massa',   href: '/parceiro/sms',         icon: MessageSquare, roles: ['parceiro', 'admin', 'supervisor'] },
+  { section: 'Leads e chamadas', label: 'Porta → Lead',   href: '/parceiro/porta',       icon: MapPin,        roles: ['parceiro', 'admin', 'supervisor'] },
+  // Vendas
+  { section: 'Vendas', label: 'Vendas',        href: '/parceiro/vendas', icon: ShoppingBag, roles: ['parceiro', 'admin', 'supervisor'] },
+  { section: 'Vendas', label: 'Fidelizações',  href: '/fidelizacoes',    icon: Calendar,    roles: ['parceiro', 'admin', 'supervisor'] },
+  // Gestão da equipa
+  { section: 'Gestão', label: 'Base de leads',    href: '/admin/leads',           icon: PhoneCall, roles: ['admin', 'supervisor'] },
+  { section: 'Gestão', label: 'Distribuição',     href: '/admin/distribuicao',    icon: Shuffle,   roles: ['admin', 'supervisor'] },
+  { section: 'Gestão', label: 'Campanhas',        href: '/admin/campanhas',       icon: Megaphone, roles: ['admin', 'supervisor'] },
+  { section: 'Gestão', label: 'Parceiros',        href: '/admin/parceiros',       icon: Users,     roles: ['admin', 'supervisor'] },
+  { section: 'Gestão', label: 'Relatórios',       href: '/admin/relatorios',      icon: BarChart2, roles: ['admin', 'supervisor'] },
+  { section: 'Gestão', label: 'Relatório porta',  href: '/admin/relatorio-porta', icon: MapPin,    roles: ['admin', 'supervisor'] },
+  // Inteligência artificial
+  { section: 'Inteligência artificial', label: 'Comando IA',    href: '/admin/comando',          icon: Sparkles,   roles: ['admin', 'supervisor'] },
+  { section: 'Inteligência artificial', label: 'Análise IA',    href: '/admin/ia',               icon: Brain,      roles: ['admin', 'supervisor'] },
+  { section: 'Inteligência artificial', label: 'Assistente IA', href: '/admin/assistente-ia',    icon: Brain,      roles: ['admin', 'supervisor'] },
+  { section: 'Inteligência artificial', label: 'LUMIN Growth',  href: '/admin/lumin-growth',     icon: TrendingUp, roles: ['admin', 'supervisor'] },
+  { section: 'Inteligência artificial', label: 'Análise IA',    href: '/parceiro/ia',            icon: Brain,      roles: ['parceiro'] },
+  { section: 'Inteligência artificial', label: 'Assistente IA', href: '/parceiro/assistente-ia', icon: Brain,      roles: ['parceiro'] },
+  // Formação e conta
+  { section: 'Formação', label: 'Formação',   href: '/formacao',        icon: GraduationCap, roles: ['admin', 'supervisor', 'parceiro'] },
+  { section: 'Formação', label: 'Meu perfil', href: '/parceiro/perfil', icon: UserCircle,    roles: ['parceiro'] },
+  // Só superadmin (filtrado abaixo)
+  { section: 'Superadmin', label: 'Empresas',      href: '/admin/empresas',     icon: Building2,   roles: ['admin'] },
+  { section: 'Superadmin', label: 'Utilizadores',  href: '/admin/utilizadores', icon: Users2,      roles: ['admin'] },
+  { section: 'Superadmin', label: 'Superadmin IA', href: '/admin/chamadas-ia',  icon: ShieldCheck, roles: ['admin'] },
 ]
 
 // Views que um utilizador com papel "admin" pode escolher ver — nao muda o papel real na base de dados,
@@ -185,10 +193,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         )}
 
         <nav style={{ flex: 1, padding: '4px 12px', overflowY: 'auto' }}>
-          {visibleNav.map(item => {
+          {visibleNav.map((item, idx) => {
+            const showSection = idx === 0 || visibleNav[idx - 1].section !== item.section
             const active = pathname === item.href || (item.href !== '/admin' && item.href !== '/parceiro' && pathname.startsWith(item.href))
             return (
-              <Link key={item.href} href={item.href} style={{
+              <div key={item.href}>
+              {showSection && (
+                <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#475569', padding: idx === 0 ? '4px 12px 6px' : '14px 12px 6px' }}>
+                  {item.section}
+                </div>
+              )}
+              <Link href={item.href} style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 padding: '9px 12px', borderRadius: 8, marginBottom: 2,
                 textDecoration: 'none',
@@ -205,6 +220,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <span style={{ flex: 1 }}>{item.label}</span>
                 {active && <ChevronRight size={14} style={{ opacity: 0.6 }} />}
               </Link>
+              </div>
             )
           })}
         </nav>
