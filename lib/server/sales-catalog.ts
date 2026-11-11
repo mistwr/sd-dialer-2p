@@ -4,7 +4,7 @@
 // da chamada. Não toca no motor de voz (STT, LLM, TTS, VAD) nem na transcrição.
 // Nunca lança erro: sem dados, devolve '' e a chamada corre como antes.
 
-const MAX_BLOCK = 6000
+const MAX_BLOCK = 8000
 
 function clip(value: unknown, max: number): string {
   return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max)
