@@ -50,7 +50,13 @@ function DocLink({ path, label }: { path: string | null; label: string }) {
   ) : null
 }
 
-function SignaturePanel({ saleId }: { saleId: string }) {
+function waNumber(phone?: string | null): string {
+  const d = String(phone || '').replace(/\D/g, '')
+  if (!d) return ''
+  return d.length === 9 ? '351' + d : d
+}
+
+function SignaturePanel({ saleId, phone, clientName }: { saleId: string; phone?: string | null; clientName?: string | null }) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -162,9 +168,14 @@ function SignaturePanel({ saleId }: { saleId: string }) {
                 }} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: 0, borderRadius: 7, background: '#2563EB', color: '#fff', padding: '8px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
                   <Copy size={13} /> {copied ? 'Copiado' : 'Copiar link'}
                 </button>
-                <a href={'https://wa.me/?text=' + encodeURIComponent('Olá! Podes confirmar e assinar o teu pedido neste link: ' + shareLink)} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 7, background: '#16A34A', color: '#fff', padding: '8px 10px', fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>
-                  <MessageCircle size={13} /> WhatsApp
+                <a href={'https://wa.me/' + waNumber(phone) + '?text=' + encodeURIComponent('Olá' + (clientName ? ' ' + String(clientName).split(' ')[0] : '') + '! Conforme falámos ao telefone, pode confirmar e assinar o seu pedido neste link: ' + shareLink)} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 7, background: '#16A34A', color: '#fff', padding: '8px 10px', fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>
+                  <MessageCircle size={13} /> WhatsApp{phone ? ' para o cliente' : ''}
                 </a>
+                {phone && (
+                  <a href={'sms:' + String(phone).replace(/\s/g, '') + '?&body=' + encodeURIComponent('Conforme falámos ao telefone, confirme e assine o seu pedido neste link: ' + shareLink)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 7, background: '#0F766E', color: '#fff', padding: '8px 10px', fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>
+                    <MessageCircle size={13} /> SMS
+                  </a>
+                )}
               </div>
             </div>
           )}
@@ -227,7 +238,7 @@ export default function VendasPage() {
             <div key={v.id} style={{ background: '#fff', borderRadius: 12, border: '1px solid #E2E8F0', padding: '14px 16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>{v.client_name}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>{v.client_name}{String(v.notes || '').includes('robot de IA') && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, background: '#EEF2FF', color: '#4F46E5', padding: '2px 7px', borderRadius: 999 }}>Venda do robot · enviar link ao cliente</span>}</div>
                   <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
                     {v.service_type || '—'} {v.operator ? `· ${v.operator}` : ''} {v.plano ? `· ${v.plano}` : ''}
                   </div>
@@ -249,7 +260,7 @@ export default function VendasPage() {
                 if (!r.ok) {const d=await r.json(); alert(d.error); return}
                 await mutate()
               }}><option value="pendente">Pendente</option><option value="recebido">Recebido</option><option value="validado">Validado</option></select></label>}
-              <SignaturePanel saleId={v.id} />
+              <SignaturePanel saleId={v.id} phone={v.client_phone} clientName={v.client_name} />
               {profile?.role==='admin' && <div style={{marginTop:12}}><DeleteSaleButton saleId={v.id} clientName={v.client_name} scope="venda"/></div>}
             </div>
           ))}
