@@ -135,18 +135,26 @@ export const leadService = {
     if (error) throw error
     return data as Lead
   },
-  async getAssigned(userId: string, maxTotal = 1000) {
+  async getAssigned(userId: string, maxTotal = 1000, zona = '') {
     const sb = createClient()
+    // Filtro de zona feito na base de dados (sobre TODAS as leads do parceiro),
+    // para nao depender de a lead estar entre as primeiras 1000 carregadas.
+    const zonaLimpa = zona.replace(/[%,()*\\]/g, ' ').replace(/\s+/g, ' ').trim()
+    const zonaOr = zonaLimpa.length >= 2
+      ? `localidade.ilike.%${zonaLimpa}%,morada.ilike.%${zonaLimpa}%,codigo_postal.ilike.%${zonaLimpa}%`
+      : ''
     const PAGE = 1000
     // Não descarrega 10k/50k leads de uma vez para o browser. As leads já
     // trabalhadas vêm primeiro e o resto é carregado por blocos a pedido.
     const listFields = 'id,company_id,campanha_id,assigned_to,nome,telefone,email,morada,codigo_postal,localidade,operador,status,origem,priority,custom_fields,created_at,updated_at,campanhas(id,name)'
 
-    const { data: trabalhadas, error: errT } = await sb
+    let qTrab = sb
       .from('leads')
       .select(listFields)
       .eq('assigned_to', userId)
       .neq('status', 'novo')
+    if (zonaOr) qTrab = qTrab.or(zonaOr)
+    const { data: trabalhadas, error: errT } = await qTrab
       .order('priority', { ascending: false })
       .order('created_at', { ascending: true })
       .limit(maxTotal)
@@ -157,11 +165,13 @@ export const leadService = {
     let from = 0
     while (restante > 0) {
       const take = Math.min(PAGE, restante)
-      const { data, error } = await sb
+      let qNovas = sb
         .from('leads')
         .select(listFields)
         .eq('assigned_to', userId)
         .eq('status', 'novo')
+      if (zonaOr) qNovas = qNovas.or(zonaOr)
+      const { data, error } = await qNovas
         .order('priority', { ascending: false })
         .order('created_at', { ascending: true })
         .range(from, from + take - 1)
