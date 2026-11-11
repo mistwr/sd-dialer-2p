@@ -81,7 +81,7 @@ export async function buildSalesCatalog(
       const campanha = d.valido_ate ? ' [CAMPANHA ATÉ ' + String(d.valido_ate).split('-').reverse().join('/') + ']' : ''
       pacotes.push(
         '- ' + clip(t.operador, 30) + ' · ' + clip(t.nome_pacote, 100) + ' · ' + (d.desde ? 'a partir de ' : '') + euro(t.preco_mensal) + '/mês' +
-          (bits.length ? ' (' + bits.join(' + ') + ')' : '') + campanha + (d.nota ? ' — ' + clip(d.nota, 220) : ''),
+          (bits.length ? ' (' + bits.join(' + ') + ')' : '') + campanha + (d.nota ? ' — ' + clip(d.nota, 420) : ''),
       )
     }
     if (!pacotes.length) return ''
