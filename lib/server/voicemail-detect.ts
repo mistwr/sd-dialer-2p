@@ -67,11 +67,17 @@ export async function hangupIfVoicemail(
     if (!call.livekit_room) return false
     const { data: lines } = await admin
       .from('voice_call_transcripts')
-      .select('speaker,text')
+      .select('speaker,text,spoken_at')
       .eq('call_id', call.id)
       .order('spoken_at', { ascending: false })
       .limit(12)
-    if (!lines?.some((l: any) => isVoicemailLine(String(l.speaker || ''), String(l.text || '')))) return false
+    const vmPhrase = !!lines?.some((l: any) => isVoicemailLine(String(l.speaker || ''), String(l.text || '')))
+    // Silêncio: o robot já disse a abertura e há 25 s que do outro lado não sai uma palavra
+    // (gravador que não foi transcrito, ou chamada muda). Antes ficava 5 min até o gravador cortar.
+    const hasClient = !!lines?.some((l: any) => String(l.speaker) !== 'agent')
+    const lastAgent = lines?.find((l: any) => String(l.speaker) === 'agent')
+    const silent = !hasClient && !!lastAgent && Date.now() - new Date(lastAgent.spoken_at).getTime() > 25_000
+    if (!vmPhrase && !silent) return false
 
     // 1) Desliga o telemóvel do cliente (participante SIP) e 2) fecha a sala (termina o agente).
     try {
