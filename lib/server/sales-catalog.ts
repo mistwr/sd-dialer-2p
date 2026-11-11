@@ -61,21 +61,29 @@ export async function buildSalesCatalog(
       parts.push('OPERADORA ATUAL REGISTADA NA LEAD (confirma com o cliente, não assumas): ' + clip(opts.operadorAtual, 40))
     }
 
-    const pacotes = tarifas.map((t) => {
-      let det = ''
+    const hoje = new Date().toISOString().slice(0, 10)
+    const pacotes: string[] = []
+    for (const t of tarifas) {
+      let d: any = {}
       try {
-        const d = typeof t.detalhes === 'string' ? JSON.parse(t.detalhes) : t.detalhes || {}
-        const bits: string[] = []
-        if (d.velocidade) bits.push('internet ' + d.velocidade)
-        if (d.tv) bits.push('TV')
-        if (d.cartoes) bits.push(d.cartoes + (Number(d.cartoes) === 1 ? ' cartão móvel' : ' cartões móveis'))
-        det = bits.join(' + ')
+        d = typeof t.detalhes === 'string' ? JSON.parse(t.detalhes) : t.detalhes || {}
       } catch {
-        det = ''
+        d = {}
       }
-      return '- ' + clip(t.operador, 30) + ' · ' + clip(t.nome_pacote, 90) + ' · ' + euro(t.preco_mensal) + '/mês' + (det ? ' (' + det + ')' : '')
-    })
-    parts.push('PACOTES DISPONÍVEIS (preço mensal de referência, com IVA):\n' + pacotes.join('\n'))
+      // Campanhas com data de fim: deixam de ser usadas depois de expirar.
+      if (d.valido_ate && String(d.valido_ate) < hoje) continue
+      const bits: string[] = []
+      if (d.velocidade) bits.push('internet ' + d.velocidade)
+      if (d.tv) bits.push('TV')
+      if (d.cartoes) bits.push(d.cartoes + (Number(d.cartoes) === 1 ? ' cartão móvel' : ' cartões móveis'))
+      const campanha = d.valido_ate ? ' [CAMPANHA ATÉ ' + String(d.valido_ate).split('-').reverse().join('/') + ']' : ''
+      pacotes.push(
+        '- ' + clip(t.operador, 30) + ' · ' + clip(t.nome_pacote, 100) + ' · ' + (d.desde ? 'a partir de ' : '') + euro(t.preco_mensal) + '/mês' +
+          (bits.length ? ' (' + bits.join(' + ') + ')' : '') + campanha + (d.nota ? ' — ' + clip(d.nota, 220) : ''),
+      )
+    }
+    if (!pacotes.length) return ''
+    parts.push('PACOTES DISPONÍVEIS (preço mensal de referência, com IVA). Se houver CAMPANHA em vigor para uma operadora, usa o preço da campanha em vez do preço normal dessa operadora. Nunca digas promoções que não estejam aqui:\n' + pacotes.join('\n'))
     const verificado = clip(tarifas[0]?.fonte, 60)
     parts.push(
       'COMO APRESENTAR O PREÇO: só depois de saberes a operadora e o valor atual do cliente, propõe UM pacote (o que melhor encaixa no que ele tem: com ou sem telemóveis) e diz o preço como "fica por volta de X euros por mês". ' +
