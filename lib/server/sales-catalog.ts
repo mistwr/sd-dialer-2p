@@ -120,9 +120,9 @@ export async function buildSalesCatalog(
     parts.push(
       'REGRAS DE PROPOSTA E FECHO (têm prioridade sobre o resto): ' +
         '(a) Só propões com os preços da lista ou das PROPOSTAS MONTADAS; nunca digas um valor que não esteja lá. Se o cliente paga X e o teu total não for claramente mais barato (pelo menos uns 5 euros a menos), escolhe outro operador da lista ou monta 3P + cartões; o cliente nunca é da mesma operadora que propões. Com telemóveis, usa sempre as PROPOSTAS MONTADAS (3P + cartões de 5 €). ' +
-        '(b) Só pedes o email DEPOIS de o cliente dizer claramente que aceita ("sim", "avançamos", "pode ser"). Nunca peças o email na mesma frase em que dás o preço. ' +
+        '(b) NUNCA peças email. Só fechas depois de o cliente dizer claramente que aceita ("sim", "avançamos", "pode ser"): diz que o pedido segue para este número de telemóvel e que o consultor lhe envia o link para confirmar e assinar. ' +
         '(c) Depois de ele aceitar o telecom, antes do email, se ainda não ofereceste a energia, oferece-a. Se ele já te disse o que paga de luz, usa-o: "paga cerca de X por mês de luz; o consultor vê se consegue baixar". ' +
-        '(d) NUNCA te despeças com "boa noite" nem digas "não avanço com o pedido" enquanto o cliente continuar a falar ou não tiver recusado. Se não conseguires apanhar o email à 2.ª tentativa, não insistas: diz "Sem problema, o consultor liga-lhe e trata disso consigo; amanhã de manhã ou à tarde?" e agenda com schedule_follow_up. Se o cliente voltar a falar depois, continua a ajudá-lo com simpatia.',
+        '(d) NUNCA te despeças com "boa noite" nem digas "não avanço com o pedido" enquanto o cliente continuar a falar ou não tiver recusado. Se o cliente voltar a falar depois de te despedires, continua a ajudá-lo com simpatia.',
     )
     const verificado = clip(tarifas[0]?.fonte, 60)
     parts.push(
@@ -206,8 +206,8 @@ export function saleLinkEnabledFor(config: any, phone: string): boolean {
 }
 
 export const SALE_LINK_CLOSING =
-  'FECHO COM LINK (substitui os passos 6 e 7; ignora o agendamento do consultor): quando a pessoa aceitar o pacote, NÃO marques consultor. ' +
-  '1) Diz que vais enviar já uma mensagem com o link para confirmar os dados e assinar, e que demora cerca de 2 minutos. ' +
-  '2) Pergunta: "Qual é o melhor email para lhe enviar também?" Quando disser, repete o email devagar, por extenso (por exemplo "joao ponto silva arroba gmail ponto com") e pergunta "Está correto?". Se corrigir, repete outra vez. Se não tiver email, não faz mal: segue só por SMS. ' +
-  '3) Diz: "Perfeito, vai receber a mensagem no telemóvel e no email dentro de alguns minutos. Quando assinar fica tudo tratado. Tenha à mão o cartão de cidadão e uma fatura." ' +
-  '4) ANTES de te despedires, se o cliente ainda não falou de energia, pergunta uma vez: "Aproveitando, a luz e o gás também lhe podem sair mais baratos. Quer que o consultor veja isso sem compromisso?" (usa as regras de energia acima; se não quiser, aceita e passa ao ponto 5). 5) Despede-te com simpatia. NÃO peças NIF, morada nem dados de pagamento. Se a pessoa não quiser receber o link, volta ao fecho normal com o consultor.'
+  'FECHO COM LINK (substitui os passos 6 e 7; ignora o agendamento do consultor): quando a pessoa aceitar o pacote, NÃO peças email e NÃO marques consultor. ' +
+  '1) Diz: "Perfeito! Vou enviar o pedido para este número de telemóvel e o consultor trata de lhe enviar o link para confirmar os dados e assinar; demora cerca de 2 minutos." ' +
+  '2) Antes de te despedires, se ainda não ofereceste a energia, oferece-a uma vez (regras de energia acima). ' +
+  '3) Diz: "Vai receber a mensagem dentro de alguns minutos. Quando assinar fica tudo tratado. Tenha à mão o cartão de cidadão e uma fatura." ' +
+  '4) Despede-te com simpatia. NÃO peças email, NIF, morada nem dados de pagamento. Se a pessoa não quiser receber o link, volta ao fecho normal com o consultor.'
