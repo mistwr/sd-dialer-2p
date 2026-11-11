@@ -4,7 +4,7 @@
 // da chamada. Não toca no motor de voz (STT, LLM, TTS, VAD) nem na transcrição.
 // Nunca lança erro: sem dados, devolve '' e a chamada corre como antes.
 
-const MAX_BLOCK = 10800
+const MAX_BLOCK = 12500
 
 function clip(value: unknown, max: number): string {
   return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max)
@@ -125,6 +125,16 @@ export async function buildSalesCatalog(
         .select('title,operator,description,service_type')
         .eq('company_id', companyId)
         .eq('status', 'ativa')
+      const { data: precos } = await admin
+        .from('energia_tarifas_ref')
+        .select('operador,plano,potencia_kva,preco_potencia_dia,preco_energia_kwh,condicoes,ordem')
+        .eq('company_id', companyId)
+        .order('ordem', { ascending: true })
+        .order('potencia_kva', { ascending: true })
+      const precosEnergia = (precos || [])
+        .map((r: any) => '- ' + clip(r.operador, 20) + ' ' + clip(r.plano, 40) + ' ' + Number(r.potencia_kva).toString().replace('.', ',') + ' kVA: ' +
+          Number(r.preco_potencia_dia).toFixed(4).replace('.', ',') + ' €/dia + ' + Number(r.preco_energia_kwh).toFixed(4).replace('.', ',') + ' €/kWh (' + clip(r.condicoes, 150) + ')')
+        .join('\n')
       const energia = (camps || []).filter((c: any) => c.service_type === 'energia' || /energia/i.test(String(c.title)))
       if (energia.length) {
         const lista = energia
@@ -135,11 +145,8 @@ export async function buildSalesCatalog(
             '(1) o cliente não quer mudar de telecom, já paga pouco, está fidelizado e não há solução, ou recusa o telecom (antes de desistires, depois da escada do não ao sim: "e na luz e no gás, já comparou? Muita gente poupa aí e é a mesma coisa, sem compromisso"); ' +
             '(2) o cliente aceita telecom: no fim, "aproveitando, a luz e o gás também?"; (3) o cliente fala de luz, gás, fatura de energia ou painéis. Podes propor telecom e energia no mesmo contacto. ' +
             'Pergunta só: com que empresa tem a luz, quanto paga por mês mais ou menos, se tem gás. Não peças NIF, morada, CPE, contador nem dados pessoais. ' +
-            'PREÇOS DE ENERGIA (tarifa simples, sem IVA e impostos; são das campanhas atuais): ' +
-            'IBERDROLA Mais Casa (válida até 31-12-2026): 3,45 kVA = 0,3796 €/dia + 0,1679 €/kWh; 6,9 kVA = 0,6364 €/dia + 0,1679 €/kWh; com fatura eletrónica e débito direto desce para 0,1659 €/kWh (6,9 kVA: 0,6288 €/dia); mais 40 € oferecidos na energia verde. ' +
-            'YES ENERGY (desde 01-10-2026, débito direto): 3,45 kVA = 0,4197 €/dia; 6,9 kVA = 0,7647 €/dia; energia 0,1722 €/kWh. ' +
-            'EDP verde 15% (só 12 meses, com débito direto e fatura eletrónica): 3,45 kVA = 0,2891 €/dia; 6,9 kVA = 0,5780 €/dia; energia 0,1420 €/kWh. ' +
-            'Para as outras (Endesa até 20% de desconto na luz e gás, Repsol, Galp, MEO Energia) não digas valores: diz que há desconto e o consultor faz a simulação. ' +
+            'PREÇOS DE ENERGIA (tarifa simples, sem IVA e impostos; valores base):\n' + precosEnergia + '\n' +
+            'Para propor, escolhe a comercializadora com menor preço do kWh e da potência para o cliente. Gás: não digas valores, diz que o consultor simula. ' +
             'Estima a poupança só se o cliente souber potência (casa normal costuma ser 6,9 kVA, 3,45 kVA em casas pequenas) e kWh por mês; senão diz que o consultor compara com a fatura real. Diz sempre que são valores base sem impostos, sujeitos a confirmação do consultor. Nunca prometas poupança concreta. ' +
             'Se aceitar, agenda a chamada do consultor (dia e hora) com schedule_follow_up e escreve no motivo que é ENERGIA (luz/gás) e a empresa e valor que ele disse. Não envies link de adesão para energia. ' +
             'Se disser que não, aplica a mesma escada de objeções (poupar sem mudar nada no dia a dia, sem compromisso, só uma simulação), no máximo 2 tentativas, e termina com simpatia. Respeita sempre "não me liguem mais".\n' +
