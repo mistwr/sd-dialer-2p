@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, Building2, Megaphone, Volume2, VolumeX,
   PhoneCall, BarChart2, LogOut, Menu, X, Bell,
   ChevronRight, PhoneIncoming, History, UserCircle,
-  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag, MessageSquare, Users2, ArrowLeft, ArrowRight, GraduationCap, TrendingUp, ShieldCheck, Sparkles} from 'lucide-react'
+  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag, MessageSquare, Users2, ArrowLeft, ArrowRight, GraduationCap, TrendingUp, ShieldCheck, Sparkles, Zap} from 'lucide-react'
 import useSWR from 'swr'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { useNotificationSound } from '@/lib/hooks/useNotificationSound'
@@ -38,6 +38,7 @@ const NAV: NavItem[] = [
   // Vendas
   { section: 'Vendas', label: 'Vendas',        href: '/parceiro/vendas', icon: ShoppingBag, roles: ['parceiro', 'admin', 'supervisor'] },
   { section: 'Vendas', label: 'Fidelizações',  href: '/fidelizacoes',    icon: Calendar,    roles: ['parceiro', 'admin', 'supervisor'] },
+  { section: 'Vendas', label: 'Simulador energia', href: '/simulador-energia', icon: Zap, roles: ['parceiro', 'admin', 'supervisor'] },
   { section: 'Vendas', label: 'Campanhas operadoras', href: '/campanhas-operadoras', icon: Megaphone, roles: ['parceiro', 'admin', 'supervisor'] },
   // Gestão da equipa
   { section: 'Gestão', label: 'Base de leads',    href: '/admin/leads',           icon: PhoneCall, roles: ['admin', 'supervisor'] },

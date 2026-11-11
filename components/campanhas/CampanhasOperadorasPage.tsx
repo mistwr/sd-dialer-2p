@@ -53,7 +53,7 @@ export function CampanhasOperadorasPage() {
     <div style={{ padding: 24, maxWidth: 1100, margin: "0 auto" }}>
       <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>Campanhas das operadoras</h1>
       <p style={{ color: "#64748B", marginBottom: 16 }}>Campanhas ativas e respetivos ficheiros (tabelas, fichas, condições).</p>
-      <a href="https://simuladorsolucoesdiferentes.netlify.app/eletricidade-tiagofelicia" target="_blank" rel="noreferrer"
+      <a href="/simulador-energia"
         style={{ display: "inline-block", marginBottom: 16, padding: "8px 14px", borderRadius: 10, background: "#0F766E", color: "#fff", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
         ⚡ Simulador de eletricidade
       </a>
