@@ -82,6 +82,7 @@ export async function GET(req: NextRequest) {
     const requestedLimit = Number.parseInt(searchParams.get('limit') ?? '50', 10)
     const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(100, requestedLimit)) : 50
 
+    const offset = Math.max(0, Number.parseInt(searchParams.get('offset') ?? '0', 10) || 0)
     const leadId = searchParams.get('lead_id')
     if (leadId && !/^[0-9a-f-]{36}$/i.test(leadId)) {
       return NextResponse.json({ error: 'lead_id invalido' }, { status: 400 })
@@ -123,7 +124,7 @@ export async function GET(req: NextRequest) {
           { count: 'exact' }
         )
         .order('created_at', { ascending: false })
-        .limit(limit),
+        .range(offset, offset + limit - 1),
       filter,
     )
 

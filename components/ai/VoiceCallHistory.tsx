@@ -188,6 +188,38 @@ export default function VoiceCallHistory({ leadId }: { leadId?: string } = {}) {
   })
 
   const calls = data?.calls ?? []
+  const [exporting, setExporting] = useState(false)
+
+  async function exportCsv() {
+    setExporting(true)
+    try {
+      const rows: any[] = []
+      for (let offset = 0; offset < 2000; offset += 100) {
+        const res = await fetch(`${url.replace('limit=50', 'limit=100')}&offset=${offset}`)
+        if (!res.ok) break
+        const json = await res.json()
+        const batch: any[] = json.calls ?? []
+        rows.push(...batch)
+        if (batch.length < 100) break
+      }
+      const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""').replace(/\r?\n/g, ' ')}"`
+      const head = ['Data', 'Cliente', 'Telefone', 'Estado', 'Duração (s)', 'Interesse', 'Venda robot', 'Resumo', 'Próxima ação', 'Operadora atual', 'Transcrição']
+      const lines = rows.map((c) => [
+        c.created_at, c.client_name, c.phone_number, c.status, c.duration_seconds, c.interest_level,
+        c.ai_sale ? `${c.ai_sale.status} ${c.ai_sale.operator ?? ''} ${c.ai_sale.package ?? ''} ${c.ai_sale.monthly_price ?? ''}`.trim() : '',
+        c.summary, c.next_action, c.call_info?.operadora_atual ?? c.call_info?.operadora ?? '',
+        (c.transcripts ?? []).map((t: VoiceTranscriptLine) => `${t.speaker === 'agent' ? 'Robot' : 'Cliente'}: ${t.text}`).join(' | '),
+      ].map(esc).join(';'))
+      const blob = new Blob(['\uFEFF' + [head.map(esc).join(';'), ...lines].join('\r\n')], { type: 'text/csv;charset=utf-8' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `chamadas-ia-${period}${filter ? '-' + filter : ''}-${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      URL.revokeObjectURL(a.href)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <section style={{
@@ -260,6 +292,10 @@ export default function VoiceCallHistory({ leadId }: { leadId?: string } = {}) {
                   color: period === value ? '#fff' : '#334155', borderRadius: 999, padding: '5px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
                 }}>{label}</button>
               ))}
+              <button type="button" onClick={exportCsv} disabled={exporting} style={{
+                marginLeft: 'auto', border: '1px solid #E2E8F0', background: '#fff', color: '#334155', borderRadius: 999,
+                padding: '5px 12px', fontSize: 12.5, fontWeight: 600, cursor: exporting ? 'wait' : 'pointer',
+              }}>{exporting ? 'A exportar…' : '⬇ Exportar CSV'}</button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(128px, 1fr))', gap: 8 }}>
               {TILES.map((t) => {
