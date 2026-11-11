@@ -86,8 +86,8 @@ export async function buildSalesCatalog(
     parts.push('PACOTES DISPONÍVEIS (preço mensal de referência, com IVA). Se houver CAMPANHA em vigor para uma operadora, usa o preço da campanha em vez do preço normal dessa operadora. Nunca digas promoções que não estejam aqui:\n' + pacotes.join('\n'))
     const verificado = clip(tarifas[0]?.fonte, 60)
     parts.push(
-      'COMO APRESENTAR O PREÇO: só depois de saberes a operadora e o valor atual do cliente, propõe UM pacote (o que melhor encaixa no que ele tem: com ou sem telemóveis) e diz o preço como "fica por volta de X euros por mês". ' +
-        'Se o cliente disse quanto paga, compara só com contas simples (ex.: paga 70, este fica 57, são cerca de 13 euros a menos por mês). Não prometas poupança total, fidelização ou condições que não estejam aqui' +
+      'COMO APRESENTAR O PREÇO: só depois de saberes a operadora e o valor atual do cliente, propõe UM pacote da lista acima (o que melhor encaixa no que ele tem: com ou sem telemóveis) e diz o preço exato dessa linha com o nome da operadora dessa linha. ' +
+        'O pacote tem de custar MENOS do que o cliente paga hoje: se o escolhido for igual ou mais caro, não o apresentes e escolhe outro mais barato da lista que encaixe; se nenhum for mais barato, diz que neste momento não encontras poupança. Nunca uses preços de exemplo nem de outra operadora. Compara com contas simples entre o valor que ele disse e o preço da linha escolhida. Não prometas poupança total, fidelização ou condições que não estejam aqui' +
         (verificado ? ' (preços: ' + verificado + ')' : '') +
         '. O valor final é confirmado no link de adesão que o cliente recebe.',
     )
