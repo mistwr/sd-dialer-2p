@@ -89,7 +89,8 @@ export async function buildSalesCatalog(
     parts.push(
       'CARTÃO MÓVEL LOW-COST (para MONTAR o pacote): 5,00 €/mês por cartão (valor indicado pela empresa; o cartão exato é confirmado no pedido). ' +
         'Quando o cliente tem telemóveis e nenhum pacote da lista com cartões fica mais barato do que paga hoje, MONTA a proposta: um pacote 3P (internet + TV) da lista + um cartão low-cost por cada telemóvel. ' +
-        'Total = preço da linha do 3P + 5 € x número de cartões (confirma quantos telemóveis tem). Diz o total mensal, a operadora do 3P e que os cartões são low-cost a 5 € cada. Há quase sempre solução mais barata assim: só dizes que não encontras poupança se nem assim ficar mais barato.',
+        'Total = preço da linha do 3P + 5 € x número de cartões (confirma quantos telemóveis tem). Diz o total mensal, a operadora do 3P e que os cartões são low-cost a 5 € cada. Há quase sempre solução mais barata assim: só dizes que não encontras poupança se nem assim ficar mais barato. ' +
+        'Se o cliente paga um valor baixo, MENOR do que os preços de lista: procura a solução mais barata possível, em TODAS as operadoras (MEO, NOS, Vodafone): usa o 3P mais barato e o preço com desconto que vem no campo nota da linha (ex.: "com desconto de adesão fica X euros"), junta cartão low-cost só se ele tiver telemóveis, e compara o total com o que ele paga. Nunca digas que não há nada mais barato sem teres experimentado o 3P mais barato de cada operadora com e sem cartões.',
     )
     const verificado = clip(tarifas[0]?.fonte, 60)
     parts.push(
