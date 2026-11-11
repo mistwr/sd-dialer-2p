@@ -336,7 +336,7 @@ export async function startOutboundCall(
         participantName: name || 'Contacto',
         participantMetadata: JSON.stringify(metadata),
         waitUntilAnswered: false,
-        ringingTimeout: 80,
+        ringingTimeout: 35,
         maxCallDuration: 900,
       },
     )
