@@ -135,7 +135,12 @@ export async function buildSalesCatalog(
             '(1) o cliente não quer mudar de telecom, já paga pouco, está fidelizado e não há solução, ou recusa o telecom (antes de desistires, depois da escada do não ao sim: "e na luz e no gás, já comparou? Muita gente poupa aí e é a mesma coisa, sem compromisso"); ' +
             '(2) o cliente aceita telecom: no fim, "aproveitando, a luz e o gás também?"; (3) o cliente fala de luz, gás, fatura de energia ou painéis. Podes propor telecom e energia no mesmo contacto. ' +
             'Pergunta só: com que empresa tem a luz, quanto paga por mês mais ou menos, se tem gás. Não peças NIF, morada, CPE, contador nem dados pessoais. ' +
-            'NÃO digas preços, tarifas nem percentagens de desconto de energia (não os tens): diz que a empresa tem campanhas das principais comercializadoras e que o consultor faz a simulação com a fatura dele. Nunca prometas poupança concreta. ' +
+            'PREÇOS DE ENERGIA (tarifa simples, sem IVA e impostos; são das campanhas atuais): ' +
+            'IBERDROLA Mais Casa (válida até 31-12-2026): 3,45 kVA = 0,3796 €/dia + 0,1679 €/kWh; 6,9 kVA = 0,6364 €/dia + 0,1679 €/kWh; com fatura eletrónica e débito direto desce para 0,1659 €/kWh (6,9 kVA: 0,6288 €/dia); mais 40 € oferecidos na energia verde. ' +
+            'YES ENERGY (desde 01-10-2026, débito direto): 3,45 kVA = 0,4197 €/dia; 6,9 kVA = 0,7647 €/dia; energia 0,1722 €/kWh. ' +
+            'EDP verde 15% (só 12 meses, com débito direto e fatura eletrónica): 3,45 kVA = 0,2891 €/dia; 6,9 kVA = 0,5780 €/dia; energia 0,1420 €/kWh. ' +
+            'Para as outras (Endesa até 20% de desconto na luz e gás, Repsol, Galp, MEO Energia) não digas valores: diz que há desconto e o consultor faz a simulação. ' +
+            'Estima a poupança só se o cliente souber potência (casa normal costuma ser 6,9 kVA, 3,45 kVA em casas pequenas) e kWh por mês; senão diz que o consultor compara com a fatura real. Diz sempre que são valores base sem impostos, sujeitos a confirmação do consultor. Nunca prometas poupança concreta. ' +
             'Se aceitar, agenda a chamada do consultor (dia e hora) com schedule_follow_up e escreve no motivo que é ENERGIA (luz/gás) e a empresa e valor que ele disse. Não envies link de adesão para energia. ' +
             'Se disser que não, aplica a mesma escada de objeções (poupar sem mudar nada no dia a dia, sem compromisso, só uma simulação), no máximo 2 tentativas, e termina com simpatia. Respeita sempre "não me liguem mais".\n' +
             'CAMPANHAS DE ENERGIA ATIVAS (só para teu conhecimento; menciona o nome da comercializadora se ajudar):\n' + lista,
