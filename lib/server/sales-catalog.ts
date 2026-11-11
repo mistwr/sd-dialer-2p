@@ -115,3 +115,19 @@ export async function buildSalesCatalog(
     return ''
   }
 }
+
+// Envio automático do link de adesão (ver ai-sale.ts). Ligado por agente em voice_call_agent_configs:
+//   autoSendSaleLink: true            -> liga
+//   autoSendSalePhones: ["+3519..."]  -> opcional: só estes números (fase de teste); vazio/ausente = todos
+export function saleLinkEnabledFor(config: any, phone: string): boolean {
+  if (!config || config.autoSendSaleLink !== true) return false
+  const phones = Array.isArray(config.autoSendSalePhones) ? config.autoSendSalePhones.map((p: unknown) => String(p)) : []
+  return phones.length === 0 || phones.includes(String(phone))
+}
+
+export const SALE_LINK_CLOSING =
+  'FECHO COM LINK (substitui os passos 6 e 7; ignora o agendamento do consultor): quando a pessoa aceitar o pacote, NÃO marques consultor. ' +
+  '1) Diz que vais enviar já uma mensagem com o link para confirmar os dados e assinar, e que demora cerca de 2 minutos. ' +
+  '2) Pergunta: "Qual é o melhor email para lhe enviar também?" Quando disser, repete o email devagar, por extenso (por exemplo "joao ponto silva arroba gmail ponto com") e pergunta "Está correto?". Se corrigir, repete outra vez. Se não tiver email, não faz mal: segue só por SMS. ' +
+  '3) Diz: "Perfeito, vai receber a mensagem no telemóvel e no email dentro de alguns minutos. Quando assinar fica tudo tratado. Tenha à mão o cartão de cidadão e uma fatura." ' +
+  '4) Despede-te com simpatia. NÃO peças NIF, morada nem dados de pagamento. Se a pessoa não quiser receber o link, volta ao fecho normal com o consultor.'

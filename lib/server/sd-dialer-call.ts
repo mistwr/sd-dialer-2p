@@ -7,7 +7,7 @@ import {
 } from '@/lib/server/sd-dialer-livekit'
 import { startCallRecording } from '@/lib/server/voice-call-recording'
 import { hangupIfVoicemail } from '@/lib/server/voicemail-detect'
-import { buildSalesCatalog } from '@/lib/server/sales-catalog'
+import { buildSalesCatalog, saleLinkEnabledFor, SALE_LINK_CLOSING } from '@/lib/server/sales-catalog'
 import { applyCallOutcome, isOptedOut } from '@/lib/server/voice-call-outcome'
 
 // Lógica comum para iniciar uma chamada de IA (usada pela app SD Dialer e pelo LUMIN Comando).
@@ -258,6 +258,7 @@ export async function startOutboundCall(
     // O robot consulta o CRM: campanha da lead, pacotes/preços, guião e objeções da empresa.
     const salesCatalog = await buildSalesCatalog(admin, String(profile.company_id), { campanhaId: leadCampanhaId, operadorAtual: leadOperador })
     if (salesCatalog) agentProfile.notes = String(agentProfile.notes || '') + '\n' + salesCatalog
+    if (saleLinkEnabledFor(savedAgent?.config, destination)) agentProfile.notes = String(agentProfile.notes || '') + '\n' + SALE_LINK_CLOSING
   }
   const metadata = {
     mode: 'outbound',
