@@ -28,6 +28,7 @@ export type SaleExtraction = {
   client_name?: string | null
   email?: string | null
   installation_preference?: string | null
+  low_cost_cards?: number | string | null
 }
 
 type ChannelResult = string
@@ -140,6 +141,7 @@ export async function processAiSale(admin: any, callId: string, sale: SaleExtrac
       monthly_price: parsePrice(sale.monthly_price),
       email: normalizeSpokenEmail(sale.email),
       installation_preference: sale.installation_preference || null,
+      low_cost_cards: Math.max(0, Math.min(6, Math.round(Number(sale.low_cost_cards) || 0))),
     }
 
     if (!extracted.agreed_to_receive_link) {
@@ -159,13 +161,19 @@ export async function processAiSale(admin: any, callId: string, sale: SaleExtrac
       return
     }
     const price = extracted.monthly_price
+    // Pacote montado: 3P do catálogo + cartões móveis low-cost a 5 €/mês cada. O preço dito é o total; o catálogo valida a base.
+    const LOW_COST_CARD = 5
+    const cards = extracted.low_cost_cards || 0
+    const basePrice = price == null ? null : Math.round((price - cards * LOW_COST_CARD) * 100) / 100
+    const cardsText = cards ? ' + ' + cards + (cards === 1 ? ' cartão móvel low-cost' : ' cartões móveis low-cost') + ' (' + LOW_COST_CARD + ' €/mês cada)' : ''
     const match = (catalog || []).find((row: any) => {
       const sameOperator = operador && String(row.operador || '').toLowerCase().includes(operador.slice(0, 4))
       if (!sameOperator || price == null) return false
       const base = Number(row.preco_mensal)
       const nota = String((typeof row.detalhes === 'string' ? row.detalhes : JSON.stringify(row.detalhes || {})) || '')
-      const priceText = price.toFixed(2).replace('.', ',')
-      return Math.abs(base - price) < 0.015 || nota.includes(priceText)
+      const target = basePrice as number
+      const priceText = target.toFixed(2).replace('.', ',')
+      return Math.abs(base - target) < 0.015 || nota.includes(priceText)
     })
     if (!match) {
       await save({ status: 'needs_review', reason: 'pacote_ou_preco_fora_do_catalogo', extracted })
@@ -203,7 +211,7 @@ export async function processAiSale(admin: any, callId: string, sale: SaleExtrac
       client_email: extracted.email,
       service_type: 'telecom',
       operator: match.operador,
-      plano: String(match.nome_pacote).slice(0, 200),
+      plano: (String(match.nome_pacote) + cardsText).slice(0, 200),
       amount: price,
       notes: ('Venda fechada pelo robot de IA (chamada ' + callId + '). Cliente: "' + extracted.evidence + '"' + (extracted.installation_preference ? '. Instalação: ' + extracted.installation_preference : '')).slice(0, 1900),
       status: 'pendente',
@@ -230,7 +238,7 @@ export async function processAiSale(admin: any, callId: string, sale: SaleExtrac
     const input: SaleMessageInput = {
       nome: clientName,
       operadora: String(match.operador),
-      pacote: String(match.nome_pacote).split(' - ')[0] + (String(match.nome_pacote).includes(' - ') ? ' · ' + String(match.nome_pacote).split(' - ').slice(1).join(' - ') : ''),
+      pacote: String(match.nome_pacote).split(' - ')[0] + (String(match.nome_pacote).includes(' - ') ? ' · ' + String(match.nome_pacote).split(' - ').slice(1).join(' - ') : '') + cardsText,
       precoMensal: price,
       link: appOrigin() + '/venda/assinar#' + token,
     }

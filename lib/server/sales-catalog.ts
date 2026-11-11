@@ -4,7 +4,7 @@
 // da chamada. Não toca no motor de voz (STT, LLM, TTS, VAD) nem na transcrição.
 // Nunca lança erro: sem dados, devolve '' e a chamada corre como antes.
 
-const MAX_BLOCK = 8000
+const MAX_BLOCK = 9500
 
 function clip(value: unknown, max: number): string {
   return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max)
@@ -86,10 +86,15 @@ export async function buildSalesCatalog(
     }
     if (!pacotes.length) return ''
     parts.push('PACOTES DISPONÍVEIS (preço mensal de referência, com IVA). Se houver CAMPANHA em vigor para uma operadora, usa o preço da campanha em vez do preço normal dessa operadora. Nunca digas promoções que não estejam aqui:\n' + pacotes.join('\n'))
+    parts.push(
+      'CARTÃO MÓVEL LOW-COST (para MONTAR o pacote): 5,00 €/mês por cartão (valor indicado pela empresa; o cartão exato é confirmado no pedido). ' +
+        'Quando o cliente tem telemóveis e nenhum pacote da lista com cartões fica mais barato do que paga hoje, MONTA a proposta: um pacote 3P (internet + TV) da lista + um cartão low-cost por cada telemóvel. ' +
+        'Total = preço da linha do 3P + 5 € x número de cartões (confirma quantos telemóveis tem). Diz o total mensal, a operadora do 3P e que os cartões são low-cost a 5 € cada. Há quase sempre solução mais barata assim: só dizes que não encontras poupança se nem assim ficar mais barato.',
+    )
     const verificado = clip(tarifas[0]?.fonte, 60)
     parts.push(
       'COMO APRESENTAR O PREÇO: só depois de saberes a operadora e o valor atual do cliente, propõe UM pacote da lista acima (o que melhor encaixa no que ele tem: com ou sem telemóveis) e diz o preço exato dessa linha com o nome da operadora dessa linha. ' +
-        'O pacote tem de custar MENOS do que o cliente paga hoje: se o escolhido for igual ou mais caro, não o apresentes e escolhe outro mais barato da lista que encaixe; se nenhum for mais barato, diz que neste momento não encontras poupança. Nunca propões DIGI, mesmo que o cliente seja de outra operadora ou pergunte por ela. Nunca uses preços de exemplo nem de outra operadora. Compara com contas simples entre o valor que ele disse e o preço da linha escolhida. Não prometas poupança total, fidelização ou condições que não estejam aqui' +
+        'O pacote tem de custar MENOS do que o cliente paga hoje: se o escolhido for igual ou mais caro, não o apresentes e escolhe outro mais barato da lista que encaixe; se nenhum for mais barato, tenta montar o 3P + cartões low-cost (regra acima) e só se nem assim for mais barato diz que neste momento não encontras poupança. Nunca propões DIGI, mesmo que o cliente seja de outra operadora ou pergunte por ela. Nunca uses preços de exemplo nem de outra operadora. Compara com contas simples entre o valor que ele disse e o preço da linha escolhida. Não prometas poupança total, fidelização ou condições que não estejam aqui' +
         (verificado ? ' (preços: ' + verificado + ')' : '') +
         '. O valor final é confirmado no link de adesão que o cliente recebe.',
     )
