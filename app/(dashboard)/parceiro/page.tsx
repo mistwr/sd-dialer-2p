@@ -197,10 +197,18 @@ function ParceiroDashboardInner() {
   const [mostrarAgendadas, setMostrarAgendadas] = useState(false)
   const [loadLimit, setLoadLimit] = useState(1000)
 
+  // A zona e pesquisada na base de dados (todas as leads), com um pequeno atraso
+  // enquanto se escreve, para nao fazer um pedido por cada tecla.
+  const [zonaServidor, setZonaServidor] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setZonaServidor(filterLocalidade.trim()), 350)
+    return () => clearTimeout(t)
+  }, [filterLocalidade])
+
   const { data: leads = [], isLoading, mutate: mutateLeads } = useSWR(
-    user ? ['parceiro-leads', user.id, loadLimit] : null,
-    () => leadService.getAssigned(user!.id, loadLimit),
-    { revalidateOnFocus: true }
+    user ? ['parceiro-leads', user.id, loadLimit, zonaServidor] : null,
+    () => leadService.getAssigned(user!.id, loadLimit, zonaServidor),
+    { revalidateOnFocus: true, keepPreviousData: true }
   )
 
   const { data: assignedStats, mutate: mutateAssignedStats } = useSWR(
@@ -568,7 +576,7 @@ function ParceiroDashboardInner() {
           </div>
         )}
 
-        {totalAssigned > leads.length && (
+        {!zonaServidor && totalAssigned > leads.length && (
           <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 10, background: '#EFF6FF', border: '1px solid #BFDBFE', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 12.5, color: '#1E40AF' }}>
               A mostrar <strong>{leads.length}</strong> de <strong>{totalAssigned}</strong> leads. Carrega mais apenas quando precisares para manter a página rápida.
