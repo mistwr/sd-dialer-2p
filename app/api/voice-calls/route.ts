@@ -82,37 +82,61 @@ export async function GET(req: NextRequest) {
     const requestedLimit = Number.parseInt(searchParams.get('limit') ?? '50', 10)
     const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(100, requestedLimit)) : 50
 
-    let query = admin
-      .from('voice_calls')
-      .select(
-        'id, company_id, lead_id, source, client_name, phone_number, status, duration_seconds, recording_enabled, transcript_consent_at, transcript_consent_status, created_by, started_at, ended_at, created_at, summary, interest_level, next_action, recording_url, extracted_facts',
-        { count: 'exact' }
-      )
-      .in('source', ['sd-dialer', 'sd-dialer-manual'])
-      .order('created_at', { ascending: false })
-      .limit(limit)
-
-    if (!isSuperAdmin) query = query.eq('company_id', me.company_id)
-
     const leadId = searchParams.get('lead_id')
-    if (leadId) {
-      if (!/^[0-9a-f-]{36}$/i.test(leadId)) {
-        return NextResponse.json({ error: 'lead_id invalido' }, { status: 400 })
-      }
-      query = query.eq('lead_id', leadId)
+    if (leadId && !/^[0-9a-f-]{36}$/i.test(leadId)) {
+      return NextResponse.json({ error: 'lead_id invalido' }, { status: 400 })
+    }
+    const hiddenIds = canSeeCompany && !isSuperAdmin ? [...(await getHiddenUserIds(admin, me as any))] : []
+
+    const PERIODS: Record<string, number> = { today: 0, '7d': 7, '30d': 30 }
+    const period = searchParams.get('period') ?? 'all'
+    const sinceIso = period in PERIODS
+      ? (() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - PERIODS[period]); return d.toISOString() })()
+      : null
+
+    const CATEGORIES = ['alto', 'medio', 'baixo', 'sem_interesse', 'correio_voz', 'indeterminado', 'em_curso', 'vendas']
+    const applyCategory = (q: any, cat: string | null) => {
+      if (!cat) return q
+      if (cat === 'em_curso') return q.is('ended_at', null)
+      if (cat === 'vendas') return q.not('extracted_facts->ai_sale', 'is', null)
+      return q.eq('interest_level', cat)
+    }
+    const scope = (q: any, cat: string | null) => {
+      q = q.in('source', ['sd-dialer', 'sd-dialer-manual'])
+      if (!isSuperAdmin) q = q.eq('company_id', me.company_id)
+      if (leadId) q = q.eq('lead_id', leadId)
+      if (sinceIso) q = q.gte('created_at', sinceIso)
+      if (!canSeeCompany && (me.role === 'supervisor' || me.role === 'admin')) q = q.in('created_by', allowedUserIds)
+      else if (!canSeeCompany) q = q.eq('created_by', userId)
+      else if (hiddenIds.length) q = q.not('created_by', 'in', `(${hiddenIds.join(',')})`)
+      return applyCategory(q, cat)
     }
 
-    if (!canSeeCompany && (me.role === 'supervisor' || me.role === 'admin')) {
-      query = query.in('created_by', allowedUserIds)
-    } else if (!canSeeCompany) {
-      query = query.eq('created_by', userId)
-    } else if (!isSuperAdmin) {
-      // Admin da empresa: tudo menos as equipas criadas por um superadmin.
-      const hidden = [...(await getHiddenUserIds(admin, me as any))]
-      if (hidden.length) query = query.not('created_by', 'in', `(${hidden.join(',')})`)
-    }
+    const rawFilter = searchParams.get('filter')
+    const filter = rawFilter && CATEGORIES.includes(rawFilter) ? rawFilter : null
 
-    const { data: calls, count, error: callsError } = await query
+    const query = scope(
+      admin
+        .from('voice_calls')
+        .select(
+          'id, company_id, lead_id, source, client_name, phone_number, status, duration_seconds, recording_enabled, transcript_consent_at, transcript_consent_status, created_by, started_at, ended_at, created_at, summary, interest_level, next_action, recording_url, extracted_facts',
+          { count: 'exact' }
+        )
+        .order('created_at', { ascending: false })
+        .limit(limit),
+      filter,
+    )
+
+    const countEntries = await Promise.all(
+      [null, ...CATEGORIES].map(async (cat) => {
+        const { count: c } = await scope(admin.from('voice_calls').select('id', { count: 'exact', head: true }), cat)
+        return [cat ?? 'todas', c ?? 0] as const
+      }),
+    )
+    const counts = Object.fromEntries(countEntries)
+
+    const { data: callsRaw, count, error: callsError } = await query
+    const calls = (callsRaw ?? []) as any[]
     if (callsError) {
       console.error('[voice-calls GET] call query error:', callsError.message)
       return NextResponse.json({ error: 'Nao foi possivel carregar o historico' }, { status: 500 })
@@ -174,7 +198,7 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({
-      calls: (calls ?? []).map(({ recording_url, extracted_facts, ...call }) => ({
+      calls: (calls ?? []).map(({ recording_url, extracted_facts, ...call }: any) => ({
         ...call,
         ai_sale: pickAiSale(extracted_facts),
         call_info: extracted_facts && typeof extracted_facts === 'object' && typeof (extracted_facts as any).call_info === 'object' ? (extracted_facts as any).call_info : null,
@@ -182,6 +206,7 @@ export async function GET(req: NextRequest) {
         transcripts: transcriptsByCall.get(call.id) ?? [],
       })),
       total: count ?? 0,
+      counts,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro interno'

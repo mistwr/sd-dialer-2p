@@ -67,7 +67,7 @@ const INTEREST_LABELS: Record<string, { label: string; color: string; bg: string
 async function fetcher(url: string) {
   const response = await fetch(url)
   if (!response.ok) throw new Error('Erro ao carregar o histórico')
-  return response.json() as Promise<{ calls: VoiceCall[]; total: number }>
+  return response.json() as Promise<{ calls: VoiceCall[]; total: number; counts?: Record<string, number> }>
 }
 
 function RecordingPlayer({ callId }: { callId: string }) {
@@ -177,9 +177,11 @@ function callStatusLabel(status: string, endedAt: string | null) {
 
 export default function VoiceCallHistory({ leadId }: { leadId?: string } = {}) {
   const [openCallId, setOpenCallId] = useState<string | null>(null)
-  const url = leadId
-    ? `/api/voice-calls?limit=50&lead_id=${encodeURIComponent(leadId)}`
-    : '/api/voice-calls?limit=50'
+  const [filter, setFilter] = useState<string | null>(null)
+  const [period, setPeriod] = useState<'today' | '7d' | '30d' | 'all'>(leadId ? 'all' : 'today')
+  const url = `/api/voice-calls?limit=50&period=${period}` +
+    (leadId ? `&lead_id=${encodeURIComponent(leadId)}` : '') +
+    (filter ? `&filter=${filter}` : '')
   const { data, error, isLoading, mutate } = useSWR(url, fetcher, {
     refreshInterval: 15000,
     revalidateOnFocus: true,
@@ -234,6 +236,50 @@ export default function VoiceCallHistory({ leadId }: { leadId?: string } = {}) {
         </button>
       </div>
 
+      {(() => {
+        const counts = data?.counts
+        if (!counts) return null
+        const TILES: Array<{ key: string | null; label: string; color: string; bg: string }> = [
+          { key: null, label: 'Todas', color: '#1E293B', bg: '#F1F5F9' },
+          { key: 'vendas', label: 'Venda do robot', color: '#166534', bg: '#DCFCE7' },
+          { key: 'alto', label: 'Interesse alto', color: INTEREST_LABELS.alto.color, bg: INTEREST_LABELS.alto.bg },
+          { key: 'medio', label: 'Interesse médio', color: INTEREST_LABELS.medio.color, bg: INTEREST_LABELS.medio.bg },
+          { key: 'baixo', label: 'Interesse baixo', color: INTEREST_LABELS.baixo.color, bg: INTEREST_LABELS.baixo.bg },
+          { key: 'sem_interesse', label: 'Sem interesse', color: INTEREST_LABELS.sem_interesse.color, bg: INTEREST_LABELS.sem_interesse.bg },
+          { key: 'correio_voz', label: 'Correio de voz', color: INTEREST_LABELS.correio_voz.color, bg: INTEREST_LABELS.correio_voz.bg },
+          { key: 'indeterminado', label: 'Sem conversa útil', color: INTEREST_LABELS.indeterminado.color, bg: INTEREST_LABELS.indeterminado.bg },
+          { key: 'em_curso', label: 'Em curso', color: '#1D4ED8', bg: '#DBEAFE' },
+        ]
+        const PERIODS: Array<['today' | '7d' | '30d' | 'all', string]> = [['today', 'Hoje'], ['7d', '7 dias'], ['30d', '30 dias'], ['all', 'Tudo']]
+        return (
+          <div style={{ margin: '14px 0 16px' }}>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+              {PERIODS.map(([value, label]) => (
+                <button key={value} type="button" onClick={() => setPeriod(value)} style={{
+                  border: '1px solid ' + (period === value ? '#2563EB' : '#E2E8F0'), background: period === value ? '#2563EB' : '#fff',
+                  color: period === value ? '#fff' : '#334155', borderRadius: 999, padding: '5px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+                }}>{label}</button>
+              ))}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(128px, 1fr))', gap: 8 }}>
+              {TILES.map((t) => {
+                const active = filter === t.key
+                const n = counts[t.key ?? 'todas'] ?? 0
+                return (
+                  <button key={t.key ?? 'todas'} type="button" onClick={() => setFilter(active ? null : t.key)} aria-pressed={active} style={{
+                    textAlign: 'left', cursor: 'pointer', padding: '10px 12px', borderRadius: 12, background: t.bg, color: t.color,
+                    border: active ? '2px solid ' + t.color : '2px solid transparent',
+                  }}>
+                    <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.1 }}>{n}</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{t.label}</div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
+
       {isLoading ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '24px 0', color: '#64748B', fontSize: 13 }}>
           <Loader2 size={18} style={{ animation: 'spin 0.75s linear infinite' }} />
@@ -245,7 +291,7 @@ export default function VoiceCallHistory({ leadId }: { leadId?: string } = {}) {
         </div>
       ) : calls.length === 0 ? (
         <div style={{ padding: '18px 0', color: '#64748B', fontSize: 13 }}>
-          {leadId ? 'Esta lead ainda não tem chamadas de IA registadas.' : 'Ainda não há chamadas da Lumin registadas.'}
+          {leadId ? 'Esta lead ainda não tem chamadas de IA registadas.' : filter || period !== 'all' ? 'Nenhuma chamada neste filtro. Escolhe outro estado ou período.' : 'Ainda não há chamadas da Lumin registadas.'}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
