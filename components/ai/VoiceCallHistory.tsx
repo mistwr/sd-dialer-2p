@@ -12,6 +12,30 @@ type VoiceTranscriptLine = {
   spoken_at: string
 }
 
+const INFO_LABELS: Array<[string, string]> = [
+  ['operadora_atual', 'Operadora atual'], ['valor_atual', 'Paga hoje'], ['servicos', 'Serviços'], ['prioridade', 'Prioridade'],
+  ['pacote_proposto', 'Pacote proposto'], ['preco_proposto', 'Preço proposto'], ['objecao', 'Objeção'],
+  ['email', 'Email'], ['consultor_agendado', 'Consultor'], ['instalacao', 'Instalação'],
+]
+const PRIORIDADES: Record<string, string> = { pagar_menos: 'Pagar menos', melhor_servico: 'Melhor serviço', ambos: 'Pagar menos e melhor serviço' }
+
+function CallInfoPanel({ info }: { info?: Record<string, string | number | null> | null }) {
+  const rows = INFO_LABELS.filter(([k]) => info && info[k] != null && info[k] !== '')
+  if (!info || !rows.length) return null
+  const fmt = (k: string, v: string | number) =>
+    k === 'valor_atual' || k === 'preco_proposto' ? Number(v).toFixed(2).replace('.', ',') + ' €/mês' : k === 'prioridade' ? PRIORIDADES[String(v)] || String(v) : String(v)
+  return (
+    <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, background: '#EFF6FF', border: '1px solid #BFDBFE' }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: '#1E3A8A', marginBottom: 6 }}>🤖 Informação recolhida pelo robot</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '4px 16px', fontSize: 12.5, color: '#1E293B' }}>
+        {rows.map(([k, label]) => (
+          <div key={k}><span style={{ color: '#475569' }}>{label}:</span> <strong>{fmt(k, info[k] as string | number)}</strong></div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 type VoiceCall = {
   id: string
   client_name: string | null
@@ -26,6 +50,7 @@ type VoiceCall = {
   interest_level?: string | null
   next_action?: string | null
   has_recording?: boolean
+  call_info?: Record<string, string | number | null> | null
   ai_sale?: { status: string; operator: string | null; package: string | null; monthly_price: number | null; email: string | null; delivery: Record<string, any> | null } | null
   transcripts: VoiceTranscriptLine[]
 }
@@ -258,6 +283,13 @@ export default function VoiceCallHistory({ leadId }: { leadId?: string } = {}) {
                     {callStatusLabel(call.status, call.ended_at)} · {formatDuration(call.duration_seconds)}
                   </span>
                   <span style={{
+                    color: call.ai_sale ? '#166534' : '#1D4ED8',
+                    background: call.ai_sale ? '#DCFCE7' : '#DBEAFE',
+                    padding: '4px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+                  }}>
+                    {call.ai_sale ? '🤖 Robot · Venda' : '🤖 Robot'}
+                  </span>
+                  <span style={{
                     color: call.transcript_consent_status === 'granted' ? '#166534' : '#64748B',
                     background: call.transcript_consent_status === 'granted' ? '#DCFCE7' : '#F1F5F9',
                     padding: '4px 8px',
@@ -307,6 +339,7 @@ export default function VoiceCallHistory({ leadId }: { leadId?: string } = {}) {
 
                 {expanded && (
                   <div style={{ padding: '12px 14px', borderTop: '1px solid #E2E8F0', background: '#fff' }}>
+                    <CallInfoPanel info={call.call_info} />
                     {call.has_recording && <RecordingPlayer callId={call.id} />}
                     {call.transcript_consent_status === 'granted' && call.transcripts.length > 0 ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

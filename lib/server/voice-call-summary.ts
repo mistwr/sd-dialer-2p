@@ -17,7 +17,21 @@ const SYSTEM_PROMPT =
   'do_not_call = true só se o cliente pedir claramente para não voltar a ser contactado (ex.: "não me liguem mais", "tirem o meu número"). ' +
   'sale: preenche SÓ se o agente propôs um pacote com preço e o cliente aceitou claramente avançar (ex.: "sim", "pode ser", "vamos avançar", escolhe uma hora de instalação). Caso contrário devolve sale = null. Nunca assumes aceitação por silêncio ou por simples interesse. ' +
   'Em sale: accepted_offer = true só com aceitação clara; agreed_to_receive_link = true só se o cliente concordou em receber o link/mensagem para confirmar e assinar; evidence = frase curta do CLIENTE que prova a aceitação; operator e package = operadora e pacote PROPOSTOS pelo agente; monthly_price = preço mensal em euros que o agente disse (número, ex.: 56.99); client_name = nome do cliente; email = o email que o cliente ditou, escrito normalmente (ex.: joao@gmail.com) ou null; installation_preference = preferência de instalação dita pelo cliente ou null. ' +
-  'Responde só com JSON: {"summary":"1-2 frases em português de Portugal","interest_level":"alto|medio|baixo|sem_interesse|correio_voz|indeterminado","next_action":"próximo passo concreto e curto","do_not_call":false,"sale":null}'
+  'info = dados recolhidos na chamada, só o que foi dito (null no que não foi dito): operadora_atual (nome correto), valor_atual (número em euros), servicos (ex.: "internet, TV e 1 telemóvel"), prioridade ("pagar_menos"|"melhor_servico"|"ambos"|null), pacote_proposto (operadora + pacote dito pelo agente), preco_proposto (número em euros), objecao (frase curta ou null), email (se o cliente o ditou, escrito normalmente, senão null), consultor_agendado (dia e hora combinados ou null), instalacao (preferência dita ou null). ' +
+  'Responde só com JSON: {"summary":"1-2 frases em português de Portugal","interest_level":"alto|medio|baixo|sem_interesse|correio_voz|indeterminado","next_action":"próximo passo concreto e curto","do_not_call":false,"sale":null,"info":null}'
+
+function cleanInfo(raw: any): Record<string, string | number | null> | null {
+  if (!raw || typeof raw !== 'object') return null
+  const str = (v: any, n = 200) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : null)
+  const num = (v: any) => { const x = typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(',', '.')); return Number.isFinite(x) && x > 0 && x < 10000 ? x : null }
+  const prioridade = ['pagar_menos', 'melhor_servico', 'ambos'].includes(raw.prioridade) ? raw.prioridade : null
+  const out = {
+    operadora_atual: str(raw.operadora_atual, 60), valor_atual: num(raw.valor_atual), servicos: str(raw.servicos),
+    prioridade, pacote_proposto: str(raw.pacote_proposto), preco_proposto: num(raw.preco_proposto),
+    objecao: str(raw.objecao), email: str(raw.email, 120), consultor_agendado: str(raw.consultor_agendado, 80), instalacao: str(raw.instalacao, 80),
+  }
+  return Object.values(out).some((v) => v !== null) ? out : null
+}
 
 export async function ensureCallSummary(admin: any, callId: string, timeoutMs = 9000): Promise<boolean> {
   const groqKey = process.env.GROQ_API_KEY
@@ -25,7 +39,7 @@ export async function ensureCallSummary(admin: any, callId: string, timeoutMs = 
 
   const { data: call } = await admin
     .from('voice_calls')
-    .select('id,summary,transcript_consent_status')
+    .select('id,summary,transcript_consent_status,extracted_facts')
     .eq('id', callId)
     .maybeSingle()
   if (!call || call.summary || call.transcript_consent_status !== 'granted') return false
@@ -72,9 +86,17 @@ export async function ensureCallSummary(admin: any, callId: string, timeoutMs = 
     const interest = INTEREST_LEVELS.has(parsed.interest_level) ? parsed.interest_level : 'indeterminado'
     const nextAction = String(parsed.next_action || '').trim().slice(0, 500) || null
 
+    const info = cleanInfo(parsed.info)
+    const prevFacts = call.extracted_facts && typeof call.extracted_facts === 'object' ? call.extracted_facts : {}
     const { error } = await admin
       .from('voice_calls')
-      .update({ summary, interest_level: interest, next_action: nextAction, updated_at: new Date().toISOString() })
+      .update({
+        summary,
+        interest_level: interest,
+        next_action: nextAction,
+        ...(info ? { extracted_facts: { ...prevFacts, call_info: info } } : {}),
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', callId)
       .is('summary', null)
     if (error) {
