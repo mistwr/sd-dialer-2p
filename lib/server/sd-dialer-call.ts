@@ -7,6 +7,7 @@ import {
 } from '@/lib/server/sd-dialer-livekit'
 import { startCallRecording } from '@/lib/server/voice-call-recording'
 import { hangupIfVoicemail } from '@/lib/server/voicemail-detect'
+import { buildSalesCatalog } from '@/lib/server/sales-catalog'
 import { applyCallOutcome, isOptedOut } from '@/lib/server/voice-call-outcome'
 
 // Lógica comum para iniciar uma chamada de IA (usada pela app SD Dialer e pelo LUMIN Comando).
@@ -138,6 +139,8 @@ export async function startOutboundCall(
     : 'lumin-telecom'
 
   let leadId = ''
+  let leadCampanhaId: string | null = null
+  let leadOperador: string | null = null
   let name = String(body.name || '').trim().slice(0, 120)
   let phone = ''
 
@@ -157,6 +160,8 @@ export async function startOutboundCall(
     }
 
     leadId = String(lead.id)
+    leadCampanhaId = lead.campanha_id ? String(lead.campanha_id) : null
+    leadOperador = lead.operador ? String(lead.operador) : null
     name = String(lead.nome || name || 'Contacto').trim().slice(0, 120)
     phone = String(lead.telefone)
   } else {
@@ -248,7 +253,12 @@ export async function startOutboundCall(
   roomName = 'sd-dialer-' + callId
   sipIdentity = 'sip-' + callId
   const source = body.lead_id ? 'sd-dialer' : 'sd-dialer-manual'
-  const agentProfile = buildAgentProfile(agentId, companyName, { ...((savedAgent?.config || {}) as Record<string, unknown>), ...(options.profileOverrides || {}) })
+  const agentProfile: Record<string, any> = buildAgentProfile(agentId, companyName, { ...((savedAgent?.config || {}) as Record<string, unknown>), ...(options.profileOverrides || {}) })
+  if (agentId === 'lumin-telecom') {
+    // O robot consulta o CRM: campanha da lead, pacotes/preços, guião e objeções da empresa.
+    const salesCatalog = await buildSalesCatalog(admin, String(profile.company_id), { campanhaId: leadCampanhaId, operadorAtual: leadOperador })
+    if (salesCatalog) agentProfile.notes = String(agentProfile.notes || '') + '\n' + salesCatalog
+  }
   const metadata = {
     mode: 'outbound',
     callId,
