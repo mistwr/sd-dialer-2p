@@ -135,13 +135,18 @@ export const leadService = {
     if (error) throw error
     return data as Lead
   },
-  async getAssigned(userId: string, maxTotal = 1000, zona = '') {
+  async getAssigned(userId: string, maxTotal = 1000, zona = '', busca = '') {
     const sb = createClient()
     // Filtro de zona feito na base de dados (sobre TODAS as leads do parceiro),
     // para nao depender de a lead estar entre as primeiras 1000 carregadas.
     const zonaLimpa = zona.replace(/[%,()*\\]/g, ' ').replace(/\s+/g, ' ').trim()
     const zonaOr = zonaLimpa.length >= 2
       ? `localidade.ilike.%${zonaLimpa}%,morada.ilike.%${zonaLimpa}%,codigo_postal.ilike.%${zonaLimpa}%`
+      : ''
+    // Pesquisa livre (nome, telefone, localidade, NIF) tambem na base de dados.
+    const buscaLimpa = busca.replace(/[%,()*\\]/g, ' ').replace(/\s+/g, ' ').trim()
+    const buscaOr = buscaLimpa.length >= 2
+      ? `nome.ilike.%${buscaLimpa}%,telefone.ilike.%${buscaLimpa}%,localidade.ilike.%${buscaLimpa}%,custom_fields->>nif.ilike.%${buscaLimpa}%`
       : ''
     const PAGE = 1000
     // Não descarrega 10k/50k leads de uma vez para o browser. As leads já
@@ -154,6 +159,7 @@ export const leadService = {
       .eq('assigned_to', userId)
       .neq('status', 'novo')
     if (zonaOr) qTrab = qTrab.or(zonaOr)
+    if (buscaOr) qTrab = qTrab.or(buscaOr)
     const { data: trabalhadas, error: errT } = await qTrab
       .order('priority', { ascending: false })
       .order('created_at', { ascending: true })
@@ -171,6 +177,7 @@ export const leadService = {
         .eq('assigned_to', userId)
         .eq('status', 'novo')
       if (zonaOr) qNovas = qNovas.or(zonaOr)
+      if (buscaOr) qNovas = qNovas.or(buscaOr)
       const { data, error } = await qNovas
         .order('priority', { ascending: false })
         .order('created_at', { ascending: true })
