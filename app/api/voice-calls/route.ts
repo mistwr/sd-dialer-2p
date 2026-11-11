@@ -177,6 +177,7 @@ export async function GET(req: NextRequest) {
       calls: (calls ?? []).map(({ recording_url, extracted_facts, ...call }) => ({
         ...call,
         ai_sale: pickAiSale(extracted_facts),
+        call_info: extracted_facts && typeof extracted_facts === 'object' && typeof (extracted_facts as any).call_info === 'object' ? (extracted_facts as any).call_info : null,
         has_recording: typeof recording_url === 'string' && recording_url.startsWith('voice-recordings/'),
         transcripts: transcriptsByCall.get(call.id) ?? [],
       })),
