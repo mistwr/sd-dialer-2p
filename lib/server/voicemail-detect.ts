@@ -84,9 +84,9 @@ export async function hangupIfVoicemail(
     const hasClient = !!lines?.some((l: any) => String(l.speaker) !== 'agent')
     const lastAgent = lines?.find((l: any) => String(l.speaker) === 'agent')
     const silent = !hasClient && !!lastAgent && Date.now() - new Date(lastAgent.spoken_at).getTime() > 25_000
-    // Nem uma linha transcrita 45 s depois de atender: o robot nem chegou a falar (gravador mudo).
+    // Nem uma linha transcrita 35 s depois de atender: o robot nem chegou a falar (gravador mudo).
     const startedMs = new Date(call.started_at || call.created_at || 0).getTime()
-    const noSpeech = (lines?.length ?? 0) === 0 && startedMs > 0 && Date.now() - startedMs > 45_000
+    const noSpeech = (lines?.length ?? 0) === 0 && startedMs > 0 && Date.now() - startedMs > 35_000
     if (!vmPhrase && !silent && !noSpeech) return false
 
     // 1) Desliga o telemóvel do cliente (participante SIP) e 2) fecha a sala (termina o agente).
