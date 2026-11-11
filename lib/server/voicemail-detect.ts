@@ -25,6 +25,9 @@ const CLIENT_VOICEMAIL = new RegExp(
     'voicemail',
     'atendimento autom[áa]tico',
     'fora da [áa]rea de cobertura',
+    '(marque|prima|digite) (um|dois|tr[êe]s|quatro|[1-9])\\b',
+    'para (ouvir|gravar|enviar|regravar|apagar)\\b.*(marque|prima)',
+    'mensagem autom[áa]tica',
   ].join('|'),
   'i',
 )
@@ -42,6 +45,10 @@ const AGENT_VOICEMAIL = new RegExp(
     'sem deixar mensagem',
     'n[ãa]o deixarei',
     'n[ãa]o consigo (marcar|premir|interagir|deixar)',
+    'entrou (num|em um) menu',
+    '(atendeu|ter atendido) (uma )?(mensagem|gravador|menu)',
+    'mensagem (autom[áa]tica|gravada)',
+    'parece (que )?(ser )?(um )?(menu|gravador|atendimento autom)',
   ].join('|'),
   'i',
 )
@@ -77,7 +84,10 @@ export async function hangupIfVoicemail(
     const hasClient = !!lines?.some((l: any) => String(l.speaker) !== 'agent')
     const lastAgent = lines?.find((l: any) => String(l.speaker) === 'agent')
     const silent = !hasClient && !!lastAgent && Date.now() - new Date(lastAgent.spoken_at).getTime() > 25_000
-    if (!vmPhrase && !silent) return false
+    // Nem uma linha transcrita 45 s depois de atender: o robot nem chegou a falar (gravador mudo).
+    const startedMs = new Date(call.started_at || call.created_at || 0).getTime()
+    const noSpeech = (lines?.length ?? 0) === 0 && startedMs > 0 && Date.now() - startedMs > 45_000
+    if (!vmPhrase && !silent && !noSpeech) return false
 
     // 1) Desliga o telemóvel do cliente (participante SIP) e 2) fecha a sala (termina o agente).
     try {
