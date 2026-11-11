@@ -64,6 +64,8 @@ export async function buildSalesCatalog(
     const hoje = new Date().toISOString().slice(0, 10)
     const pacotes: string[] = []
     for (const t of tarifas) {
+      // O robot não propõe DIGI (decisão da empresa).
+      if (/digi/i.test(String(t.operador || ''))) continue
       let d: any = {}
       try {
         d = typeof t.detalhes === 'string' ? JSON.parse(t.detalhes) : t.detalhes || {}
@@ -87,7 +89,7 @@ export async function buildSalesCatalog(
     const verificado = clip(tarifas[0]?.fonte, 60)
     parts.push(
       'COMO APRESENTAR O PREÇO: só depois de saberes a operadora e o valor atual do cliente, propõe UM pacote da lista acima (o que melhor encaixa no que ele tem: com ou sem telemóveis) e diz o preço exato dessa linha com o nome da operadora dessa linha. ' +
-        'O pacote tem de custar MENOS do que o cliente paga hoje: se o escolhido for igual ou mais caro, não o apresentes e escolhe outro mais barato da lista que encaixe; se nenhum for mais barato, diz que neste momento não encontras poupança. Nunca uses preços de exemplo nem de outra operadora. Compara com contas simples entre o valor que ele disse e o preço da linha escolhida. Não prometas poupança total, fidelização ou condições que não estejam aqui' +
+        'O pacote tem de custar MENOS do que o cliente paga hoje: se o escolhido for igual ou mais caro, não o apresentes e escolhe outro mais barato da lista que encaixe; se nenhum for mais barato, diz que neste momento não encontras poupança. Nunca propões DIGI, mesmo que o cliente seja de outra operadora ou pergunte por ela. Nunca uses preços de exemplo nem de outra operadora. Compara com contas simples entre o valor que ele disse e o preço da linha escolhida. Não prometas poupança total, fidelização ou condições que não estejam aqui' +
         (verificado ? ' (preços: ' + verificado + ')' : '') +
         '. O valor final é confirmado no link de adesão que o cliente recebe.',
     )
