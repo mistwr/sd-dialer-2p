@@ -7,7 +7,7 @@ import {
 } from '@/lib/server/sd-dialer-livekit'
 import { startCallRecording } from '@/lib/server/voice-call-recording'
 import { hangupIfVoicemail } from '@/lib/server/voicemail-detect'
-import { isOptedOut } from '@/lib/server/voice-call-outcome'
+import { applyCallOutcome, isOptedOut } from '@/lib/server/voice-call-outcome'
 
 // Lógica comum para iniciar uma chamada de IA (usada pela app SD Dialer e pelo LUMIN Comando).
 
@@ -81,6 +81,15 @@ export async function reconcileCall(admin: any, call: { id: string; status?: str
     return 'active'
   }
   if (status === 'active' && (!roomExists || !sipStatus || sipStatus === 'hangup')) {
+    // Sem uma única frase transcrita = ninguém atendeu (toque até ao limite). Não conta minutos.
+    const { count: lines } = await admin.from('voice_call_transcripts').select('id', { count: 'exact', head: true }).eq('call_id', call.id)
+    if (!lines) {
+      await admin.from('voice_calls').update({
+        status: 'failed', error_message: 'Não atendeu.', ended_at: now, duration_seconds: 0, updated_at: now,
+      }).eq('id', call.id).is('ended_at', null)
+      await applyCallOutcome(admin, call.id, { noAnswer: true })
+      return 'failed'
+    }
     const began = new Date(call.started_at || call.created_at || now).getTime()
     await admin.from('voice_calls').update({
       status: 'answered',

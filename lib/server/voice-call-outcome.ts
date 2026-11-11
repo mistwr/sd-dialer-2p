@@ -18,7 +18,7 @@ const STATUS_BY_INTEREST: Record<string, string> = {
 export async function applyCallOutcome(
   admin: any,
   callId: string,
-  opts: { doNotCall?: boolean } = {},
+  opts: { doNotCall?: boolean; noAnswer?: boolean } = {},
 ): Promise<void> {
   try {
     const { data: call } = await admin
@@ -46,7 +46,7 @@ export async function applyCallOutcome(
     }
 
     if (!call.lead_id) return
-    const target = opts.doNotCall ? 'nao_interessado' : STATUS_BY_INTEREST[String(call.interest_level || '')]
+    const target = opts.doNotCall ? 'nao_interessado' : opts.noAnswer ? 'nao_atende' : STATUS_BY_INTEREST[String(call.interest_level || '')]
     if (!target) return
 
     const { data: lead } = await admin.from('leads').select('id,status').eq('id', call.lead_id).maybeSingle()
