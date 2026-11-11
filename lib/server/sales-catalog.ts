@@ -4,7 +4,7 @@
 // da chamada. Não toca no motor de voz (STT, LLM, TTS, VAD) nem na transcrição.
 // Nunca lança erro: sem dados, devolve '' e a chamada corre como antes.
 
-const MAX_BLOCK = 12500
+const MAX_BLOCK = 16000
 
 function clip(value: unknown, max: number): string {
   return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max)
@@ -117,6 +117,13 @@ export async function buildSalesCatalog(
     } catch {
       // sem propostas montadas: segue com a lista
     }
+    parts.push(
+      'REGRAS DE PROPOSTA E FECHO (têm prioridade sobre o resto): ' +
+        '(a) Só propões com os preços da lista ou das PROPOSTAS MONTADAS; nunca digas um valor que não esteja lá. Se o cliente paga X e o teu total não for claramente mais barato (pelo menos uns 5 euros a menos), escolhe outro operador da lista ou monta 3P + cartões; o cliente nunca é da mesma operadora que propões. Com telemóveis, usa sempre as PROPOSTAS MONTADAS (3P + cartões de 5 €). ' +
+        '(b) Só pedes o email DEPOIS de o cliente dizer claramente que aceita ("sim", "avançamos", "pode ser"). Nunca peças o email na mesma frase em que dás o preço. ' +
+        '(c) Depois de ele aceitar o telecom, antes do email, se ainda não ofereceste a energia, oferece-a. Se ele já te disse o que paga de luz, usa-o: "paga cerca de X por mês de luz; o consultor vê se consegue baixar". ' +
+        '(d) NUNCA te despeças com "boa noite" nem digas "não avanço com o pedido" enquanto o cliente continuar a falar ou não tiver recusado. Se não conseguires apanhar o email à 2.ª tentativa, não insistas: diz "Sem problema, o consultor liga-lhe e trata disso consigo; amanhã de manhã ou à tarde?" e agenda com schedule_follow_up. Se o cliente voltar a falar depois, continua a ajudá-lo com simpatia.',
+    )
     const verificado = clip(tarifas[0]?.fonte, 60)
     parts.push(
       'COMO APRESENTAR O PREÇO: só depois de saberes a operadora e o valor atual do cliente, propõe UM pacote da lista acima (o que melhor encaixa no que ele tem: com ou sem telemóveis) e diz o preço exato dessa linha com o nome da operadora dessa linha. ' +
