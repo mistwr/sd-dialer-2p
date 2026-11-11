@@ -92,6 +92,31 @@ export async function buildSalesCatalog(
         'Total = preço da linha do 3P + 5 € x número de cartões (confirma quantos telemóveis tem). Diz o total mensal, a operadora do 3P e que os cartões são low-cost a 5 € cada. Há quase sempre solução mais barata assim: se nem assim ficar mais barato, não digas que não há: marca a chamada do consultor. ' +
         'Se o cliente paga um valor baixo, MENOR do que os preços de lista: procura a solução mais barata possível, em TODAS as operadoras (MEO, NOS, Vodafone): usa o 3P mais barato e o preço com desconto que vem no campo nota da linha (ex.: "com desconto de adesão fica X euros"), junta cartão low-cost só se ele tiver telemóveis, e compara o total com o que ele paga. NUNCA digas ao cliente que não há nada mais barato nem que não encontras poupança: em caso de dúvida, ou se nada ficar mais barato, diz que o consultor consegue ver condições melhores e agenda a chamada do consultor (dia e hora, com schedule_follow_up).',
     )
+    // Totais exatos 3P + cartões low-cost por operadora (o robot não faz contas de cabeça nem inventa preços).
+    try {
+      const melhor3p: Record<string, number> = {}
+      for (const t of tarifas) {
+        const nome = String(t.nome_pacote || '')
+        const op = String(t.operador || '')
+        if (/digi/i.test(op) || !/\(3P\)|fibra3/i.test(nome) || /2\s*Gbps/i.test(nome)) continue
+        let d: any = {}
+        try { d = typeof t.detalhes === 'string' ? JSON.parse(t.detalhes) : t.detalhes || {} } catch { d = {} }
+        if (d.valido_ate && String(d.valido_ate) < hoje) continue
+        const m = /PREÇO A DIZER AO CLIENTE:\s*([\d]+[,.]?\d*)/i.exec(String(d.nota || ''))
+        const preco = m ? Number(m[1].replace(',', '.')) : Number(t.preco_mensal)
+        if (Number.isFinite(preco) && (melhor3p[op] === undefined || preco < melhor3p[op])) melhor3p[op] = preco
+      }
+      const linhas = Object.entries(melhor3p).map(([op, p3]) =>
+        '- ' + clip(op, 20) + ' 3P ' + euro(p3) + ' → com 1 cartão ' + euro(p3 + 5) + '; 2 cartões ' + euro(p3 + 10) + '; 3 cartões ' + euro(p3 + 15) + '; 4 cartões ' + euro(p3 + 20),
+      )
+      if (linhas.length) {
+        parts.push(
+          'PROPOSTAS MONTADAS (3P + cartões low-cost de 5 €): usa ESTES totais exatos quando o cliente tem telemóveis; nunca inventes um total diferente (diz sempre "operadora X por Y euros por mês, com internet, TV e N cartões a 5 euros cada"):\n' + linhas.join('\n'),
+        )
+      }
+    } catch {
+      // sem propostas montadas: segue com a lista
+    }
     const verificado = clip(tarifas[0]?.fonte, 60)
     parts.push(
       'COMO APRESENTAR O PREÇO: só depois de saberes a operadora e o valor atual do cliente, propõe UM pacote da lista acima (o que melhor encaixa no que ele tem: com ou sem telemóveis) e diz o preço exato dessa linha com o nome da operadora dessa linha. ' +
@@ -178,4 +203,4 @@ export const SALE_LINK_CLOSING =
   '1) Diz que vais enviar já uma mensagem com o link para confirmar os dados e assinar, e que demora cerca de 2 minutos. ' +
   '2) Pergunta: "Qual é o melhor email para lhe enviar também?" Quando disser, repete o email devagar, por extenso (por exemplo "joao ponto silva arroba gmail ponto com") e pergunta "Está correto?". Se corrigir, repete outra vez. Se não tiver email, não faz mal: segue só por SMS. ' +
   '3) Diz: "Perfeito, vai receber a mensagem no telemóvel e no email dentro de alguns minutos. Quando assinar fica tudo tratado. Tenha à mão o cartão de cidadão e uma fatura." ' +
-  '4) Despede-te com simpatia. NÃO peças NIF, morada nem dados de pagamento. Se a pessoa não quiser receber o link, volta ao fecho normal com o consultor.'
+  '4) ANTES de te despedires, se o cliente ainda não falou de energia, pergunta uma vez: "Aproveitando, a luz e o gás também lhe podem sair mais baratos. Quer que o consultor veja isso sem compromisso?" (usa as regras de energia acima; se não quiser, aceita e passa ao ponto 5). 5) Despede-te com simpatia. NÃO peças NIF, morada nem dados de pagamento. Se a pessoa não quiser receber o link, volta ao fecho normal com o consultor.'
