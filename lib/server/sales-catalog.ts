@@ -4,7 +4,7 @@
 // da chamada. Não toca no motor de voz (STT, LLM, TTS, VAD) nem na transcrição.
 // Nunca lança erro: sem dados, devolve '' e a chamada corre como antes.
 
-const MAX_BLOCK = 9500
+const MAX_BLOCK = 10800
 
 function clip(value: unknown, max: number): string {
   return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max)
@@ -115,6 +115,34 @@ export async function buildSalesCatalog(
         'RESPOSTAS A OBJEÇÕES (do método da empresa; usa o sentido, em frases curtas):\n' +
           objecoes.map((o) => '- ' + clip(o.objecao, 70) + ' → ' + clip(o.resposta_sugerida, 330)).join('\n'),
       )
+    }
+
+    // Energia (luz/gás): campanhas das operadoras de energia importadas do CRM. Sem preços (estão nos PDFs):
+    // o robot não inventa tarifas, abre a porta e passa ao consultor.
+    try {
+      const { data: camps } = await admin
+        .from('campanhas_operadoras')
+        .select('title,operator,description,service_type')
+        .eq('company_id', companyId)
+        .eq('status', 'ativa')
+      const energia = (camps || []).filter((c: any) => c.service_type === 'energia' || /energia/i.test(String(c.title)))
+      if (energia.length) {
+        const lista = energia
+          .map((c: any) => '- ' + clip(c.operator, 20) + ': ' + clip(c.title, 50) + (c.description ? ' — ' + clip(c.description, 110) : ''))
+          .join('\n')
+        parts.push(
+          'VENDER ENERGIA TAMBÉM (luz e gás): além de telecomunicações, a empresa vende luz e gás. Usa isto em 3 situações: ' +
+            '(1) o cliente não quer mudar de telecom, já paga pouco, está fidelizado e não há solução, ou recusa o telecom (antes de desistires, depois da escada do não ao sim: "e na luz e no gás, já comparou? Muita gente poupa aí e é a mesma coisa, sem compromisso"); ' +
+            '(2) o cliente aceita telecom: no fim, "aproveitando, a luz e o gás também?"; (3) o cliente fala de luz, gás, fatura de energia ou painéis. Podes propor telecom e energia no mesmo contacto. ' +
+            'Pergunta só: com que empresa tem a luz, quanto paga por mês mais ou menos, se tem gás. Não peças NIF, morada, CPE, contador nem dados pessoais. ' +
+            'NÃO digas preços, tarifas nem percentagens de desconto de energia (não os tens): diz que a empresa tem campanhas das principais comercializadoras e que o consultor faz a simulação com a fatura dele. Nunca prometas poupança concreta. ' +
+            'Se aceitar, agenda a chamada do consultor (dia e hora) com schedule_follow_up e escreve no motivo que é ENERGIA (luz/gás) e a empresa e valor que ele disse. Não envies link de adesão para energia. ' +
+            'Se disser que não, aplica a mesma escada de objeções (poupar sem mudar nada no dia a dia, sem compromisso, só uma simulação), no máximo 2 tentativas, e termina com simpatia. Respeita sempre "não me liguem mais".\n' +
+            'CAMPANHAS DE ENERGIA ATIVAS (só para teu conhecimento; menciona o nome da comercializadora se ajudar):\n' + lista,
+        )
+      }
+    } catch {
+      // sem energia: segue só telecom
     }
 
     return parts.join('\n').slice(0, MAX_BLOCK)
