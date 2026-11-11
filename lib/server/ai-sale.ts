@@ -154,6 +154,10 @@ export async function processAiSale(admin: any, callId: string, sale: SaleExtrac
       .eq('company_id', call.company_id)
       .eq('segmento', 'telecom')
     const operador = String(extracted.operator || '').toLowerCase()
+    if (/digi/.test(operador)) {
+      await save({ status: 'needs_review', reason: 'operadora_nao_permitida', extracted })
+      return
+    }
     const price = extracted.monthly_price
     const match = (catalog || []).find((row: any) => {
       const sameOperator = operador && String(row.operador || '').toLowerCase().includes(operador.slice(0, 4))
