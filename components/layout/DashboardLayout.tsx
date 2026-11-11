@@ -38,6 +38,7 @@ const NAV: NavItem[] = [
   // Vendas
   { section: 'Vendas', label: 'Vendas',        href: '/parceiro/vendas', icon: ShoppingBag, roles: ['parceiro', 'admin', 'supervisor'] },
   { section: 'Vendas', label: 'Fidelizações',  href: '/fidelizacoes',    icon: Calendar,    roles: ['parceiro', 'admin', 'supervisor'] },
+  { section: 'Vendas', label: 'Campanhas operadoras', href: '/campanhas-operadoras', icon: Megaphone, roles: ['parceiro', 'admin', 'supervisor'] },
   // Gestão da equipa
   { section: 'Gestão', label: 'Base de leads',    href: '/admin/leads',           icon: PhoneCall, roles: ['admin', 'supervisor'] },
   { section: 'Gestão', label: 'Distribuição',     href: '/admin/distribuicao',    icon: Shuffle,   roles: ['admin', 'supervisor'] },
