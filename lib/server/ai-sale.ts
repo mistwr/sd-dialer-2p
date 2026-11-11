@@ -229,7 +229,6 @@ export async function processAiSale(admin: any, callId: string, sale: SaleExtrac
       pacote: String(match.nome_pacote).split(' - ')[0] + (String(match.nome_pacote).includes(' - ') ? ' · ' + String(match.nome_pacote).split(' - ').slice(1).join(' - ') : ''),
       precoMensal: price,
       link: appOrigin() + '/venda/assinar#' + token,
-      consultor: seller.full_name || null,
     }
     const [email, sms, whatsapp] = await Promise.all([
       extracted.email ? sendEmail(extracted.email, buildSaleEmail(input)) : Promise.resolve('skipped:sem_email'),
