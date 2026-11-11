@@ -60,7 +60,7 @@ async function sendEmail(to: string, mail: { subject: string; html: string; text
       body: JSON.stringify({
         from: process.env.SALES_FROM_EMAIL || 'Compara+ <vendas@luminai.pt>',
         to: [to],
-        ...(process.env.SALES_REPLY_TO ? { reply_to: process.env.SALES_REPLY_TO } : {}),
+        reply_to: process.env.SALES_REPLY_TO || 'misterluminai@gmail.com',
         subject: mail.subject,
         html: mail.html,
         text: mail.text,
