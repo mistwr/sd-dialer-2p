@@ -26,6 +26,7 @@ type VoiceCall = {
   interest_level?: string | null
   next_action?: string | null
   has_recording?: boolean
+  ai_sale?: { status: string; operator: string | null; package: string | null; monthly_price: number | null; email: string | null; delivery: Record<string, any> | null } | null
   transcripts: VoiceTranscriptLine[]
 }
 
@@ -280,6 +281,17 @@ export default function VoiceCallHistory({ leadId }: { leadId?: string } = {}) {
                   )}
                   {expanded ? <ChevronUp size={16} color="#64748B" /> : <ChevronDown size={16} color="#64748B" />}
                 </button>
+                {call.ai_sale && (
+                  <div style={{ margin: '0 14px 8px', padding: '8px 10px', borderRadius: 8, fontSize: 12.5, lineHeight: 1.5,
+                    background: call.ai_sale.status === 'sent' ? '#DCFCE7' : call.ai_sale.status === 'delivery_failed' ? '#FEE2E2' : '#FEF9C3',
+                    color: '#1E293B' }}>
+                    <strong>Venda do robot:</strong>{' '}
+                    {({ sent: 'pedido enviado ao cliente', delivery_failed: 'registada, mas o envio falhou', needs_review: 'a rever (dados incompletos)', shadow: 'simulação (envio desligado para este número)', skipped: 'não enviada' } as Record<string, string>)[call.ai_sale.status] || call.ai_sale.status}
+                    {[call.ai_sale.operator, call.ai_sale.package].filter(Boolean).length > 0 && ' · ' + [call.ai_sale.operator, call.ai_sale.package].filter(Boolean).join(' ')}
+                    {call.ai_sale.monthly_price != null && ' · ' + call.ai_sale.monthly_price.toFixed(2).replace('.', ',') + ' €/mês'}
+                    {call.ai_sale.email && ' · ' + call.ai_sale.email}
+                  </div>
+                )}
                 {call.summary && (
                   <div style={{ padding: '0 14px 12px', background: expanded ? '#F8FAFC' : '#fff' }}>
                     <p style={{ margin: 0, color: '#334155', fontSize: 12.5, lineHeight: 1.5 }}>

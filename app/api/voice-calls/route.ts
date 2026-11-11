@@ -26,6 +26,20 @@ async function resolveUserId(req: NextRequest): Promise<string | null> {
   return data?.user?.id ?? null
 }
 
+function pickAiSale(facts: any) {
+  const s = facts && typeof facts === 'object' ? facts.ai_sale : null
+  if (!s || typeof s !== 'object') return null
+  const e = s.extracted || {}
+  return {
+    status: String(s.status || ''),
+    operator: e.operator ?? null,
+    package: e.package ?? null,
+    monthly_price: typeof e.monthly_price === 'number' ? e.monthly_price : null,
+    email: e.email ?? null,
+    delivery: s.delivery && typeof s.delivery === 'object' ? s.delivery : null,
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const userId = await resolveUserId(req)
@@ -71,7 +85,7 @@ export async function GET(req: NextRequest) {
     let query = admin
       .from('voice_calls')
       .select(
-        'id, company_id, lead_id, source, client_name, phone_number, status, duration_seconds, recording_enabled, transcript_consent_at, transcript_consent_status, created_by, started_at, ended_at, created_at, summary, interest_level, next_action, recording_url',
+        'id, company_id, lead_id, source, client_name, phone_number, status, duration_seconds, recording_enabled, transcript_consent_at, transcript_consent_status, created_by, started_at, ended_at, created_at, summary, interest_level, next_action, recording_url, extracted_facts',
         { count: 'exact' }
       )
       .in('source', ['sd-dialer', 'sd-dialer-manual'])
@@ -160,8 +174,9 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({
-      calls: (calls ?? []).map(({ recording_url, ...call }) => ({
+      calls: (calls ?? []).map(({ recording_url, extracted_facts, ...call }) => ({
         ...call,
+        ai_sale: pickAiSale(extracted_facts),
         has_recording: typeof recording_url === 'string' && recording_url.startsWith('voice-recordings/'),
         transcripts: transcriptsByCall.get(call.id) ?? [],
       })),
