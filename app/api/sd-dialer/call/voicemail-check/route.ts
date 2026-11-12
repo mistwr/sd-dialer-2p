@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     const admin = createAdminClient()
     const { data: call } = await admin
       .from('voice_calls')
-      .select('id,livekit_room,started_at,created_at,ended_at')
+      .select('id,livekit_room,started_at,created_at,ended_at,status')
       .eq('id', callId)
       .maybeSingle()
     if (!call || call.ended_at || !call.livekit_room) return NextResponse.json({ ok: true, hungUp: false })
