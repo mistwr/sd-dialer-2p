@@ -51,8 +51,69 @@ type VoiceCall = {
   next_action?: string | null
   has_recording?: boolean
   call_info?: Record<string, string | number | null> | null
+  review?: { decision: string; by: string | null; at: string | null; note: string | null } | null
   ai_sale?: { status: string; operator: string | null; package: string | null; monthly_price: number | null; email: string | null; delivery: Record<string, any> | null } | null
   transcripts: VoiceTranscriptLine[]
+}
+
+const REVIEW_LABELS: Record<string, string> = {
+  voltar_a_ligar: 'Voltar a ligar',
+  passar_consultor: 'Passado ao consultor',
+  nao_ligar: 'Não ligar mais',
+  ok: 'Visto, está certo',
+}
+
+function needsReview(call: VoiceCall): boolean {
+  if (call.ai_sale) return false
+  const i = call.interest_level
+  return !i || i === 'indeterminado' || i === 'correio_voz' || call.status === 'failed'
+}
+
+function ReviewBar({ call, onDone }: { call: VoiceCall; onDone: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  async function send(decision: string) {
+    setBusy(true)
+    setErr('')
+    try {
+      const r = await fetch('/api/voice-calls/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ call_id: call.id, decision }),
+      })
+      if (!r.ok) throw new Error('falhou')
+      onDone()
+    } catch {
+      setErr('Não foi possível guardar. Tenta outra vez.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const btn = (bg: string): React.CSSProperties => ({
+    border: 0, borderRadius: 8, background: bg, color: '#fff', padding: '6px 10px', fontSize: 12, fontWeight: 700, cursor: busy ? 'wait' : 'pointer',
+  })
+  return (
+    <div style={{ margin: '0 14px 8px', padding: '8px 10px', borderRadius: 8, background: '#F1F5F9', fontSize: 12.5, color: '#1E293B' }}>
+      {call.review ? (
+        <span>
+          <strong>Validado:</strong> {REVIEW_LABELS[call.review.decision] || call.review.decision}
+          {call.review.by ? ' · ' + call.review.by : ''}
+          {call.review.at ? ' · ' + new Date(call.review.at).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}
+          {' '}
+          <button type="button" disabled={busy} onClick={() => send('voltar_a_ligar')} style={{ ...btn('#64748B'), marginLeft: 6 }}>Mudar</button>
+        </span>
+      ) : (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <strong>Validar depois de ver a transcrição:</strong>
+          <button type="button" disabled={busy} onClick={() => send('voltar_a_ligar')} style={btn('#2563EB')}>Voltar a ligar</button>
+          <button type="button" disabled={busy} onClick={() => send('passar_consultor')} style={btn('#16A34A')}>Passar ao consultor</button>
+          <button type="button" disabled={busy} onClick={() => send('nao_ligar')} style={btn('#B91C1C')}>Não ligar mais</button>
+          <button type="button" disabled={busy} onClick={() => send('ok')} style={btn('#64748B')}>Está certo</button>
+        </div>
+      )}
+      {err && <div style={{ color: '#B91C1C', marginTop: 4 }}>{err}</div>}
+    </div>
+  )
 }
 
 const INTEREST_LABELS: Record<string, { label: string; color: string; bg: string }> = {
@@ -405,6 +466,9 @@ export default function VoiceCallHistory({ leadId }: { leadId?: string } = {}) {
                     {call.ai_sale.monthly_price != null && ' · ' + call.ai_sale.monthly_price.toFixed(2).replace('.', ',') + ' €/mês'}
                     {call.ai_sale.email && ' · ' + call.ai_sale.email}
                   </div>
+                )}
+                {needsReview(call) && (
+                  <ReviewBar call={call} onDone={() => mutate()} />
                 )}
                 {call.summary && (
                   <div style={{ padding: '0 14px 12px', background: expanded ? '#F8FAFC' : '#fff' }}>

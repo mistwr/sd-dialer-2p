@@ -40,6 +40,12 @@ function pickAiSale(facts: any) {
   }
 }
 
+function pickReview(facts: any) {
+  const r = facts && typeof facts === 'object' ? facts.review : null
+  if (!r || typeof r !== 'object') return null
+  return { decision: String(r.decision || ''), by: r.by ? String(r.by) : null, at: r.at ? String(r.at) : null, note: r.note ? String(r.note) : null }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const userId = await resolveUserId(req)
@@ -202,6 +208,7 @@ export async function GET(req: NextRequest) {
       calls: (calls ?? []).map(({ recording_url, extracted_facts, ...call }: any) => ({
         ...call,
         ai_sale: pickAiSale(extracted_facts),
+        review: pickReview(extracted_facts),
         call_info: extracted_facts && typeof extracted_facts === 'object' && typeof (extracted_facts as any).call_info === 'object' ? (extracted_facts as any).call_info : null,
         has_recording: typeof recording_url === 'string' && recording_url.startsWith('voice-recordings/'),
         transcripts: transcriptsByCall.get(call.id) ?? [],
