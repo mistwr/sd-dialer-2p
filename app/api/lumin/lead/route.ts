@@ -84,6 +84,7 @@ export async function POST(req: NextRequest) {
     const empresa = clean(body.empresa, 160)
     const email = clean(body.email, 180)
     const telefone = clean(body.telefone, 40)
+    const consentimentoRgpd = body.consentimento_rgpd === true
     const equipa = clean(body.equipa, 80)
     const leadsMes = clean(body.leads, 80)
     const problema = clean(body.problema, 180)
@@ -97,8 +98,8 @@ export async function POST(req: NextRequest) {
     const utmCampaign = clean(utmParams.get('utm_campaign'), 160)
     const utmContent = clean(utmParams.get('utm_content'), 160)
 
-    if (!nome || !telefone) {
-      return NextResponse.json({ error: 'nome e telefone required' }, { status: 400, headers })
+    if (!nome || !telefone || !consentimentoRgpd) {
+      return NextResponse.json({ error: 'nome, telefone and consentimento_rgpd required' }, { status: 400, headers })
     }
 
     const supabase = adminClient()
@@ -172,7 +173,9 @@ export async function POST(req: NextRequest) {
           nome,
           email,
           telefone,
-          status: 'novo',
+          origem: 'luminai.pt',
+          consentimento_rgpd: true,
+          data_consentimento: new Date().toISOString(),
           observacoes,
           custom_fields: customFields,
         })
@@ -186,6 +189,9 @@ export async function POST(req: NextRequest) {
           email,
           telefone,
           company_id: companyId,
+          origem: 'luminai.pt',
+          consentimento_rgpd: true,
+          data_consentimento: new Date().toISOString(),
           status: 'novo',
           imported_at: new Date().toISOString(),
           observacoes,
