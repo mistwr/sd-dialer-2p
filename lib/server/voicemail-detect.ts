@@ -68,7 +68,7 @@ const SIP_KIND = 3
 export async function hangupIfVoicemail(
   admin: any,
   api: any,
-  call: { id: string; livekit_room?: string | null; started_at?: string | null; created_at?: string | null },
+  call: { id: string; livekit_room?: string | null; started_at?: string | null; created_at?: string | null; status?: string | null },
 ) {
   try {
     if (!call.livekit_room) return false
@@ -85,8 +85,28 @@ export async function hangupIfVoicemail(
     const lastAgent = lines?.find((l: any) => String(l.speaker) === 'agent')
     const silent = !hasClient && !!lastAgent && Date.now() - new Date(lastAgent.spoken_at).getTime() > 25_000
     // Nem uma linha transcrita 35 s depois de atender: o robot nem chegou a falar (gravador mudo).
-    const startedMs = new Date(call.started_at || call.created_at || 0).getTime()
-    const noSpeech = (lines?.length ?? 0) === 0 && startedMs > 0 && Date.now() - startedMs > 35_000
+    // Conta só a partir do ATENDIMENTO: enquanto o telemóvel está a tocar não há fala nenhuma,
+    // e cortar aos 35 s desde a marcação desligava chamadas que ainda estavam a tocar.
+    let noSpeech = false
+    if (!vmPhrase && !silent && (lines?.length ?? 0) === 0) {
+      let sipStatus = ''
+      try {
+        const participants = await api.room.listParticipants(call.livekit_room)
+        const sip = participants.find((p: any) => Number(p.kind) === SIP_KIND || String(p.identity || '').startsWith('sip-'))
+        sipStatus = String(sip?.attributes?.['sip.callStatus'] || '')
+      } catch {
+        return false
+      }
+      if (sipStatus !== 'active') return false
+      if (String(call.status || '') !== 'active') {
+        // Acabou de ser atendida: regista a hora do atendimento e volta a verificar mais tarde.
+        const nowIso = new Date().toISOString()
+        await admin.from('voice_calls').update({ status: 'active', started_at: nowIso, updated_at: nowIso }).eq('id', call.id).is('ended_at', null)
+        return false
+      }
+      const answeredMs = new Date(call.started_at || 0).getTime()
+      noSpeech = answeredMs > 0 && Date.now() - answeredMs > 35_000
+    }
     if (!vmPhrase && !silent && !noSpeech) return false
 
     // 1) Desliga o telemóvel do cliente (participante SIP) e 2) fecha a sala (termina o agente).
