@@ -106,12 +106,14 @@ export async function buildSalesCatalog(
         const preco = m ? Number(m[1].replace(',', '.')) : Number(t.preco_mensal)
         if (Number.isFinite(preco) && (melhor3p[op] === undefined || preco < melhor3p[op])) melhor3p[op] = preco
       }
-      const linhas = Object.entries(melhor3p).map(([op, p3]) =>
-        '- ' + clip(op, 20) + ' 3P ' + euro(p3) + ' → com 1 cartão ' + euro(p3 + 5) + '; 2 cartões ' + euro(p3 + 10) + '; 3 cartões ' + euro(p3 + 15) + '; 4 cartões ' + euro(p3 + 20),
-      )
-      if (linhas.length) {
+      const porCartoes: string[] = []
+      for (let n = 1; n <= 4; n++) {
+        const ord = Object.entries(melhor3p).map(([op, p3]) => [op, p3 + 5 * n] as [string, number]).sort((a, b) => a[1] - b[1])
+        if (ord.length) porCartoes.push('- ' + n + (n === 1 ? ' cartão' : ' cartões') + ': ' + ord.map(([op, t]) => clip(op, 20) + ' ' + euro(t)).join(' < '))
+      }
+      if (porCartoes.length) {
         parts.push(
-          'PROPOSTAS MONTADAS (3P + cartões low-cost de 5 €): usa ESTES totais exatos quando o cliente tem telemóveis; nunca inventes um total diferente (diz sempre "operadora X por Y euros por mês, com internet, TV e N cartões a 5 euros cada"):\n' + linhas.join('\n'),
+          'PROPOSTA OBRIGATÓRIA QUANDO O CLIENTE TEM TELEMÓVEIS (ordenadas da mais barata para a mais cara; o total já inclui os cartões low-cost de 5 € cada): escolhe a PRIMEIRA que não seja a operadora atual do cliente e diz "[operadora] por [total] euros por mês, com internet, TV e [N] cartões a 5 euros cada". Só podes propor outro pacote do catálogo (mais caro) se o cliente recusar este ou pedir mais telemóveis/dados:\n' + porCartoes.join('\n'),
         )
       }
     } catch {
@@ -122,6 +124,7 @@ export async function buildSalesCatalog(
         '(a) Só propões com os preços da lista ou das PROPOSTAS MONTADAS; nunca digas um valor que não esteja lá. Se o cliente paga X e o teu total não for claramente mais barato (pelo menos uns 5 euros a menos), escolhe outro operador da lista ou monta 3P + cartões; o cliente nunca é da mesma operadora que propões. Com telemóveis, usa sempre as PROPOSTAS MONTADAS (3P + cartões de 5 €). ' +
         '(b) NUNCA peças email. Só fechas depois de o cliente dizer claramente que aceita ("sim", "avançamos", "pode ser"): diz que o pedido segue para este número de telemóvel e que o consultor lhe envia o link para confirmar e assinar. ' +
         '(c) Depois de ele aceitar o telecom, antes do email, se ainda não ofereceste a energia, oferece-a. Se ele já te disse o que paga de luz, usa-o: "paga cerca de X por mês de luz; o consultor vê se consegue baixar". ' +
+        '(e) Mensagem da proposta: diz o total, quanto poupa por mês e por ano (diferença x 12) e termina com UMA só pergunta, "Faz sentido avançarmos?". Não juntes "se continuar 12 meses, compensa?" nem pedidos de confirmação na mesma frase; espera pela resposta. ' +
         '(d) NUNCA te despeças com "boa noite" nem digas "não avanço com o pedido" enquanto o cliente continuar a falar ou não tiver recusado. Se o cliente voltar a falar depois de te despedires, continua a ajudá-lo com simpatia.',
     )
     const verificado = clip(tarifas[0]?.fonte, 60)
