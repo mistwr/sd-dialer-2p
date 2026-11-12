@@ -254,7 +254,10 @@ export async function startOutboundCall(
   sipIdentity = 'sip-' + callId
   const source = body.lead_id ? 'sd-dialer' : 'sd-dialer-manual'
   const agentProfile: Record<string, any> = buildAgentProfile(agentId, companyName, { ...((savedAgent?.config || {}) as Record<string, unknown>), ...(options.profileOverrides || {}) })
-  if (agentId === 'lumin-telecom') {
+  // Modo "qualificar": o robot só qualifica e marca o consultor — não recebe catálogo nem preços,
+  // para não poder propor pacotes. Voltar ao modo venda = tirar "mode" da configuração.
+  const qualifyOnly = String((savedAgent?.config as any)?.mode || '') === 'qualificar'
+  if (agentId === 'lumin-telecom' && !qualifyOnly) {
     // O robot consulta o CRM: campanha da lead, pacotes/preços, guião e objeções da empresa.
     const salesCatalog = await buildSalesCatalog(admin, String(profile.company_id), { campanhaId: leadCampanhaId, operadorAtual: leadOperador })
     if (salesCatalog) agentProfile.notes = String(agentProfile.notes || '') + '\n' + salesCatalog
