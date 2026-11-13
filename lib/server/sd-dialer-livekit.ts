@@ -220,7 +220,10 @@ export async function resolveCallerId(
     new Date(subscription.expires_at).getTime() > Date.now()
   )
   if (!authorised) throw new SdDialerError('Acesso às chamadas de IA não autorizado pelo superadministrador.', 403)
-  const systemNumber = normalizePtPhone(process.env.LUMIN_CALLER_ID || '')
+  // Vários números de saída: LUMIN_CALLER_IDS="+3519...,+3512..." (rodam ao acaso para repartir o "spam score").
+  // Se não existir, usa o LUMIN_CALLER_ID único.
+  const pool = String(process.env.LUMIN_CALLER_IDS || '').split(',').map(n => normalizePtPhone(n.trim())).filter(Boolean) as string[]
+  const systemNumber = pool.length ? pool[Math.floor(Math.random() * pool.length)] : normalizePtPhone(process.env.LUMIN_CALLER_ID || '')
   if (!systemNumber) throw new SdDialerError('O número de saída da empresa não está configurado.', 503)
   return { id: 'superuser-managed-caller-id', phoneNumber: systemNumber, usingPersonalNumber: false }
 }
