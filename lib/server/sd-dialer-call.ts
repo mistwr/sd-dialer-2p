@@ -257,6 +257,11 @@ export async function startOutboundCall(
   // Modo "qualificar": o robot só qualifica e marca o consultor — não recebe catálogo nem preços,
   // para não poder propor pacotes. Voltar ao modo venda = tirar "mode" da configuração.
   const qualifyOnly = String((savedAgent?.config as any)?.mode || '') === 'qualificar'
+  // O CRM já sabe o operador atual da lead: dá-o ao robot para confirmar em vez de depender só da transcrição
+  // (a voz transcreve "DIGI" como "Diz", "MEO" como "Mel", etc.).
+  if (leadOperador && agentId === 'lumin-telecom') {
+    agentProfile.notes = String(agentProfile.notes || '') + '\nOPERADORA ATUAL SEGUNDO O CRM: ' + leadOperador + '. Se a resposta do cliente for confusa, curta ou parecida com "' + leadOperador + '", assume que é essa e confirma só uma vez ("É da ' + leadOperador + ', certo?"). Nunca digas que não percebeste a operadora mais de uma vez.'
+  }
   if (agentId === 'lumin-telecom' && !qualifyOnly) {
     // O robot consulta o CRM: campanha da lead, pacotes/preços, guião e objeções da empresa.
     const salesCatalog = await buildSalesCatalog(admin, String(profile.company_id), { campanhaId: leadCampanhaId, operadorAtual: leadOperador })
