@@ -10,6 +10,11 @@ function isManager(profile: any) {
   return profile.is_super_admin === true || MANAGERS.has(String(profile.role))
 }
 
+// As chamadas automáticas são só para admin/supervisor/superadmin (parceiros não têm acesso).
+function assertManager(profile: any) {
+  if (!isManager(profile)) throw new SdDialerError('As chamadas automáticas são só para administradores e supervisores.', 403)
+}
+
 async function chunked<T>(ids: string[], fn: (part: string[]) => Promise<T[]>) {
   const out: T[] = []
   for (let i = 0; i < ids.length; i += 150) out.push(...(await fn(ids.slice(i, i + 150))))
@@ -19,6 +24,7 @@ async function chunked<T>(ids: string[], fn: (part: string[]) => Promise<T[]>) {
 export async function GET(request: NextRequest) {
   try {
     const { admin, user, profile } = await requireSdDialerUser(request)
+    assertManager(profile)
     let query = admin.from('call_campaigns').select('*').eq('company_id', profile.company_id).order('created_at', { ascending: false }).limit(10)
     if (!isManager(profile)) query = query.eq('created_by', user.id)
     const { data: campaigns, error } = await query
@@ -52,6 +58,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { admin, user, profile } = await requireSdDialerUser(request)
+    assertManager(profile)
     await requireVoiceCallAccess(admin, user.id, profile)
     const body = await request.json().catch(() => ({})) as any
     const name = String(body.name || '').trim().slice(0, 80) || 'Campanha ' + new Date().toLocaleDateString('pt-PT')
@@ -102,6 +109,7 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const { admin, user, profile } = await requireSdDialerUser(request)
+    assertManager(profile)
     const body = await request.json().catch(() => ({})) as any
     const action = String(body.action || '')
     const next = ({ play: 'running', pause: 'paused', stop: 'stopped' } as Record<string, string>)[action]
