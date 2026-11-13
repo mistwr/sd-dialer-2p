@@ -63,7 +63,14 @@ export async function POST(request: NextRequest) {
     const windowStart = Math.min(23, Math.max(0, Number(body.window_start ?? 9)))
     const windowEnd = Math.min(24, Math.max(windowStart + 1, Number(body.window_end ?? 21)))
 
+    const pickedIds: string[] = Array.isArray(body.lead_ids) ? body.lead_ids.map(String).slice(0, 2000) : []
     let leadsQuery = admin.from('leads').select('id,telefone').eq('company_id', profile.company_id).in('status', statuses).not('telefone', 'is', null).order('created_at', { ascending: true }).limit(limit)
+    if (pickedIds.length) leadsQuery = leadsQuery.in('id', pickedIds)
+    else {
+      if (body.campanha_id) leadsQuery = leadsQuery.eq('campanha_id', String(body.campanha_id))
+      const loc = String(body.localidade || '').trim().replace(/[%,]/g, ''); if (loc) leadsQuery = leadsQuery.ilike('localidade', '%' + loc + '%')
+      const opr = String(body.operador || '').trim().replace(/[%,]/g, ''); if (opr) leadsQuery = leadsQuery.ilike('operador', '%' + opr + '%')
+    }
     if (!isManager(profile)) leadsQuery = leadsQuery.eq('assigned_to', user.id)
     const { data: leads, error: leadsError } = await leadsQuery
     if (leadsError) throw new SdDialerError('Não foi possível escolher as leads.', 500)

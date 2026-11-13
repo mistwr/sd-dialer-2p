@@ -6,6 +6,7 @@ import { Pause, Play, Square, PhoneCall } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { PageSpinner } from "@/components/ui/Spinner";
 
+type Lead = { id: string; nome: string | null; telefone: string; status: string; localidade: string | null; operador: string | null };
 type Campaign = {
   id: string; name: string; status: "running" | "paused" | "stopped" | "done";
   concurrency: number; calls_per_hour: number; window_start: number; window_end: number;
@@ -43,6 +44,24 @@ export function CampanhasChamadasPage() {
   const [end, setEnd] = useState(20);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const [campanhaId, setCampanhaId] = useState("");
+  const [localidade, setLocalidade] = useState("");
+  const [operador, setOperador] = useState("");
+  const [texto, setTexto] = useState("");
+  const [lista, setLista] = useState<{ leads: Lead[]; total: number; campanhas: { id: string; name: string }[] } | null>(null);
+  const [picked, setPicked] = useState<string[]>([]);
+
+  async function verLeads() {
+    setBusy(true); setMsg("");
+    try {
+      const qs = new URLSearchParams({ statuses: statuses.join(","), campanha_id: campanhaId, localidade, operador, q: texto });
+      const res = await fetch("/api/campanhas-chamadas/leads?" + qs, { headers: { Authorization: "Bearer " + (await token()) } });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Erro");
+      setLista(json); setPicked([]);
+    } catch (e) { setMsg((e as Error).message); }
+    setBusy(false);
+  }
 
   async function run(fn: () => Promise<unknown>, ok?: string) {
     setBusy(true); setMsg("");
@@ -71,9 +90,28 @@ export function CampanhasChamadasPage() {
           <label>Em simultâneo<br /><select value={concurrency} onChange={e => setConcurrency(+e.target.value)} style={input}><option value={1}>1</option><option value={2}>2</option><option value={3}>3</option></select></label>
           <label>Das<br /><input type="number" value={start} min={0} max={23} onChange={e => setStart(+e.target.value)} style={{ ...input, width: 60 }} />h</label>
           <label>Às<br /><input type="number" value={end} min={1} max={24} onChange={e => setEnd(+e.target.value)} style={{ ...input, width: 60 }} />h</label>
-          <button disabled={busy} onClick={() => run(() => api("POST", { name, statuses, limit, calls_per_hour: perHour, concurrency, window_start: start, window_end: end }), "Campanha criada em pausa. Carrega em Play.")}
+          <button disabled={busy} onClick={() => run(() => api("POST", { name, statuses, limit, lead_ids: picked, campanha_id: campanhaId || undefined, localidade, operador, calls_per_hour: perHour, concurrency, window_start: start, window_end: end }), "Campanha criada em pausa. Carrega em Play.")}
             style={{ padding: "8px 14px", borderRadius: 8, background: "#0f172a", color: "#fff", border: 0 }}>Criar</button>
         </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 12, alignItems: "end", fontSize: 13 }}>
+          <label>Campanha da lead<br /><select value={campanhaId} onChange={e => setCampanhaId(e.target.value)} style={{ ...input, width: 170 }}><option value="">Todas</option>{(lista?.campanhas ?? []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+          <label>Localidade<br /><input value={localidade} onChange={e => setLocalidade(e.target.value)} placeholder="Porto" style={{ ...input, width: 120 }} /></label>
+          <label>Operador atual<br /><input value={operador} onChange={e => setOperador(e.target.value)} placeholder="MEO" style={{ ...input, width: 110 }} /></label>
+          <label>Nome ou telefone<br /><input value={texto} onChange={e => setTexto(e.target.value)} style={{ ...input, width: 140 }} /></label>
+          <button disabled={busy} onClick={verLeads} style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #0f172a" }}>Ver leads</button>
+        </div>
+        {lista && <div style={{ marginTop: 10, fontSize: 13 }}>
+          <div><strong>{lista.total}</strong> leads com estes filtros (mostro as primeiras {lista.leads.length}). {picked.length ? picked.length + " selecionadas: só estas entram." : "Sem seleção: entram as primeiras " + Math.min(limit, lista.total) + " (Máx. leads)."}
+            {" "}<button onClick={() => setPicked(picked.length === lista.leads.length ? [] : lista.leads.map(l => l.id))} style={{ textDecoration: "underline" }}>{picked.length === lista.leads.length ? "Limpar" : "Selecionar as mostradas"}</button></div>
+          <div style={{ maxHeight: 260, overflow: "auto", border: "1px solid #e2e8f0", borderRadius: 8, marginTop: 6 }}>
+            {lista.leads.map(l => (
+              <label key={l.id} style={{ display: "flex", gap: 8, padding: "4px 8px", borderBottom: "1px solid #f1f5f9" }}>
+                <input type="checkbox" checked={picked.includes(l.id)} onChange={e => setPicked(p => e.target.checked ? [...p, l.id] : p.filter(x => x !== l.id))} />
+                <span style={{ minWidth: 140 }}>{l.nome || "(sem nome)"}</span><span style={{ minWidth: 100 }}>{l.telefone}</span><span style={{ color: "#64748b" }}>{l.status}{l.localidade ? " · " + l.localidade : ""}{l.operador ? " · " + l.operador : ""}</span>
+              </label>
+            ))}
+          </div>
+        </div>}
         {concurrency > 1 && <p style={{ fontSize: 12, color: "#b45309", marginBottom: 0 }}>Chamadas em simultâneo ainda não foram testadas com carga: confirma antes que o teu Twilio/SIP permite várias linhas.</p>}
         {msg && <p style={{ fontSize: 13, marginBottom: 0 }}>{msg}</p>}
       </section>
