@@ -33,14 +33,48 @@ function Stat({ title, value, hint, tone }: { title: string; value: string; hint
   )
 }
 
-export default function AnaliseRobot({ getToken, companies }: { getToken: () => Promise<string>; companies: { id: string; name: string }[] }) {
+type QRow = { callId: string; leadId: string | null; companyId: string; name: string; phone: string; level: string; summary: string; nextAction: string; durationSeconds: number; createdAt: string; assignedTo: string | null; leadStatus: string | null; operator: string | null; currentValue: string | null; scheduled: string | null; missingFields: number }
+
+export default function AnaliseRobot({ getToken, companies, users }: { getToken: () => Promise<string>; companies: { id: string; name: string }[]; users: { id: string; full_name: string; company_id: string; status?: string }[] }) {
   const [days, setDays] = useState(14)
   const [companyId, setCompanyId] = useState('')
   const [data, setData] = useState<Analytics | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [qual, setQual] = useState<QRow[]>([])
+  const [picked, setPicked] = useState<Record<string, boolean>>({})
+  const [assignTo, setAssignTo] = useState('')
+  const [assignMsg, setAssignMsg] = useState('')
+
+  async function loadQualified() {
+    try {
+      const token = await getToken()
+      const qs = new URLSearchParams({ days: String(days) })
+      if (companyId) qs.set('companyId', companyId)
+      const res = await fetch('/api/admin/voice-calls/qualified?' + qs.toString(), { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' })
+      const json = await res.json()
+      if (res.ok) setQual(json.rows || [])
+    } catch { /* a lista é opcional; os números acima continuam a funcionar */ }
+  }
+
+  async function assign() {
+    const leadIds = qual.filter(r => r.leadId && picked[r.callId]).map(r => r.leadId as string)
+    if (!assignTo || !leadIds.length) { setAssignMsg('Escolhe o vendedor e pelo menos um lead.'); return }
+    try {
+      const token = await getToken()
+      const res = await fetch('/api/admin/voice-calls/qualified', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ userId: assignTo, leadIds }) })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.detail || 'Não foi possível atribuir.')
+      setAssignMsg(json.assigned + ' de ' + json.requested + ' leads atribuídos.')
+      setPicked({})
+      await loadQualified()
+    } catch (err) {
+      setAssignMsg(err instanceof Error ? err.message : 'Falha ao atribuir.')
+    }
+  }
 
   async function load() {
+    void loadQualified()
     setBusy(true)
     setError('')
     try {
@@ -132,6 +166,39 @@ export default function AnaliseRobot({ getToken, companies }: { getToken: () => 
               ))}
             </div>
             <div style={{ fontSize: 12, color: '#64748B', marginTop: 10 }}>Atendida = humano ou voicemail. O custo é uma estimativa a partir da duração das chamadas; a fatura real está na Twilio.</div>
+          </div>
+
+          <div style={card}>
+            <div style={label}>Qualificados prontos a ligar ({qual.length})</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', margin: '12px 0' }}>
+              <select value={assignTo} onChange={e => setAssignTo(e.target.value)} style={{ padding: '9px 12px', borderRadius: 10, border: '1px solid #CBD5E1' }}>
+                <option value="">Atribuir a…</option>
+                {users.filter(u => u.status === 'active' && (!companyId || u.company_id === companyId)).map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+              </select>
+              <button type="button" onClick={() => void assign()} style={{ padding: '9px 14px', borderRadius: 10, border: 0, background: '#2563EB', color: 'white', fontWeight: 700 }}>Atribuir selecionados</button>
+              {assignMsg && <span style={{ fontSize: 13, color: '#475569' }}>{assignMsg}</span>}
+            </div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {qual.map(r => (
+                <label key={r.callId} style={{ display: 'grid', gridTemplateColumns: '24px 1fr', gap: 10, padding: 12, borderRadius: 12, border: '1px solid #E2E8F0', background: r.level === 'alto' ? '#F0FDF4' : '#FFFBEB', cursor: r.leadId ? 'pointer' : 'default' }}>
+                  <input type="checkbox" disabled={!r.leadId} checked={Boolean(picked[r.callId])} onChange={e => setPicked(p => ({ ...p, [r.callId]: e.target.checked }))} />
+                  <div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'baseline' }}>
+                      <strong style={{ color: '#0F172A' }}>{r.name}</strong>
+                      <span style={{ fontSize: 13, color: '#475569' }}>{r.phone}</span>
+                      <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 999, background: r.level === 'alto' ? '#BBF7D0' : '#FDE68A', color: '#14532D' }}>{r.level === 'alto' ? 'ALTO' : 'MÉDIO'}</span>
+                      {r.operator && <span style={{ fontSize: 12, color: '#475569' }}>{r.operator}</span>}
+                      {r.currentValue && <span style={{ fontSize: 12, color: '#475569' }}>{r.currentValue}</span>}
+                      {r.assignedTo && <span style={{ fontSize: 12, color: '#64748B' }}>· já atribuído a {users.find(u => u.id === r.assignedTo)?.full_name || 'outro utilizador'}</span>}
+                      {r.missingFields > 0 && <span style={{ fontSize: 12, color: '#B45309' }}>· faltam {r.missingFields} dados</span>}
+                    </div>
+                    {r.summary && <div style={{ fontSize: 13, color: '#334155', marginTop: 4 }}>{r.summary.slice(0, 220)}{r.summary.length > 220 ? '…' : ''}</div>}
+                    {r.scheduled && <div style={{ fontSize: 12, color: '#475569', marginTop: 3 }}>Marcado: {r.scheduled}</div>}
+                  </div>
+                </label>
+              ))}
+              {qual.length === 0 && <div style={{ color: '#64748B', fontSize: 14 }}>Sem qualificados neste período.</div>}
+            </div>
           </div>
         </>
       )}
