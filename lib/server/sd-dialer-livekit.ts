@@ -73,6 +73,11 @@ export async function requireSdDialerUser(request: NextRequest) {
     throw new SdDialerError('O teu utilizador não tem acesso às chamadas de IA.', 403)
   }
 
+  if (profile.is_super_admin !== true && profile.role !== 'super_admin') {
+    const { data: company } = await admin.from('companies').select('status').eq('id', profile.company_id).maybeSingle()
+    if (company?.status === 'inactive') throw new SdDialerError('O período de teste desta empresa terminou. Contacta o superadmin.', 403)
+  }
+
   return { admin, user: data.user, profile, accessToken }
 }
 

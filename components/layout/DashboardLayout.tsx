@@ -9,6 +9,7 @@ import {
   Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag, MessageSquare, Users2, ArrowLeft, ArrowRight, GraduationCap, TrendingUp, ShieldCheck, Sparkles, Zap} from 'lucide-react'
 import useSWR from 'swr'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { createClient } from '@/lib/supabase/client'
 import { useNotificationSound } from '@/lib/hooks/useNotificationSound'
 import { notificacaoService } from '@/lib/services'
 import { Spinner } from '@/components/ui/Spinner'
@@ -101,6 +102,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => { setSidebarOpen(false); setBellOpen(false) }, [pathname])
 
+  // Empresa desativada (ex.: período de teste terminado): bloqueia a app e pede para contactar o superadmin.
+  const [blockedCompany, setBlockedCompany] = useState<string | null>(null)
+  useEffect(() => {
+    if (!profile?.id) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data: { session } } = await createClient().auth.getSession()
+        const res = await fetch('/api/company-access', { headers: { Authorization: 'Bearer ' + (session?.access_token || '') } })
+        const json = await res.json()
+        if (!cancelled) setBlockedCompany(json.blocked ? String(json.company || 'A tua empresa') : null)
+      } catch { /* sem bloqueio se falhar */ }
+    })()
+    return () => { cancelled = true }
+  }, [profile?.id])
+
   const role = profile?.role ?? 'parceiro'
   const canSwitchView = role === 'admin'
   const [viewRole, setViewRole] = useState<string>(role)
@@ -126,6 +143,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const avatarInitials = profile?.full_name
     ? profile.full_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
     : '?'
+
+  if (blockedCompany) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F8FAFC', padding: 24 }}>
+        <div style={{ maxWidth: 420, textAlign: 'center', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, padding: 28 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Acesso desativado</h1>
+          <p style={{ color: '#475569', fontSize: 15 }}>O período de teste de <strong>{blockedCompany}</strong> terminou. Contacta o superadmin para reativar o acesso.</p>
+          <button type="button" onClick={() => void logout()} style={{ marginTop: 16, padding: '10px 18px', borderRadius: 10, background: '#0F172A', color: '#fff', border: 0, cursor: 'pointer' }}>Sair</button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: '#F8FAFC', overflow: 'hidden' }}>
