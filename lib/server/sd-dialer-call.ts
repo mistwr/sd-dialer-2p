@@ -112,7 +112,7 @@ export type OutboundCallBody = {
 }
 
 // Chamadas automáticas só em horário razoável (hora de Lisboa).
-function withinCallingHours(now = new Date()) {
+export function withinCallingHours(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Lisbon', weekday: 'short', hour: '2-digit', hour12: false }).formatToParts(now)
   const wd = parts.find(p => p.type === 'weekday')?.value
   const h = Number(parts.find(p => p.type === 'hour')?.value)
