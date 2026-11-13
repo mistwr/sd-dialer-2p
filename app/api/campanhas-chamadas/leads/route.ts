@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
     const p = request.nextUrl.searchParams
     const statuses = (p.get('statuses') || OPEN.join(',')).split(',').filter(s => OPEN.includes(s))
     const manager = profile.is_super_admin === true || MANAGERS.has(String(profile.role))
+    if (!manager) throw new SdDialerError('As chamadas automáticas são só para administradores e supervisores.', 403)
 
     let q = admin.from('leads')
       .select('id,nome,telefone,status,localidade,operador,campanha_id', { count: 'exact' })
