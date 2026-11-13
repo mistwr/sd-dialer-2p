@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { RefreshCw, Save, PhoneCall, KeyRound, SlidersHorizontal, AudioLines, ShieldCheck, History, Download } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import AnaliseRobot from '@/components/admin/AnaliseRobot'
 
 type AdminData = {
   users: any[]
@@ -23,7 +24,7 @@ const AGENT_NAMES: Record<string, string> = {
 
 export default function AdminVoiceCallsPage() {
   const [data, setData] = useState<AdminData | null>(null)
-  const [tab, setTab] = useState<'history' | 'agents' | 'numbers' | 'access' | 'limits'>('history')
+  const [tab, setTab] = useState<'analysis' | 'history' | 'agents' | 'numbers' | 'access' | 'limits'>('history')
   const [histFrom, setHistFrom] = useState(() => new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10))
   const [histTo, setHistTo] = useState(() => new Date().toISOString().slice(0, 10))
   const [histCompany, setHistCompany] = useState('')
@@ -249,6 +250,7 @@ export default function AdminVoiceCallsPage() {
 
       <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 18 }}>
         {([
+          ['analysis', 'Análise', ShieldCheck],
           ['history', 'Histórico', History],
           ['agents', 'Agentes e guião', AudioLines],
           ['numbers', 'Números Twilio', PhoneCall],
@@ -264,6 +266,10 @@ export default function AdminVoiceCallsPage() {
       {message && <div role="status" style={{ ...panel, marginBottom: 14, padding: 12, borderColor: '#86EFAC', color: '#166534' }}>{message}</div>}
       {error && <div role="alert" style={{ ...panel, marginBottom: 14, padding: 12, borderColor: '#FCA5A5', color: '#B91C1C' }}>{error}</div>}
       {loading && <div style={{ ...panel, color: '#64748B' }}>A carregar a configuração…</div>}
+
+      {!loading && data && tab === 'analysis' && (
+        <AnaliseRobot getToken={getToken} companies={(data.companies || []).map((c: any) => ({ id: c.id, name: c.name }))} />
+      )}
 
       {!loading && data && tab === 'history' && (
         <section style={panel}>
