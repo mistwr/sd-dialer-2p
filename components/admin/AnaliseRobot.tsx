@@ -45,6 +45,29 @@ export default function AnaliseRobot({ getToken, companies, users }: { getToken:
   const [picked, setPicked] = useState<Record<string, boolean>>({})
   const [assignTo, setAssignTo] = useState('')
   const [assignMsg, setAssignMsg] = useState('')
+  const [question, setQuestion] = useState('')
+  const [chat, setChat] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
+  const [asking, setAsking] = useState(false)
+
+  async function ask(text?: string) {
+    const q = (text ?? question).trim()
+    if (!q || asking) return
+    setAsking(true)
+    setQuestion('')
+    const history = chat
+    setChat(c => [...c, { role: 'user', content: q }])
+    try {
+      const token = await getToken()
+      const res = await fetch('/api/admin/voice-calls/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ question: q, days, companyId, history }) })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.detail || 'Não foi possível responder.')
+      setChat(c => [...c, { role: 'assistant', content: json.reply || '(sem resposta)' }])
+    } catch (err) {
+      setChat(c => [...c, { role: 'assistant', content: err instanceof Error ? err.message : 'Falha ao responder.' }])
+    } finally {
+      setAsking(false)
+    }
+  }
 
   async function loadQualified() {
     try {
@@ -166,6 +189,25 @@ export default function AnaliseRobot({ getToken, companies, users }: { getToken:
               ))}
             </div>
             <div style={{ fontSize: 12, color: '#64748B', marginTop: 10 }}>Atendida = humano ou voicemail. O custo é uma estimativa a partir da duração das chamadas; a fatura real está na Twilio.</div>
+          </div>
+
+          <div style={card}>
+            <div style={label}>Pergunta à IA sobre o robot</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '12px 0' }}>
+              {['Resume como correu este período', 'Onde estou a gastar minutos a mais?', 'A que horas devo ligar?'].map(t => (
+                <button key={t} type="button" onClick={() => void ask(t)} disabled={asking} style={{ padding: '7px 12px', borderRadius: 999, border: '1px solid #CBD5E1', background: 'white', fontSize: 13 }}>{t}</button>
+              ))}
+            </div>
+            <div style={{ display: 'grid', gap: 10, marginBottom: 12 }}>
+              {chat.map((m, i) => (
+                <div key={i} style={{ padding: '10px 12px', borderRadius: 12, whiteSpace: 'pre-wrap', fontSize: 14, lineHeight: 1.5, background: m.role === 'user' ? '#EFF6FF' : '#F8FAFC', border: '1px solid #E2E8F0', color: '#0F172A' }}>{m.content}</div>
+              ))}
+              {asking && <div style={{ color: '#64748B', fontSize: 13 }}>A analisar…</div>}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input value={question} onChange={e => setQuestion(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void ask() }} placeholder="Ex.: Vale a pena manter o robot a ligar à hora de almoço?" style={{ flex: 1, padding: '10px 12px', borderRadius: 10, border: '1px solid #CBD5E1' }} />
+              <button type="button" onClick={() => void ask()} disabled={asking || !question.trim()} style={{ padding: '10px 16px', borderRadius: 10, border: 0, background: '#2563EB', color: 'white', fontWeight: 700 }}>Perguntar</button>
+            </div>
           </div>
 
           <div style={card}>
