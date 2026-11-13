@@ -36,7 +36,7 @@ const LEAD_STATES = [["novo", "Novas"], ["nao_atende", "Não atendeu"], ["ligar_
 export function CampanhasChamadasPage() {
   const { data, isLoading, mutate } = useSWR<{ campaigns: Campaign[] }>("campanhas-chamadas", fetcher, { refreshInterval: 8000 });
   const [name, setName] = useState("");
-  const [statuses, setStatuses] = useState<string[]>(["novo", "nao_atende"]);
+  const [statuses, setStatuses] = useState<string[]>(["novo"]);
   const [limit, setLimit] = useState(200);
   const [perHour, setPerHour] = useState(30);
   const [concurrency, setConcurrency] = useState(1);
