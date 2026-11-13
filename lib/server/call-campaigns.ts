@@ -43,6 +43,12 @@ export async function tickCampaign(admin: any, campaign: any) {
   const id = String(campaign.id)
   if (campaign.status !== 'running') return { id, skipped: 'não está a correr' }
 
+  const { data: company } = await admin.from('companies').select('status').eq('id', campaign.company_id).maybeSingle()
+  if (company?.status === 'inactive') {
+    await note(admin, id, 'Empresa desativada: campanha parada.', { status: 'stopped' })
+    return { id, stopped: 'empresa inativa' }
+  }
+
   const live = await settleCalling(admin, id)
 
   const { count: pendingCount } = await admin.from('call_campaign_leads').select('lead_id', { count: 'exact', head: true }).eq('campaign_id', id).eq('state', 'pending')
