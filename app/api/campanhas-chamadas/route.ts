@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     const windowEnd = Math.min(24, Math.max(windowStart + 1, Number(body.window_end ?? 21)))
 
     const pickedIds: string[] = Array.isArray(body.lead_ids) ? body.lead_ids.map(String).slice(0, 2000) : []
-    let leadsQuery = admin.from('leads').select('id,telefone').eq('company_id', profile.company_id).in('status', statuses).not('telefone', 'is', null).order('created_at', { ascending: true }).limit(limit)
+    let leadsQuery = admin.from('leads').select('id,telefone').eq('company_id', profile.company_id).in('status', statuses).not('telefone', 'is', null).order('created_at', { ascending: false }).limit(limit)
     if (pickedIds.length) leadsQuery = leadsQuery.in('id', pickedIds)
     else {
       if (body.campanha_id) leadsQuery = leadsQuery.eq('campanha_id', String(body.campanha_id))

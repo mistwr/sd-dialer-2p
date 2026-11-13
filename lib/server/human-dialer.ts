@@ -55,7 +55,7 @@ export async function nextCall(admin: any, userId: string, profile: Profile, fil
   const op = String(filters.operador || '').replace(/[%,]/g, '').trim(); if (op) q = q.ilike('operador', '%' + op + '%')
   const skip = exclude.filter(x => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 500)
   if (skip.length) q = q.not('id', 'in', '(' + skip.join(',') + ')')
-  const { data: candidates } = await q.order('created_at', { ascending: true }).limit(40)
+  const { data: candidates } = await q.order('created_at', { ascending: false }).limit(40)
 
   const livekit = getLiveKitConfig()
   for (const lead of candidates || []) {
