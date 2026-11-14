@@ -11,6 +11,7 @@ const EVENT_TYPES = new Set([
   'robot_click',
   'pro_click',
   'checkout_click',
+  'product_click',
   'whatsapp_click',
   'simulation_click',
   'simulation_result',
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = adminClient()
-    const { error } = await supabase.from('lumin_analytics_events').insert(payload)
+    const { error } = await supabase.from('lumin_events').insert(payload)
     if (error) throw error
 
     return NextResponse.json({ ok: true }, { headers })
