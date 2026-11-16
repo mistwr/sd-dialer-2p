@@ -10,10 +10,13 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 
 const ALLOWED = new Set(['https://luminai.pt', 'https://www.luminai.pt', 'https://heartfelt-cupcake-12d08b.netlify.app'])
+// Permitir apenas o preview específico da nova demonstração, sem abrir CORS a terceiros.
+const DEMO_PREVIEW = /^https:\/\/(?:6afb6aff8d03140370039d19|6afb6afcd9d2ad8a82349f1e|6afb6a4c2c8e0cac2e89dbe4)--heartfelt-cupcake-12d08b\.netlify\.app$/
+const isAllowed = (origin: string) => ALLOWED.has(origin) || DEMO_PREVIEW.test(origin)
 const clean = (v: unknown, max: number) => (typeof v === 'string' ? v.replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, max) : '')
 
 function cors(origin: string): Record<string, string> {
-  return ALLOWED.has(origin)
+  return isAllowed(origin)
     ? { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '600', Vary: 'Origin' }
     : {}
 }
@@ -23,12 +26,12 @@ function reply(origin: string, body: unknown, status = 200) {
 
 export async function OPTIONS(request: NextRequest) {
   const origin = request.headers.get('origin') || ''
-  return new NextResponse(null, { status: ALLOWED.has(origin) ? 204 : 403, headers: cors(origin) })
+  return new NextResponse(null, { status: isAllowed(origin) ? 204 : 403, headers: cors(origin) })
 }
 
 export async function POST(request: NextRequest) {
   const origin = request.headers.get('origin') || ''
-  if (!ALLOWED.has(origin)) return reply(origin, { error: 'Origem não permitida.' }, 403)
+  if (!isAllowed(origin)) return reply(origin, { error: 'Origem não permitida.' }, 403)
   try {
     const raw = await request.text()
     if (raw.length > 4000) return reply(origin, { error: 'Configuração demasiado longa.' }, 413)
