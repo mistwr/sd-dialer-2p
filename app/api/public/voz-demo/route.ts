@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
     if (raw.length > 4000) return reply(origin, { error: 'Configuração demasiado longa.' }, 413)
     const body = JSON.parse(raw || '{}') as { agent?: Record<string, unknown> }
     const a = body.agent || {}
+    const presentation = body.mode === 'lumin-presentation'
 
     const ip = (request.headers.get('x-nf-client-connection-ip') || request.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'desconhecido'
     const ipHash = createHash('sha256').update(ip + '|lumin-voz').digest('hex').slice(0, 32)
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
       objective: clean(a.objective, 180) || 'Conversar, esclarecer dúvidas e mostrar como um agente de voz ajuda a empresa.',
       product: clean(a.product, 500),
       opening: clean(a.opening, 180) || `Olá! Sou o ${name}, assistente virtual da ${company}. Como posso ajudar?`,
-      notes: 'Demonstração pública no browser: não há chamada telefónica, CRM nem agendamento real. Não digas que marcaste ou registaste nada. Respostas curtas, uma pergunta de cada vez. Não peças dados pessoais sensíveis.',
+      notes: presentation ? 'IDENTIDADE EXCLUSIVA: És a LUMIN, assistente de apresentação da LUMIN AI. Não és Ricardo, não representas Compara+ e não vendes contratos de telecomunicações. Apresenta os agentes de voz, o SD Dialer e as ferramentas LUMIN AI sem inventar integrações ou resultados. Não há chamada telefónica, CRM nem agendamento real nesta demo. Não digas que marcaste ou registaste nada. Respostas curtas em português de Portugal, uma pergunta de cada vez. Não peças dados sensíveis.' : 'Demonstração pública no browser: não há chamada telefónica, CRM nem agendamento real. Não digas que marcaste ou registaste nada. Respostas curtas, uma pergunta de cada vez. Não peças dados pessoais sensíveis.',
       tone: voice === 'commercial' ? 'Comercial, enérgico e cordial' : voice === 'clear' ? 'Claro, calmo e objetivo' : 'Natural, profissional e direto',
       voice,
     })
@@ -68,11 +69,14 @@ export async function POST(request: NextRequest) {
     const serverUrl = String(process.env.LIVEKIT_URL || '').replace(/^https:/i, 'wss:')
     const roomName = `demo-${randomUUID()}`
     const identity = `visitante-${randomUUID().slice(0, 8)}`
-    const agentName = process.env.LIVEKIT_DEMO_AGENT_NAME || process.env.LIVEKIT_PRIMARY_AGENT_NAME || process.env.LIVEKIT_TELECOM_AGENT_NAME || 'lumin-compara-lab'
+    const agentName = presentation
+      ? process.env.LIVEKIT_PRESENTATION_AGENT_NAME
+      : (process.env.LIVEKIT_DEMO_AGENT_NAME || process.env.LIVEKIT_PRIMARY_AGENT_NAME || process.env.LIVEKIT_TELECOM_AGENT_NAME || 'lumin-compara-lab')
+    if (!agentName) return reply(origin, { error: 'O agente LUMIN Apresentação ainda não está disponível. Tenta novamente mais tarde.' }, 503)
 
     await api.room.createRoom({ name: roomName, emptyTimeout: 60, departureTimeout: 10, maxParticipants: 3 })
     await api.agentDispatch.createDispatch(roomName, agentName, {
-      metadata: JSON.stringify({ agentProfile, name: '', source: 'web-demo', mode: 'web' }),
+      metadata: JSON.stringify({ agentProfile, name: '', source: presentation ? 'lumin-presentation' : 'web-demo', mode: 'web' }),
     })
     await admin.from('voice_demo_sessions').insert({ ip_hash: ipHash, room: roomName, origin })
 
