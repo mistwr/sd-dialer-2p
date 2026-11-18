@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { errorResponse, requireSdDialerUser, requireVoiceCallAccess, SdDialerError } from '@/lib/server/sd-dialer-livekit'
+import { AUTO_DIALER_MANUTENCAO, MSG_MANUTENCAO } from '@/lib/server/call-campaigns'
 
 export const runtime = 'nodejs'
 
@@ -118,6 +119,7 @@ export async function PATCH(request: NextRequest) {
     if (!campaign) throw new SdDialerError('Campanha não encontrada.', 404)
     if (!isManager(profile) && campaign.created_by !== user.id) throw new SdDialerError('Sem permissão para esta campanha.', 403)
     if (campaign.status === 'done' || campaign.status === 'stopped') throw new SdDialerError('Esta campanha já terminou.', 409)
+    if (next === 'running' && AUTO_DIALER_MANUTENCAO) throw new SdDialerError(MSG_MANUTENCAO, 503)
     if (next === 'running') await requireVoiceCallAccess(admin, user.id, profile)
     const note = next === 'running' ? 'Em execução. A primeira chamada sai no próximo minuto.' : next === 'paused' ? 'Em pausa. A chamada atual termina normalmente.' : 'Parada.'
     await admin.from('call_campaigns').update({ status: next, last_note: note, updated_at: new Date().toISOString() }).eq('id', campaign.id)

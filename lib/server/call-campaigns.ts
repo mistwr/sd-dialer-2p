@@ -127,7 +127,15 @@ export async function tickCampaign(admin: any, campaign: any) {
   return { id, launched: launchedNow }
 }
 
+// Marcador automático em manutenção. Para reativar: definir AUTO_DIALER_MANUTENCAO=off na Netlify.
+export const AUTO_DIALER_MANUTENCAO = process.env.AUTO_DIALER_MANUTENCAO !== 'off'
+export const MSG_MANUTENCAO = 'O marcador automático está em manutenção. Volta a estar disponível em breve.'
+
 export async function tickCampaigns(admin: any) {
+  if (AUTO_DIALER_MANUTENCAO) {
+    await admin.from('call_campaigns').update({ status: 'paused', last_note: 'Em manutenção.', updated_at: new Date().toISOString() }).eq('status', 'running')
+    return []
+  }
   const { data: running } = await admin.from('call_campaigns').select('*').eq('status', 'running')
   const out: any[] = []
   for (const campaign of running || []) {
