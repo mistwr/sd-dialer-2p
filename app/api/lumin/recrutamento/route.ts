@@ -23,10 +23,10 @@ export async function POST(req: NextRequest) {
     const nome = clean(body.nome, 120), telefone = clean(body.telefone, 32)
     const email = clean(body.email, 180), localidade = clean(body.localidade, 120)
     const experiencia = clean(body.experiencia, 500), disponibilidade = clean(body.disponibilidade, 160)
-    if (nome.length < 2 || !/^\\+?[0-9\\s()-]{9,24}$/.test(telefone) || !body.consentimento) {
+    if (nome.length < 2 || !/^\+?[0-9\s()-]{9,24}$/.test(telefone) || !body.consentimento) {
       return NextResponse.json({ error: 'Confirma o nome, telefone e consentimento.' }, { status: 400, headers })
     }
-    if (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ error: 'Email inválido.' }, { status: 400, headers })
     }
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       company_id: companyId, nome, telefone, email: email || null, status: 'novo',
       imported_at: new Date().toISOString(),
       observacoes: ['CANDIDATURA — RECRUTAMENTO REMOTO', 'Localidade: '+localidade,
-        'Experiência: '+experiencia, 'Disponibilidade: '+disponibilidade].join('\\n'),
+        'Experiência: '+experiencia, 'Disponibilidade: '+disponibilidade].join('\n'),
       custom_fields: { source: 'luminai.pt', form: 'recrutamento_remoto',
         tipo: 'candidatura', localidade, experiencia, disponibilidade,
         page_url: 'https://luminai.pt/recrutamento/' },
