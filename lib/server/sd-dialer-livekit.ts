@@ -1,3 +1,4 @@
+import { emManutencaoPara, MSG_MANUTENCAO } from '@/lib/server/manutencao'
 import { createClient } from '@supabase/supabase-js'
 import { LiveKitAPI } from 'livekit-server-sdk'
 import { NextRequest, NextResponse } from 'next/server'
@@ -86,6 +87,7 @@ export async function requireVoiceCallAccess(
   userId: string,
   profile: { role?: string; is_super_admin?: boolean | null },
 ) {
+  if (emManutencaoPara(userId)) throw new SdDialerError(MSG_MANUTENCAO, 503)
   if (profile.is_super_admin === true || profile.role === 'super_admin') return { active: true, expiresAt: null as string | null }
   const { data, error } = await admin
     .from('voice_call_subscriptions')

@@ -1,5 +1,6 @@
 import { startOutboundCall, reconcileCall, withinCallingHours } from '@/lib/server/sd-dialer-call'
 import { SdDialerError } from '@/lib/server/sd-dialer-livekit'
+import { emManutencaoPara } from '@/lib/server/manutencao'
 
 // Campanhas de chamadas automáticas: o servidor liga às leads da fila enquanto a campanha estiver em "running".
 // Um cron (pg_cron, 1 minuto) chama tickCampaigns(). Pausar/Parar = mudar o estado na base de dados.
@@ -127,16 +128,12 @@ export async function tickCampaign(admin: any, campaign: any) {
   return { id, launched: launchedNow }
 }
 
-// Marcador automático em manutenção. Para reativar: definir AUTO_DIALER_MANUTENCAO=off na Netlify.
-export const AUTO_DIALER_MANUTENCAO = process.env.AUTO_DIALER_MANUTENCAO !== 'off'
-export const MSG_MANUTENCAO = 'O marcador automático está em manutenção. Volta a estar disponível em breve.'
-
 export async function tickCampaigns(admin: any) {
-  if (AUTO_DIALER_MANUTENCAO) {
-    await admin.from('call_campaigns').update({ status: 'paused', last_note: 'Em manutenção.', updated_at: new Date().toISOString() }).eq('status', 'running')
-    return []
-  }
-  const { data: running } = await admin.from('call_campaigns').select('*').eq('status', 'running')
+  const { data: all } = await admin.from('call_campaigns').select('*').eq('status', 'running')
+  // Em manutenção só correm as campanhas criadas por utilizadores com exceção; as outras ficam em pausa.
+  const bloqueadas = (all || []).filter((c: any) => emManutencaoPara(c.created_by))
+  if (bloqueadas.length) await admin.from('call_campaigns').update({ status: 'paused', last_note: 'Em manutenção.', updated_at: new Date().toISOString() }).in('id', bloqueadas.map((c: any) => c.id)).eq('status', 'running')
+  const running = (all || []).filter((c: any) => !emManutencaoPara(c.created_by))
   const out: any[] = []
   for (const campaign of running || []) {
     out.push(await tickCampaign(admin, campaign).catch((e: any) => ({ id: campaign.id, error: String(e?.message || e) })))

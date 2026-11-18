@@ -1,3 +1,4 @@
+import { emManutencaoPara, MSG_MANUTENCAO } from '@/lib/server/manutencao'
 import {
   buildAgentProfile,
   getLiveKitConfig,
@@ -127,6 +128,7 @@ export async function startOutboundCall(
   body: OutboundCallBody,
   options: { profileOverrides?: Record<string, unknown> } = {},
 ) {
+  if (emManutencaoPara(userId)) throw new SdDialerError(MSG_MANUTENCAO, 503)
   let callId = ''
   let roomName = ''
   let sipIdentity = ''
