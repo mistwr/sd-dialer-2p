@@ -6,7 +6,11 @@
  * Isto evita servir versões antigas do dashboard depois de um deploy.
  */
 
-const CACHE_NAME = 'sd-dialer-v4'
+const CACHE_NAME = 'sd-dialer-v5'
+// Funil da porta: única página que também funciona sem rede (guardada na primeira visita com rede).
+const FUNIL_CACHE = 'sd-dialer-funil-v1'
+const FUNIL_PATH = '/parceiro/porta/funil'
+const FUNIL_NETWORK_TIMEOUT_MS = 4000
 const ASSETS_TO_CACHE = [
   '/manifest.json',
   '/icons/icon-192.png',
@@ -27,7 +31,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) =>
       Promise.all(
         cacheNames
-          .filter((cacheName) => cacheName !== CACHE_NAME)
+          .filter((cacheName) => cacheName !== CACHE_NAME && cacheName !== FUNIL_CACHE)
           .map((cacheName) => caches.delete(cacheName))
       )
     )
@@ -55,6 +59,33 @@ self.addEventListener('fetch', (event) => {
   // Nunca servir dados de API a partir de uma versão antiga em cache.
   if (isApi) {
     event.respondWith(fetch(event.request))
+    return
+  }
+
+  // Funil da porta: rede primeiro (com limite de tempo, para zonas de cobertura fraca);
+  // se falhar ou demorar, usa a cópia guardada na última visita com rede.
+  if (isNavigation && url.pathname === FUNIL_PATH) {
+    event.respondWith((async () => {
+      const cache = await caches.open(FUNIL_CACHE)
+      const fromCache = () => cache.match(FUNIL_PATH)
+      const network = fetch(event.request).then((response) => {
+        if (response && response.ok && !response.redirected) cache.put(FUNIL_PATH, response.clone())
+        return response
+      })
+      const timeout = new Promise((resolve) => setTimeout(() => resolve(null), FUNIL_NETWORK_TIMEOUT_MS))
+      try {
+        const first = await Promise.race([network, timeout])
+        if (first) return first
+        const cached = await fromCache()
+        return cached || network
+      } catch {
+        const cached = await fromCache()
+        return cached || new Response('Sem rede. Abre o funil uma vez com rede para o poder usar offline.', {
+          status: 503,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        })
+      }
+    })())
     return
   }
 

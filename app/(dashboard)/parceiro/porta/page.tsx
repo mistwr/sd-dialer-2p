@@ -46,6 +46,19 @@ export default function PortaListPage() {
         </div>
       </div>
 
+      {/* <a> normal (não <Link>): obriga a navegação completa, que o service worker consegue guardar para uso sem rede. */}
+      <a
+        href="/parceiro/porta/funil"
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          background: '#0F172A', color: '#fff', textDecoration: 'none',
+          padding: '14px 20px', borderRadius: 14, fontSize: 15, fontWeight: 700,
+          marginBottom: 10,
+        }}
+      >
+        Questionário MyPoupar
+      </a>
+
       <Link
         href="/parceiro/porta/nova"
         style={{
