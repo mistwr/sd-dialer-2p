@@ -268,7 +268,7 @@ export default function AdminVoiceCallsPage() {
       {loading && <div style={{ ...panel, color: '#64748B' }}>A carregar a configuração…</div>}
 
       {!loading && data && tab === 'analysis' && (
-        <AnaliseRobot getToken={getToken} companies={(data.companies || []).map((c: any) => ({ id: c.id, name: c.name }))} />
+        <AnaliseRobot getToken={getToken} companies={(data.companies || []).map((c: any) => ({ id: c.id, name: c.name }))} users={(data.users || []).map((u: any) => ({ id: u.id, full_name: u.full_name, company_id: u.company_id, status: u.status }))} />
       )}
 
       {!loading && data && tab === 'history' && (
