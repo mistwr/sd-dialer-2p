@@ -234,6 +234,7 @@ function RecordingRow({ recording, onAnalyse }: { recording: Recording; onAnalys
 
 const VOICE_AGENTS = [
   { id: 'lumin-telecom', label: 'Compara+ Telecom', detail: 'Qualifica o interesse em internet e televisão e agenda uma comparação.' },
+  { id: 'ricardo-energia', label: 'Ricardo · Compara+ Energia', detail: 'Qualifica energia (luz, gás, solar) para casa ou empresa e agenda uma comparação com consultor.' },
   { id: 'lumin-energia', label: 'Lumin Energia', detail: 'Qualifica energia e fecha interesse para comparação.' },
   { id: 'lumin-ai', label: 'Lumin AI Comercial', detail: 'Vende a plataforma LUMIN AI de forma consultiva.' },
 ] as const

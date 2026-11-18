@@ -22,7 +22,7 @@ const BLOCKED_LEAD_STATUSES = new Set([
   'vendido',
 ])
 
-const AGENT_IDS = new Set(['lumin-telecom', 'lumin-energia', 'lumin-ai'])
+const AGENT_IDS = new Set(['lumin-telecom', 'lumin-energia', 'lumin-ai', 'ricardo-energia'])
 
 function normalizedStatus(value: unknown) {
   return String(value || '')
