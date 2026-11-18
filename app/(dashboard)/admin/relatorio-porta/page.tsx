@@ -6,6 +6,7 @@ import { doorCaptureService, usuarioService, campanhaService } from '@/lib/servi
 import { useAuth } from '@/lib/hooks/useAuth'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { StatCard } from '@/components/ui/StatCard'
+import { RelatorioQuestionario } from '@/components/admin/RelatorioQuestionario'
 
 function RankingList({ title, data }: { title: string; data: Record<string, number> }) {
   const entries = Object.entries(data).sort((a, b) => b[1] - a[1]).slice(0, 8)
@@ -34,6 +35,7 @@ export default function RelatorioPortaPage() {
   const [campanhaId, setCampanhaId] = useState('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
+  const [aba, setAba] = useState<'portas' | 'questionario'>('portas')
 
   const { data: usuarios = [] } = useSWR(
     profile?.company_id ? ['usuarios-porta', profile.company_id] : null,
@@ -74,6 +76,12 @@ export default function RelatorioPortaPage() {
       </h1>
       <p style={{ fontSize: 13, color: '#64748B', margin: '0 0 20px' }}>Desempenho das captações porta a porta</p>
 
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        {([['portas', 'Portas'], ['questionario', 'Questionário MyPoupar']] as const).map(([k, l]) => (
+          <button key={k} onClick={() => setAba(k)} style={{ padding: '8px 14px', borderRadius: 10, border: '1.5px solid #E2E8F0', fontSize: 13, fontWeight: 700, cursor: 'pointer', background: aba === k ? '#2563EB' : '#fff', color: aba === k ? '#fff' : '#334155' }}>{l}</button>
+        ))}
+      </div>
+
       {/* Filtros */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 22 }}>
         <select style={selectStyle} value={comercialId} onChange={e => setComercialId(e.target.value)}>
@@ -88,7 +96,9 @@ export default function RelatorioPortaPage() {
         <input style={selectStyle} type="date" value={to} onChange={e => setTo(e.target.value)} />
       </div>
 
-      {isLoading || !stats ? <PageSpinner /> : (
+      {aba === 'questionario' ? (
+        profile?.company_id ? <RelatorioQuestionario companyId={profile.company_id} comercialId={comercialId} from={from} to={to} usuarios={usuarios} /> : null
+      ) : isLoading || !stats ? <PageSpinner /> : (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 22 }}>
             <StatCard icon={MapPin} label="Portas abordadas" value={stats.portasAbordadas} color="#2563EB" />
