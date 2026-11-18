@@ -53,6 +53,8 @@ export default function FunilPortaPage() {
   const [msg, setMsg] = useState('')
   const [pendentes, setPendentes] = useState(0)
   const [online, setOnline] = useState(true)
+  const [offlineOk, setOfflineOk] = useState(false)
+  const [ident, setIdent] = useState<{ userId: string; companyId: string } | null>(null)
   const iniciado = useRef(false)
 
   const set = useCallback(<K extends keyof FunilState>(k: K, v: FunilState[K]) => setS(p => (p ? { ...p, [k]: v } : p)), [])
@@ -72,6 +74,22 @@ export default function FunilPortaPage() {
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
   }, [])
 
+  useEffect(() => {
+    // Guarda quem és neste telemóvel para poderes guardar capturas sem rede.
+    if (user?.id && profile?.company_id) {
+      const i = { userId: user.id, companyId: profile.company_id }
+      setIdent(i)
+      try { localStorage.setItem('porta-funil-ident', JSON.stringify(i)) } catch { /* ignora */ }
+    } else {
+      try { const r = localStorage.getItem('porta-funil-ident'); if (r) setIdent(JSON.parse(r)) } catch { /* ignora */ }
+    }
+  }, [user?.id, profile?.company_id])
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    navigator.serviceWorker.ready.then(() => setOfflineOk(!!navigator.serviceWorker.controller)).catch(() => undefined)
+  }, [])
+
   useEffect(() => { if (s) { const t = setTimeout(() => guardarRascunho({ ...s, fase_final: fase }), 300); return () => clearTimeout(t) } }, [s, fase])
 
   if (!s) return <div style={{ padding: 24 }}><Loader2 className="animate-spin" /></div>
@@ -83,9 +101,9 @@ export default function FunilPortaPage() {
     fase === 'abordar' ? !!s.reacao : fase === 'escutar' ? !!s.operadora : fase === 'resolver' ? !!s.interesse : fase === 'fechar' ? !!podeFechar : true
 
   async function concluir(resultado: 'fechado' | 'vai_pensar' | 'sem_interesse', fechou: boolean) {
-    if (!user?.id || !profile?.company_id || !s) { setMsg('Sessão não carregada. Tenta outra vez.'); return }
+    if (!ident || !s) { setMsg('Abre o funil uma vez com rede para te identificar neste telemóvel.'); return }
     setSaving(true); setMsg('')
-    const r = await guardarCaptura({ state: { ...s, fase_final: fase }, companyId: profile.company_id, comercialId: user.id, resultado, fechou })
+    const r = await guardarCaptura({ state: { ...s, fase_final: fase }, companyId: ident.companyId, comercialId: ident.userId, resultado, fechou })
     setSaving(false)
     setPendentes(lerFila().length)
     alert(r === 'enviada' ? 'Guardado.' : 'Guardado no telemóvel. Envia sozinho quando tiveres rede.')
@@ -103,7 +121,7 @@ export default function FunilPortaPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
         <button onClick={() => router.push('/parceiro/porta')} style={{ background: 'none', border: 0, display: 'flex', gap: 6, alignItems: 'center', fontWeight: 700 }}><ArrowLeft size={18} /> Porta</button>
         <span style={{ fontSize: 12, color: online ? '#047857' : '#B45309', display: 'flex', gap: 5, alignItems: 'center' }}>
-          {!online && <CloudOff size={14} />} {online ? 'Com rede' : 'Sem rede, guarda no telemóvel'}{pendentes > 0 ? ` · ${pendentes} por enviar` : ''}
+          {!online && <CloudOff size={14} />} {online ? 'Com rede' : 'Sem rede, guarda no telemóvel'}{offlineOk ? ' · disponível offline' : ''}{pendentes > 0 ? ` · ${pendentes} por enviar` : ''}
         </span>
       </div>
 

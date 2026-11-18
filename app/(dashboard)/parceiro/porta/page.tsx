@@ -46,7 +46,8 @@ export default function PortaListPage() {
         </div>
       </div>
 
-      <Link
+      {/* <a> normal (não <Link>): obriga a navegação completa, que o service worker consegue guardar para uso sem rede. */}
+      <a
         href="/parceiro/porta/funil"
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
@@ -56,7 +57,7 @@ export default function PortaListPage() {
         }}
       >
         Funil AEDCRAFAM (novo)
-      </Link>
+      </a>
 
       <Link
         href="/parceiro/porta/nova"
