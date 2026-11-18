@@ -13,7 +13,7 @@ import {
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const AGENTS = ['lumin-telecom', 'lumin-energia', 'lumin-ai'] as const
+const AGENTS = ['lumin-telecom', 'lumin-energia', 'lumin-ai', 'ricardo-energia'] as const
 
 export async function GET(request: NextRequest) {
   try {

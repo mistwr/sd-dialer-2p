@@ -19,6 +19,7 @@ type AdminData = {
 const AGENT_NAMES: Record<string, string> = {
   'lumin-telecom': 'Compara+ Telecom',
   'lumin-energia': 'Lumin Energia',
+  'ricardo-energia': 'Ricardo · Compara+ Energia',
   'lumin-ai': 'Lumin AI',
 }
 
