@@ -5,13 +5,16 @@ import { Bot, PhoneCall, ShoppingBag, Users, UserPlus, AudioLines, Send, Refresh
 import { PageSpinner } from '@/components/ui/Spinner'
 import { StatCard } from '@/components/ui/StatCard'
 
-type Msg = { role: 'user' | 'assistant'; content: string }
+type Proposta = { id: string; tipo: string; titulo: string; texto_proposto: string; motivo?: string; estado: string }
+type Msg = { role: 'user' | 'assistant'; content: string; propostas?: Proposta[] }
 
 const SUGESTOES = [
   'Como está a equipa esta semana?',
   'Onde estamos a perder vendas?',
   'Que leads devíamos trabalhar hoje?',
   'Quem precisa de apoio na equipa?',
+  'Analisa as últimas conversas do robot e diz como melhorar',
+  'Onde perdemos mais conversas na porta?',
 ]
 
 function Inline({ text }: { text: string }) {
@@ -75,8 +78,14 @@ export default function ComandoPage() {
     try {
       const r = await fetch('/api/sd-dialer/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: q, messages }) })
       const d = await r.json().catch(() => ({}))
-      setMessages([...next, { role: 'assistant', content: r.ok ? d.reply : d?.error || 'Sem resposta.' }])
+      setMessages([...next, { role: 'assistant', content: r.ok ? d.reply : d?.error || 'Sem resposta.', propostas: r.ok ? d.propostas : undefined }])
     } catch { setMessages([...next, { role: 'assistant', content: 'Falhou a ligação.' }]) } finally { setThinking(false) }
+  }
+
+  async function decidir(msgIdx: number, id: string, estado: 'aprovada' | 'rejeitada') {
+    const r = await fetch('/api/sd-dialer/comando', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, estado }) })
+    if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d?.error || 'Não foi possível guardar.'); return }
+    setMessages(ms => ms.map((m, i) => (i === msgIdx ? { ...m, propostas: m.propostas?.map(p => (p.id === id ? { ...p, estado } : p)) } : m)))
   }
 
   if (loading && !data) return <PageSpinner />
@@ -139,13 +148,28 @@ export default function ComandoPage() {
       </div>
 
       <div style={{ ...card, borderColor: '#BFDBFE' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}><Bot size={18} color="#2563EB" /> Pergunta ao Comando</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}><Bot size={18} color="#2563EB" /> Pergunta ao Comando · tem acesso a empresa, robot, porta e conversas (mascaradas)</div>
         <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
           {messages.map((m, i) => (
             <div key={i} style={m.role === 'user'
               ? { marginLeft: 'auto', maxWidth: '85%', background: '#EFF6FF', borderRadius: 14, padding: '8px 14px' }
               : { maxWidth: '92%', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 14, padding: '10px 14px', lineHeight: 1.55 }}>
               {m.role === 'assistant' ? <Markdown text={m.content} /> : m.content}
+              {m.propostas?.map(p => (
+                <div key={p.id} style={{ marginTop: 10, border: '1px solid #BFDBFE', background: '#fff', borderRadius: 10, padding: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#2563EB', textTransform: 'uppercase' }}>Proposta · {p.tipo}</div>
+                  <div style={{ fontWeight: 700, margin: '2px 0 6px' }}>{p.titulo}</div>
+                  <div style={{ whiteSpace: 'pre-wrap', fontSize: 14 }}>{p.texto_proposto}</div>
+                  {p.motivo && <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 6 }}>Porquê: {p.motivo}</div>}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
+                    {p.estado === 'pendente' ? (<>
+                      <button onClick={() => decidir(i, p.id, 'aprovada')} style={{ background: '#16A34A', color: '#fff', border: 0, borderRadius: 8, padding: '6px 12px', fontWeight: 700, cursor: 'pointer' }}>Aprovar</button>
+                      <button onClick={() => decidir(i, p.id, 'rejeitada')} style={{ background: '#fff', border: '1px solid #CBD5E1', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}>Rejeitar</button>
+                      <span style={{ fontSize: 12, color: '#94A3B8' }}>Nada muda na app até ser aplicada.</span>
+                    </>) : <span style={{ fontSize: 13, fontWeight: 700, color: p.estado === 'aprovada' ? '#16A34A' : '#64748B' }}>{p.estado === 'aprovada' ? 'Aprovada, pronta a aplicar' : 'Rejeitada'}</span>}
+                  </div>
+                </div>
+              ))}
             </div>
           ))}
           {thinking && <div style={{ color: '#64748B' }}>A analisar…</div>}
