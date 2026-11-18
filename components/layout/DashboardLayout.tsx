@@ -1,4 +1,5 @@
 'use client'
+import { LocationReporter } from '@/components/common/LocationReporter'
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -49,6 +50,7 @@ const NAV: NavItem[] = [
   { section: 'Gestão', label: 'Campanhas',        href: '/admin/campanhas',       icon: Megaphone, roles: ['admin', 'supervisor'] },
   { section: 'Gestão', label: 'Parceiros',        href: '/admin/parceiros',       icon: Users,     roles: ['admin', 'supervisor'] },
   { section: 'Gestão', label: 'Relatórios',       href: '/admin/relatorios',      icon: BarChart2, roles: ['admin', 'supervisor'] },
+  { section: 'Gestão', label: 'Equipa no mapa',  href: '/admin/localizacao',     icon: MapPin,    roles: ['admin', 'supervisor'] },
   { section: 'Gestão', label: 'Relatório porta',  href: '/admin/relatorio-porta', icon: MapPin,    roles: ['admin', 'supervisor'] },
   // Inteligência artificial
   { section: 'Inteligência artificial', label: 'Comando IA',    href: '/admin/comando',          icon: Sparkles,   roles: ['admin', 'supervisor'] },
@@ -427,6 +429,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
 
         <main className="dashboard-main" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '24px 20px' }}>
+          {user?.id && profile?.company_id && (
+            <div style={{ maxWidth: 900, margin: '0 auto', textAlign: 'right', minHeight: 0 }}><LocationReporter userId={user.id} /></div>
+          )}
           {user?.id && profile?.company_id && (
             <div style={{ maxWidth: 900, margin: '0 auto 0' }}>
               <MensagemMotivacional userId={user.id} companyId={profile.company_id} />
