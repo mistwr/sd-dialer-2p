@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
     if (!unique.length) throw new SdDialerError('Não há leads com esses estados para ligar.', 400)
 
     const { data: campaign, error } = await admin.from('call_campaigns').insert({
-      company_id: profile.company_id, created_by: user.id, name, agent_id: 'lumin-telecom',
+      company_id: profile.company_id, created_by: user.id, name, agent_id: ['lumin-telecom', 'ricardo-energia'].includes(String(body.agent_id)) ? String(body.agent_id) : 'lumin-telecom',
       status: 'paused', concurrency, calls_per_hour: callsPerHour, window_start: windowStart, window_end: windowEnd,
       last_note: 'Criada. Carrega em Play para começar.',
     }).select('*').single()
