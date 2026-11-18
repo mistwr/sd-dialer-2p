@@ -39,6 +39,24 @@ export async function POST(req: NextRequest) {
       companyId = data?.id || ''
     }
     if (!companyId) throw new Error('Empresa LUMIN AI não configurada')
+    // Evita submissões repetidas do mesmo número num intervalo curto.
+    const since = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+    const { data: recent, error: recentError } = await sb.from('leads')
+      .select('id, custom_fields').eq('company_id', companyId)
+      .eq('telefone', telefone).gte('imported_at', since).limit(20)
+    if (recentError) throw recentError
+    if ((recent || []).some(row => row.custom_fields?.form === 'recrutamento_remoto')) {
+      return NextResponse.json({ ok: true, duplicate: true }, { headers })
+    }
+    // A notificação é dirigida a uma conta configurada e pertencente à empresa.
+    const notifyUserId = process.env.LUMIN_RECRUITMENT_NOTIFY_USER_ID
+    if (!notifyUserId) throw new Error('Destinatário de notificações não configurado')
+    const { data: recipient, error: recipientError } = await sb.from('usuarios')
+      .select('id, company_id, is_super_admin').eq('id', notifyUserId).maybeSingle()
+    if (recipientError) throw recipientError
+    if (!recipient || (recipient.company_id !== companyId && !recipient.is_super_admin)) {
+      throw new Error('Destinatário de notificações não autorizado')
+    }
     const { data: lead, error: insertError } = await sb.from('leads').insert({
       company_id: companyId, nome, telefone, email: email || null, status: 'novo',
       imported_at: new Date().toISOString(),
@@ -52,7 +70,6 @@ export async function POST(req: NextRequest) {
 
     // Destinatário explícito: nunca notificar automaticamente outros parceiros.
     // Definir LUMIN_RECRUITMENT_NOTIFY_USER_ID com o UUID da conta administradora.
-    const notifyUserId = process.env.LUMIN_RECRUITMENT_NOTIFY_USER_ID
     let notified = false
     if (notifyUserId) {
       const { error } = await sb.from('notificacoes').insert({
