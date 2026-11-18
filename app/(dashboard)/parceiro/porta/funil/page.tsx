@@ -101,7 +101,7 @@ export default function FunilPortaPage() {
     fase === 'abordar' ? !!s.reacao : fase === 'escutar' ? !!s.operadora : fase === 'resolver' ? !!s.interesse : fase === 'fechar' ? !!podeFechar : true
 
   async function concluir(resultado: 'fechado' | 'vai_pensar' | 'sem_interesse', fechou: boolean) {
-    if (!ident || !s) { setMsg('Abre o funil uma vez com rede para te identificar neste telemóvel.'); return }
+    if (!ident || !s) { setMsg('Abre o questionário uma vez com rede para te identificar neste telemóvel.'); return }
     setSaving(true); setMsg('')
     const r = await guardarCaptura({ state: { ...s, fase_final: fase }, companyId: ident.companyId, comercialId: ident.userId, resultado, fechou })
     setSaving(false)
@@ -125,6 +125,7 @@ export default function FunilPortaPage() {
         </span>
       </div>
 
+      <h1 style={{ fontSize: 18, fontWeight: 800, margin: '0 0 10px' }}>Questionário MyPoupar</h1>
       <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
         {FASES.map((f, i) => (
           <div key={f.id} title={f.nome} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 800, padding: '6px 0', borderRadius: 8, background: i === idx ? '#2563EB' : i < idx ? '#BFDBFE' : '#F1F5F9', color: i === idx ? '#fff' : '#334155' }}>{f.letra}</div>
