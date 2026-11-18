@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
+import { responderIA } from '@/lib/server/ia-central'
 
 // Comando IA — add-on pago do SD Dialer: painel + assistente que responde sobre os dados da empresa do utilizador.
 
@@ -53,9 +54,6 @@ export async function POST(request: NextRequest) {
   if ('error' in ctx) return ctx.error
   const { db, user, me, company } = ctx
   if (!company.comando_ativo && !me.is_super_admin) return lockedResponse(company, user.email)
-  const key = process.env.GROQ_API_KEY
-  if (!key) return NextResponse.json({ error: 'IA não configurada.' }, { status: 500 })
-
   const body = await request.json().catch(() => ({})) as { message?: string; messages?: Array<{ role: string; content: string }> }
   const question = String(body.message || '').slice(0, 1500)
   if (!question.trim()) return NextResponse.json({ error: 'Escreve uma pergunta.' }, { status: 400 })
@@ -64,29 +62,37 @@ export async function POST(request: NextRequest) {
     .slice(-8)
     .map(m => ({ role: m.role, content: m.content.slice(0, 1500) }))
 
-  const { data } = await db.rpc('comando_empresa', { p_company: company.id })
-  const system = `És o Comando IA do SD Dialer, o assistente de gestão da empresa "${company.name}". Falas com ${me.full_name || 'o gestor'} (${me.role}).
-Respondes em português de Portugal, direto e curto (máx. 8 linhas; usa **negrito** e listas com "- ").
-Usa APENAS os DADOS abaixo (agregados dos últimos 30 dias salvo indicação). Se algo não estiver nos dados, diz que não tens essa informação — nunca inventes números.
-Ajuda a decidir: onde está a equipa a perder vendas, que leads trabalhar, quem precisa de apoio, o que fazer hoje. Termina com 1 ação concreta quando fizer sentido.
-Estados de leads: novo, contactado, vendido, nao_interessado, nao_atende, numero_errado, ligar_depois, sem_cobertura, desligado, etc. "semAtribuir" = leads novas sem comercial atribuído.
-Só tens acesso de leitura; para alterar dados o gestor usa os menus do SD Dialer (Leads, Distribuição, Campanhas).
-
-DADOS (${new Date().toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon' })}):
-${JSON.stringify(data)}`
-
   try {
-    const r = await fetch(GROQ_API_URL, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: GROQ_MODEL, temperature: 0.3, max_tokens: 900, messages: [{ role: 'system', content: system }, ...history, { role: 'user', content: question }] }),
-      signal: AbortSignal.timeout(45_000),
-    })
-    const j = await r.json().catch(() => ({}))
-    const reply = String(j?.choices?.[0]?.message?.content || '').trim()
-    if (!r.ok || !reply) return NextResponse.json({ error: 'A IA não respondeu agora. Tenta outra vez.' }, { status: 502 })
-    return NextResponse.json({ reply })
-  } catch {
-    return NextResponse.json({ error: 'A IA demorou demasiado. Tenta outra vez.' }, { status: 504 })
+    const out = await responderIA({ db, companyId: company.id, companyName: company.name, quem: me.full_name || 'o gestor', role: String(me.role), question, history })
+    let guardadas: any[] = []
+    if (out.propostas.length) {
+      const { data: ins } = await db.from('ia_propostas').insert(out.propostas.map(p => ({ ...p, company_id: company.id, criado_por: user.id }))).select('id,tipo,titulo,texto_proposto,motivo,estado,created_at')
+      guardadas = ins || []
+    }
+    return NextResponse.json({ reply: out.reply, propostas: guardadas })
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || 'A IA não respondeu agora. Tenta outra vez.' }, { status: 502 })
   }
+}
+
+// Propostas pendentes da empresa
+export async function PUT() {
+  const ctx = await context()
+  if ('error' in ctx) return ctx.error
+  const { db, company } = ctx
+  const { data } = await db.from('ia_propostas').select('id,tipo,titulo,texto_proposto,motivo,estado,created_at').eq('company_id', company.id).order('created_at', { ascending: false }).limit(30)
+  return NextResponse.json({ propostas: data || [] })
+}
+
+// Aprovar / rejeitar (não aplica nada sozinho)
+export async function PATCH(request: NextRequest) {
+  const ctx = await context()
+  if ('error' in ctx) return ctx.error
+  const { db, user, me, company } = ctx
+  if (!['admin', 'super_admin'].includes(String(me.role)) && !me.is_super_admin) return NextResponse.json({ error: 'Só administradores decidem propostas.' }, { status: 403 })
+  const b = await request.json().catch(() => ({})) as { id?: string; estado?: string }
+  if (!b.id || !['aprovada', 'rejeitada'].includes(String(b.estado))) return NextResponse.json({ error: 'Pedido inválido.' }, { status: 400 })
+  const { error } = await db.from('ia_propostas').update({ estado: b.estado, decidido_por: user.id, decidido_em: new Date().toISOString() }).eq('id', b.id).eq('company_id', company.id).eq('estado', 'pendente')
+  if (error) return NextResponse.json({ error: 'Não foi possível guardar.' }, { status: 500 })
+  return NextResponse.json({ ok: true })
 }
