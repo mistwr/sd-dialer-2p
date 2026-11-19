@@ -41,6 +41,7 @@ type VoiceCall = {
   client_name: string | null
   phone_number: string
   status: string
+  error_message?: string | null
   duration_seconds: number | null
   transcript_consent_status: 'pending' | 'granted' | 'denied' | 'not_requested' | 'unavailable' | string
   transcript_consent_at: string | null
@@ -213,7 +214,22 @@ function consentLabel(status: VoiceCall['transcript_consent_status']) {
   return 'Sem transcrição'
 }
 
-function callStatusLabel(status: string, endedAt: string | null) {
+function failedReason(message?: string | null) {
+  const m = (message || '').toLowerCase()
+  if (!m) return 'Falhada'
+  if (m.includes('não atendeu') || m.includes('nao atendeu') || m.includes('não foi atendida') || m.includes('expirou')) return 'Não atendeu'
+  if (m.includes('ocupad') || m.includes('busy') || m.includes('486')) return 'Número ocupado'
+  if (m.includes('não atribu') || m.includes('nao atribu') || m.includes('inexistente') || m.includes('404') || m.includes('unallocated')) return 'Número não atribuído'
+  if (m.includes('recus') || m.includes('declin') || m.includes('603')) return 'Chamada recusada'
+  if (m.includes('desligad') || m.includes('indispon')) return 'Número indisponível'
+  if (m.includes('agente')) return 'Agente de voz indisponível'
+  if (m.includes('saldo') || m.includes('402') || m.includes('403')) return 'Linha sem saldo ou bloqueada'
+  if (m.includes('sessão interrompida')) return 'Sessão interrompida'
+  return (message || 'Falhada').replace(/\.$/, '').slice(0, 60)
+}
+
+function callStatusLabel(status: string, endedAt: string | null, errorMessage?: string | null) {
+  if (status === 'failed') return failedReason(errorMessage)
   const terminalLabels: Record<string, string> = {
     failed: 'Falhada',
     voicemail: 'Correio de voz',
@@ -423,7 +439,7 @@ export default function VoiceCallHistory({ leadId }: { leadId?: string } = {}) {
                     </span>
                   </span>
                   <span style={{ color: '#475569', fontSize: 12 }}>
-                    {callStatusLabel(call.status, call.ended_at)} · {formatDuration(call.duration_seconds)}
+                    {callStatusLabel(call.status, call.ended_at, call.error_message)} · {formatDuration(call.duration_seconds)}
                   </span>
                   <span style={{
                     color: call.ai_sale ? '#166534' : '#1D4ED8',
