@@ -126,7 +126,7 @@ export async function GET(req: NextRequest) {
       admin
         .from('voice_calls')
         .select(
-          'id, company_id, lead_id, source, client_name, phone_number, status, duration_seconds, recording_enabled, transcript_consent_at, transcript_consent_status, created_by, started_at, ended_at, created_at, summary, interest_level, next_action, recording_url, extracted_facts',
+          'id, company_id, lead_id, source, client_name, phone_number, status, duration_seconds, recording_enabled, transcript_consent_at, transcript_consent_status, created_by, started_at, ended_at, created_at, summary, interest_level, next_action, recording_url, extracted_facts, error_message',
           { count: 'exact' }
         )
         .order('created_at', { ascending: false })
