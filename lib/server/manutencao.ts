@@ -11,3 +11,7 @@ const excecoes = new Set((process.env.MANUTENCAO_EXCECOES || MIGUEL).split(',').
 export function emManutencaoPara(userId?: string | null): boolean {
   return MANUTENCAO_ATIVA && !(userId && excecoes.has(userId))
 }
+
+export function ehExcecao(userId?: string | null): boolean {
+  return Boolean(userId && excecoes.has(userId))
+}
