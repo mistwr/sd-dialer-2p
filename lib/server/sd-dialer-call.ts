@@ -87,7 +87,11 @@ export async function reconcileCall(admin: any, call: { id: string; status?: str
     const { count: lines } = await admin.from('voice_call_transcripts').select('id', { count: 'exact', head: true }).eq('call_id', call.id)
     if (!lines) {
       await admin.from('voice_calls').update({
-        status: 'failed', error_message: 'Não atendeu.', ended_at: now, duration_seconds: 0, updated_at: now,
+        status: 'failed',
+        error_message: (Date.now() - new Date(call.started_at || call.created_at || now).getTime()) < 15_000
+          ? 'Recusada de imediato (menos de 15 s): número igual ao de saída, número inválido ou a operadora/Twilio a recusar.'
+          : 'Não atendeu.',
+        ended_at: now, duration_seconds: 0, updated_at: now,
       }).eq('id', call.id).is('ended_at', null)
       await applyCallOutcome(admin, call.id, { noAnswer: true })
       return 'failed'
@@ -188,6 +192,9 @@ export async function startOutboundCall(
   const isSuperAdmin = profile.is_super_admin === true || profile.role === 'super_admin'
   const callerIdentity = await resolveCallerId(admin, userId, profile.company_id, isSuperAdmin)
   const callerId = callerIdentity.phoneNumber
+  if (String(callerId).replace(/\D/g, '').slice(-9) === String(destination).replace(/\D/g, '').slice(-9)) {
+    throw new SdDialerError('O número a marcar é igual ao número de saída da empresa; a operadora rejeita a chamada. Liga a outro número para testar.', 400)
+  }
 
   const { data: voiceSettings, error: settingsError } = await admin
     .from('voice_settings')
