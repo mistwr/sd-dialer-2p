@@ -10,6 +10,7 @@ import { startCallRecording } from '@/lib/server/voice-call-recording'
 import { hangupIfVoicemail } from '@/lib/server/voicemail-detect'
 import { buildSalesCatalog, saleLinkEnabledFor, SALE_LINK_CLOSING } from '@/lib/server/sales-catalog'
 import { applyCallOutcome, isOptedOut } from '@/lib/server/voice-call-outcome'
+import { ehExcecao } from '@/lib/server/manutencao'
 
 // Lógica comum para iniciar uma chamada de IA (usada pela app SD Dialer e pelo LUMIN Comando).
 
@@ -39,6 +40,28 @@ export function spokenFirstName(fullName: string) {
   if (!first) return ''
   const lower = first.toLocaleLowerCase('pt-PT')
   return lower.charAt(0).toLocaleUpperCase('pt-PT') + lower.slice(1)
+}
+
+// DISPATCH_ON_ANSWER: 'off' (defeito) = o agente entra antes de tocar (comportamento antigo);
+// 'test' = só para utilizadores com exceção (Miguel); 'on' = para todos.
+// Com 'on'/'test' o agente só entra quando o cliente atende: chamadas sem resposta e caixas de voz
+// que nunca chegam a ter agente não gastam minutos de agente.
+function dispatchOnAnswerFor(userId: string) {
+  const mode = String(process.env.DISPATCH_ON_ANSWER || 'off').toLowerCase()
+  return mode === 'on' || (mode === 'test' && ehExcecao(userId))
+}
+
+// Traduz o erro do LiveKit/SIP num motivo legível. Devolve null se não for uma resposta normal da rede (ex.: erro de configuração).
+function sipOutcome(error: unknown): { message: string; noAnswer: boolean } | null {
+  const text = String((error as any)?.message || error || '').toLowerCase()
+  const code = (text.match(/\b([456]\d\d)\b/) || [])[1]
+  if (code === '486' || code === '600') return { message: 'Número ocupado.', noAnswer: true }
+  if (code === '603') return { message: 'Chamada recusada.', noAnswer: false }
+  if (code === '404' || code === '604') return { message: 'Número não atribuído.', noAnswer: false }
+  if (code === '480' || code === '408' || code === '487' || /timeout|timed out|no answer|not answered|ring/.test(text)) {
+    return { message: 'Não atendeu.', noAnswer: true }
+  }
+  return null
 }
 
 const AGENT_KIND = 4 // ParticipantInfo_Kind.AGENT
@@ -305,6 +328,7 @@ export async function startOutboundCall(
   }
 
   try {
+    const onAnswer = dispatchOnAnswerFor(userId)
     // Dispatch the agent first so it is already in the room when the callee answers.
     // Telecom uses the Ricardo agent validated over a real SIP call. Other campaigns retain their configured agent.
     // Todos os perfis vão para o agente validado no LiveKit Cloud (o worker antigo "lumin-web" pode não estar a correr).
@@ -316,43 +340,95 @@ export async function startOutboundCall(
         ? livekit.agentName
         : (process.env.LIVEKIT_PRIMARY_AGENT_NAME || process.env.LIVEKIT_TELECOM_AGENT_NAME || 'lumin-compara-lab')
     await api.room.createRoom({ name: roomName, emptyTimeout: 120, departureTimeout: 20 }).catch(() => null)
-    const dispatch = await api.agentDispatch.createDispatch(roomName, selectedAgentName, {
-      metadata: JSON.stringify(metadata),
-    })
-    dispatchId = dispatch.id
 
-    // Só marca o número depois de o agente estar na sala: evita chamadas em silêncio quando o agente não arranca.
-    const agentReady = await waitForAgent(api, roomName, 15_000)
-    if (!agentReady) {
-      await api.agentDispatch.deleteDispatch(dispatchId, roomName).catch(() => null)
-      await api.room.deleteRoom(roomName).catch(() => null)
-      dispatchId = ''
-      await admin
-        .from('voice_calls')
-        .update({
-          status: 'failed',
-          error_message: `O agente de voz "${selectedAgentName}" não entrou na chamada a tempo. Nenhum número foi marcado.`,
-          ended_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', callId)
-      throw new SdDialerError('O agente de voz não arrancou a tempo, por isso não liguei ao cliente. Tenta daqui a um minuto; se repetir, o agente está desligado no LiveKit.', 503)
+    const dispatchAgentNow = async (waitMs: number) => {
+      const dispatch = await api.agentDispatch.createDispatch(roomName, selectedAgentName, {
+        metadata: JSON.stringify(metadata),
+      })
+      dispatchId = dispatch.id
+      return waitForAgent(api, roomName, waitMs)
+    }
+    const agentFailedMessage = `O agente de voz "${selectedAgentName}" não entrou na chamada a tempo.`
+
+    if (!onAnswer) {
+      const agentReady = await dispatchAgentNow(15_000)
+      if (!agentReady) {
+        await api.agentDispatch.deleteDispatch(dispatchId, roomName).catch(() => null)
+        await api.room.deleteRoom(roomName).catch(() => null)
+        dispatchId = ''
+        await admin
+          .from('voice_calls')
+          .update({
+            status: 'failed',
+            error_message: agentFailedMessage + ' Nenhum número foi marcado.',
+            ended_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', callId)
+        throw new SdDialerError('O agente de voz não arrancou a tempo, por isso não liguei ao cliente. Tenta daqui a um minuto; se repetir, o agente está desligado no LiveKit.', 503)
+      }
     }
 
-    const sipParticipant = await api.sip.createSipParticipant(
-      livekit.trunkId,
-      destination,
-      roomName,
-      {
-        fromNumber: callerId,
-        participantIdentity: sipIdentity,
-        participantName: name || 'Contacto',
-        participantMetadata: JSON.stringify(metadata),
-        waitUntilAnswered: false,
-        ringingTimeout: 35,
-        maxCallDuration: 900,
-      },
-    )
+    let sipParticipant: any
+    if (!onAnswer) {
+      sipParticipant = await api.sip.createSipParticipant(
+        livekit.trunkId,
+        destination,
+        roomName,
+        {
+          fromNumber: callerId,
+          participantIdentity: sipIdentity,
+          participantName: name || 'Contacto',
+          participantMetadata: JSON.stringify(metadata),
+          waitUntilAnswered: false,
+          ringingTimeout: 35,
+          maxCallDuration: 900,
+        },
+      )
+    } else {
+      // Liga primeiro e espera que atendam; só então chama o agente.
+      try {
+        sipParticipant = await api.sip.createSipParticipant(
+          livekit.trunkId,
+          destination,
+          roomName,
+          {
+            fromNumber: callerId,
+            participantIdentity: sipIdentity,
+            participantName: name || 'Contacto',
+            participantMetadata: JSON.stringify(metadata),
+            waitUntilAnswered: true,
+            ringingTimeout: 25,
+            maxCallDuration: 900,
+          },
+        )
+      } catch (sipError) {
+        const outcome = sipOutcome(sipError)
+        if (!outcome) throw sipError
+        const endedAt = new Date().toISOString()
+        await admin.from('voice_calls').update({
+          status: 'failed', error_message: outcome.message, ended_at: endedAt, duration_seconds: 0, updated_at: endedAt,
+        }).eq('id', callId)
+        if (outcome.noAnswer) await applyCallOutcome(admin, callId, { noAnswer: true })
+        await api.room.deleteRoom(roomName).catch(() => null)
+        return { ok: true as const, callId, status: 'failed' as const, roomName }
+      }
+      participantCreated = true
+      const agentReady = await dispatchAgentNow(12_000)
+      if (!agentReady) {
+        await api.room.removeParticipant(roomName, sipIdentity).catch(() => null)
+        await api.agentDispatch.deleteDispatch(dispatchId, roomName).catch(() => null)
+        await api.room.deleteRoom(roomName).catch(() => null)
+        dispatchId = ''
+        const endedAt = new Date().toISOString()
+        await admin.from('voice_calls').update({
+          status: 'failed', error_message: agentFailedMessage, ended_at: endedAt, duration_seconds: 0, updated_at: endedAt,
+        }).eq('id', callId)
+        throw new SdDialerError('O cliente atendeu mas o agente de voz não entrou a tempo. Verifica o agente no LiveKit.', 503)
+      }
+      const answeredAt = new Date().toISOString()
+      await admin.from('voice_calls').update({ status: 'active', started_at: answeredAt, updated_at: answeredAt }).eq('id', callId)
+    }
     participantCreated = true
 
     const sipCallId = String((sipParticipant as any)?.sipCallId || '')
@@ -379,7 +455,7 @@ export async function startOutboundCall(
     return {
       ok: true as const,
       callId,
-      status: 'ringing' as const,
+      status: (onAnswer ? 'active' : 'ringing') as 'active' | 'ringing',
       roomName,
     }
   } catch (error) {
