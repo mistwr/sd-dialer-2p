@@ -309,9 +309,12 @@ export async function startOutboundCall(
     // Telecom uses the Ricardo agent validated over a real SIP call. Other campaigns retain their configured agent.
     // Todos os perfis vão para o agente validado no LiveKit Cloud (o worker antigo "lumin-web" pode não estar a correr).
     // Para voltar a usar o worker próprio: LIVEKIT_USE_WEB_AGENT=1.
-    const selectedAgentName = process.env.LIVEKIT_USE_WEB_AGENT === '1'
-      ? livekit.agentName
-      : (process.env.LIVEKIT_PRIMARY_AGENT_NAME || process.env.LIVEKIT_TELECOM_AGENT_NAME || 'lumin-compara-lab')
+    // O Ricardo da Compara+ energias tem o seu próprio agente no LiveKit (separado do telecom).
+    const selectedAgentName = agentId === 'ricardo-energia'
+      ? (process.env.LIVEKIT_ENERGIA_AGENT_NAME || 'ricardo-energia')
+      : process.env.LIVEKIT_USE_WEB_AGENT === '1'
+        ? livekit.agentName
+        : (process.env.LIVEKIT_PRIMARY_AGENT_NAME || process.env.LIVEKIT_TELECOM_AGENT_NAME || 'lumin-compara-lab')
     await api.room.createRoom({ name: roomName, emptyTimeout: 120, departureTimeout: 20 }).catch(() => null)
     const dispatch = await api.agentDispatch.createDispatch(roomName, selectedAgentName, {
       metadata: JSON.stringify(metadata),
