@@ -58,7 +58,7 @@ function sipOutcome(error: unknown): { message: string; noAnswer: boolean } | nu
   if (code === '486' || code === '600') return { message: 'Número ocupado.', noAnswer: true }
   if (code === '603') return { message: 'Chamada recusada.', noAnswer: false }
   if (code === '404' || code === '604') return { message: 'Número não atribuído.', noAnswer: false }
-  if (code === '480' || code === '408' || code === '487' || /timeout|timed out|no answer|not answered|ring/.test(text)) {
+  if (code === '480' || code === '408' || code === '487' || /timeout|timed out|no answer|not answered|ringing/.test(text)) {
     return { message: 'Não atendeu.', noAnswer: true }
   }
   return null
@@ -387,6 +387,7 @@ export async function startOutboundCall(
       )
     } else {
       // Liga primeiro e espera que atendam; só então chama o agente.
+      const dialStartedAt = Date.now()
       try {
         sipParticipant = await api.sip.createSipParticipant(
           livekit.trunkId,
@@ -403,6 +404,17 @@ export async function startOutboundCall(
           },
         )
       } catch (sipError) {
+        const rawSipError = String((sipError as any)?.message || sipError || '').replace(/\s+/g, ' ').slice(0, 160)
+        console.error('[sd-dialer] SIP dial failed after', Date.now() - dialStartedAt, 'ms:', rawSipError)
+        // Falha imediata (< 8 s) nunca é "não atendeu": é um erro técnico. Guarda o erro real no histórico.
+        if (Date.now() - dialStartedAt < 8_000) {
+          const endedAtFast = new Date().toISOString()
+          await admin.from('voice_calls').update({
+            status: 'failed', error_message: 'Falha ao ligar: ' + rawSipError, ended_at: endedAtFast, duration_seconds: 0, updated_at: endedAtFast,
+          }).eq('id', callId)
+          await api.room.deleteRoom(roomName).catch(() => null)
+          return { ok: true as const, callId, status: 'failed' as const, roomName }
+        }
         const outcome = sipOutcome(sipError)
         if (!outcome) throw sipError
         const endedAt = new Date().toISOString()
