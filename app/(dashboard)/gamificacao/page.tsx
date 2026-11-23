@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import useSWR from 'swr'
 import { Gift, Phone, MessageCircle, ShoppingBag, GraduationCap, Trophy, Pencil } from 'lucide-react'
+import { NatalEstilos, PaiNatal, Treno } from '@/components/common/NatalArte'
+import { epocaNatal } from '@/lib/formacao-conteudo'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { authFetch, authFetcher as fetcher } from '@/lib/client/authFetch'
 
@@ -64,6 +66,7 @@ export default function GamificacaoPage() {
   return (
     <div className="mx-auto min-w-0 max-w-4xl px-3 py-4 sm:px-4 sm:py-6">
       <div style={{ borderRadius: 20, padding: '22px 22px 18px', marginBottom: 16, color: '#fff', background: 'radial-gradient(120% 140% at 0% 0%, #1F4D36 0%, #0C2B1E 45%, #2A0A0A 100%)', border: '1px solid rgba(212,175,55,0.35)', position: 'relative', overflow: 'hidden' }}>
+        {epocaNatal() && (<><NatalEstilos /><Treno width={200} /><div className="hidden sm:block" style={{ position: 'absolute', right: 18, top: 14 }}><PaiNatal size={96} /></div></>)}
         <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#E8C766', fontWeight: 800 }}>Juntos Somos +</div>
         <h1 style={{ margin: '6px 0 4px', fontSize: 26, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 10 }}><Trophy size={24} color="#E8C766" /> Ranking da equipa</h1>
         <p style={{ margin: 0, fontSize: 13.5, color: 'rgba(255,255,255,0.8)', maxWidth: 560 }}>Os teus resultados e os dos colegas da tua empresa. Chamada {data?.pontos?.chamada ?? 1} pt · conversa real +{data?.pontos?.conversa ?? 3} · venda {data?.pontos?.venda ?? 50} · módulo de formação {data?.pontos?.modulo ?? 10}.</p>
