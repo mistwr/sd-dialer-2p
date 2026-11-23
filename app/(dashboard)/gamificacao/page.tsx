@@ -4,11 +4,11 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import { Gift, Phone, MessageCircle, ShoppingBag, GraduationCap, Trophy, Pencil } from 'lucide-react'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { authFetch, authFetcher as fetcher } from '@/lib/client/authFetch'
 
 type Linha = { id: string; nome: string; avatar: string | null; role: string; chamadas: number; conversas: number; vendas: number; modulos: number; pontos: number }
 type Resp = { ranking: Linha[]; natal: { inicio: string; fim: string; premios: string[] }; pontos: { chamada: number; conversa: number; venda: number; modulo: number }; eu: string; de: string; ate: string | null }
 
-const fetcher = (u: string) => fetch(u).then(r => r.json())
 const card: React.CSSProperties = { background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, padding: 16, marginBottom: 14 }
 
 function medalhas(l: Linha) {
@@ -36,7 +36,7 @@ function EditarPremios({ natal, onDone }: { natal: Resp['natal']; onDone: () => 
   const [busy, setBusy] = useState(false)
   async function guardar() {
     setBusy(true)
-    await fetch('/api/gamificacao', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inicio, fim, premios: premios.split('\n').map(p => p.trim()).filter(Boolean) }) })
+    await authFetch('/api/gamificacao', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inicio, fim, premios: premios.split('\n').map(p => p.trim()).filter(Boolean) }) })
     setBusy(false); onDone()
   }
   const inp: React.CSSProperties = { padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14 }

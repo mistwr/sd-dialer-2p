@@ -1,12 +1,12 @@
 'use client'
 
 // Neve discreta (só na barra lateral escura, só na época de Natal). Respeita "reduzir movimento".
-const FLOCOS = Array.from({ length: 22 }, (_, i) => ({
+const FLOCOS = Array.from({ length: 16 }, (_, i) => ({
   left: (i * 37) % 100,
   delay: (i * 1.7) % 12,
   dur: 9 + ((i * 3) % 8),
-  size: 6 + ((i * 5) % 7),
-  op: 0.25 + ((i * 7) % 5) / 10,
+  size: 2 + ((i * 5) % 3),
+  op: 0.18 + ((i * 7) % 4) / 20,
 }))
 
 export default function NatalNeve() {

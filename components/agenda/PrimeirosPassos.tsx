@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { CheckCircle2, Circle, Rocket, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { authFetch } from '@/lib/client/authFetch'
 
 // Guia para quem entra pela primeira vez: o que fazer, por ordem, sem usar o robot.
 export default function PrimeirosPassos({ userId }: { userId?: string | null }) {
@@ -16,7 +17,7 @@ export default function PrimeirosPassos({ userId }: { userId?: string | null }) 
   const { data } = useSWR(userId ? ['primeiros-passos', userId] : null, async () => {
     const sb = createClient()
     const [prog, ch, fu, vd] = await Promise.all([
-      fetch('/api/formacao/progresso').then(r => r.json()).catch(() => ({})),
+      authFetch('/api/formacao/progresso').then(r => r.json()).catch(() => ({})),
       sb.from('call_history').select('id', { count: 'exact', head: true }).eq('parceiro_id', String(userId)),
       sb.from('follow_ups').select('id', { count: 'exact', head: true }).eq('parceiro_id', String(userId)),
       sb.from('vendas').select('id', { count: 'exact', head: true }).eq('seller_id', String(userId)).is('deleted_at', null),
