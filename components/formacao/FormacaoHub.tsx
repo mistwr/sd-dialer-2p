@@ -6,6 +6,7 @@ import Link from "next/link";
 import { BookOpen, CheckCircle2, ExternalLink, Gift, GraduationCap, Rocket, Store, Trophy, Zap } from "lucide-react";
 import { MODULOS, PONTOS, type Modulo } from "@/lib/formacao-conteudo";
 import { FormacaoPage as MateriaisEmpresa } from "@/components/formacao/FormacaoPage";
+import { authFetch, authFetcher } from "@/lib/client/authFetch";
 
 type Aba = "comecar" | "metodo" | "mypoupar" | "operadora" | "natal" | "materiais";
 type Campanha = { id: string; title: string; description: string | null; operator: string | null; service_type: string | null; published_at: string | null };
@@ -174,14 +175,14 @@ function MyPouparEmbed() {
 export function FormacaoHub() {
   const [aba, setAba] = useState<Aba>("comecar");
   const [opId, setOpId] = useState<string>("op-meo");
-  const { data, mutate } = useSWR<{ progresso: Record<string, string> }>("/api/formacao/progresso", fetcher);
+  const { data, mutate } = useSWR<{ progresso: Record<string, string> }>("/api/formacao/progresso", authFetcher);
   const progresso = data?.progresso || {};
   const total = MODULOS.length;
   const feitos = MODULOS.filter((m) => progresso[m.id]).length;
   const operadoras = useMemo(() => MODULOS.filter((m) => m.grupo === "operadora"), []);
 
   async function passou(id: string) {
-    const r = await fetch("/api/formacao/progresso", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ modulo: id }) });
+    const r = await authFetch("/api/formacao/progresso", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ modulo: id }) });
     if (r.ok) await mutate(await r.json(), { revalidate: false });
   }
 
