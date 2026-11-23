@@ -147,6 +147,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     ? profile.full_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
     : '?'
 
+  if (!loading && user && !profile) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F8FAFC', padding: 24 }}>
+        <div style={{ maxWidth: 420, textAlign: 'center', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, padding: 28 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Não foi possível carregar o teu perfil</h1>
+          <p style={{ color: '#475569', fontSize: 15 }}>A sessão pode ter expirado ou esta conta não tem perfil no SD Dialer. Tenta outra vez ou sai e volta a entrar.</p>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 16 }}>
+            <button type="button" onClick={() => window.location.reload()} style={{ padding: '10px 18px', borderRadius: 10, background: '#fff', color: '#0F172A', border: '1px solid #CBD5E1', cursor: 'pointer' }}>Tentar outra vez</button>
+            <button type="button" onClick={() => void logout()} style={{ padding: '10px 18px', borderRadius: 10, background: '#0F172A', color: '#fff', border: 0, cursor: 'pointer' }}>Sair</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (blockedCompany) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F8FAFC', padding: 24 }}>

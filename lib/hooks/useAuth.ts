@@ -22,18 +22,20 @@ export function useAuth() {
   useEffect(() => {
     const supabase = createClient()
 
-    const loadProfile = async (userId: string) => {
-      const { data, error } = await supabase
-        .from('usuarios')
-        .select('*')
-        .eq('id', userId)
-        .single()
-      if (error) return null
-      // Update last_seen
-      supabase.from('usuarios').update({ last_seen_at: new Date().toISOString() }).eq('id', userId).then(() => {})
-      return data as Usuario
+    const loadProfile = async (userId: string): Promise<Usuario | null> => {
+      // Com timeout e uma nova tentativa: se a rede ou a sessão falharem, não fica a carregar para sempre.
+      for (let tentativa = 0; tentativa < 2; tentativa++) {
+        const r: any = await Promise.race([
+          supabase.from('usuarios').select('*').eq('id', userId).maybeSingle(),
+          new Promise(res => setTimeout(() => res({ data: null, error: { message: 'timeout' } }), 8000)),
+        ])
+        if (r?.data) {
+          supabase.from('usuarios').update({ last_seen_at: new Date().toISOString() }).eq('id', userId).then(() => {})
+          return r.data as Usuario
+        }
+      }
+      return null
     }
-
     // Get initial session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
@@ -45,21 +47,33 @@ export function useAuth() {
     })
 
     // Listen for changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        const profile = await loadProfile(session.user.id)
-        setState({ user: session.user, profile, loading: false, error: null })
-      } else {
-        setState({ user: null, profile: null, loading: false, error: null })
-      }
+    // Nunca fazer pedidos ao Supabase dentro do callback (bloqueia o "lock" da sessão do supabase-js):
+    // adia para fora do callback.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setTimeout(async () => {
+        if (session?.user) {
+          const profile = await loadProfile(session.user.id)
+          setState({ user: session.user, profile, loading: false, error: null })
+        } else {
+          setState({ user: null, profile: null, loading: false, error: null })
+        }
+      }, 0)
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
   const logout = useCallback(async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
+    // Sair tem de funcionar sempre, mesmo que o pedido ao Supabase fique pendurado.
+    try {
+      const supabase = createClient()
+      await Promise.race([supabase.auth.signOut({ scope: 'local' }), new Promise(r => setTimeout(r, 3000))])
+    } catch {}
+    try {
+      Object.keys(localStorage).filter(k => k.startsWith('sb-')).forEach(k => localStorage.removeItem(k))
+      document.cookie.split(';').map(c => c.split('=')[0].trim()).filter(n => n.startsWith('sb-'))
+        .forEach(n => { document.cookie = `${n}=; Max-Age=0; path=/` })
+    } catch {}
     window.location.href = '/login'
   }, [])
 
