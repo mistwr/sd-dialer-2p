@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { epocaNatal } from '@/lib/formacao-conteudo'
 
 interface MensagemMotivacionalProps {
@@ -28,11 +27,14 @@ export default function MensagemMotivacional({ userId, companyId }: MensagemMoti
   if (epocaNatal()) {
     const msg = natal[(userId.length + companyId.length + new Date().getDate()) % natal.length]
     return (
-      <Link href="/gamificacao" className="mb-4 flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-sm"
-        style={{ background: 'linear-gradient(90deg,#991B1B,#B91C1C 50%,#166534)', textDecoration: 'none' }}>
-        <span><span className="mr-2">🎄</span>{msg}</span>
-        <span className="whitespace-nowrap rounded-full bg-white/20 px-3 py-1 text-xs font-bold">🎁 Desafio de Natal →</span>
-      </Link>
+      <a href="/gamificacao" className="mb-4 flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-sm shadow-sm"
+        style={{ background: 'linear-gradient(120deg, #0C2B1E 0%, #123B2A 55%, #3B0D0D 100%)', border: '1px solid rgba(212,175,55,0.45)', color: '#F8FAFC', textDecoration: 'none' }}>
+        <span className="flex items-center gap-3">
+          <span aria-hidden style={{ width: 30, height: 30, borderRadius: 10, background: 'rgba(212,175,55,0.15)', border: '1px solid rgba(212,175,55,0.5)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>🎄</span>
+          <span style={{ fontWeight: 600 }}>{msg}</span>
+        </span>
+        <span className="whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold" style={{ background: '#D4AF37', color: '#1F2937' }}>Desafio de Natal →</span>
+      </a>
     )
   }
   const indice = (userId.length + companyId.length + new Date().getDate()) % mensagens.length

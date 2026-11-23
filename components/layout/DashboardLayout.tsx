@@ -16,6 +16,8 @@ import { notificacaoService } from '@/lib/services'
 import { Spinner } from '@/components/ui/Spinner'
 import { formatDateTimeShort } from '@/lib/utils/formatters'
 import MensagemMotivacional from '@/components/common/MensagemMotivacional'
+import NatalNeve from '@/components/common/NatalNeve'
+import { epocaNatal } from '@/lib/formacao-conteudo'
 
 interface NavItem {
   label: string
@@ -79,6 +81,7 @@ const VIEW_OPTIONS = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, profile, loading, logout } = useAuth()
+  const natal = epocaNatal()
   const pathname = usePathname()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -186,7 +189,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <aside style={{
         width: 'min(86vw, 280px)',
-        background: '#0F172A',
+        background: natal ? 'linear-gradient(180deg, #0C2B1E 0%, #0F172A 42%)' : '#0F172A',
         display: 'flex',
         flexDirection: 'column',
         flexShrink: 0,
@@ -198,17 +201,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       }}
         className="sidebar-fixed"
       >
-        <div style={{ padding: '20px 20px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        {natal && <NatalNeve />}
+        <div style={{ padding: '20px 20px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative', zIndex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
               width: 32, height: 32, borderRadius: 10,
-              background: 'linear-gradient(135deg, #2563EB, #1D4ED8)',
+              background: natal ? 'linear-gradient(135deg, #B91C1C, #7F1D1D)' : 'linear-gradient(135deg, #2563EB, #1D4ED8)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(37,99,235,0.4)',
+              boxShadow: natal ? '0 4px 14px rgba(185,28,28,0.45), inset 0 0 0 1px rgba(212,175,55,0.6)' : '0 4px 12px rgba(37,99,235,0.4)',
             }}>
               <PhoneCall size={16} color="#fff" />
             </div>
-            <span style={{ color: '#fff', fontWeight: 700, fontSize: 16, letterSpacing: '-0.3px' }}>SD Dialer</span>
+            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
+              <span style={{ color: '#fff', fontWeight: 700, fontSize: 16, letterSpacing: '-0.3px' }}>SD Dialer</span>
+              {natal && <span style={{ color: '#E8C766', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: 3 }}>Boas Festas</span>}
+            </div>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="md-hidden" style={{
             background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: 4, borderRadius: 6,
@@ -243,7 +250,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         )}
 
-        <nav style={{ flex: 1, padding: '4px 12px', overflowY: 'auto' }}>
+        <nav style={{ flex: 1, padding: '4px 12px', overflowY: 'auto', position: 'relative', zIndex: 1 }}>
           {visibleNav.map((item, idx) => {
             const showSection = idx === 0 || visibleNav[idx - 1].section !== item.section
             const active = pathname === item.href || (item.href !== '/admin' && item.href !== '/parceiro' && pathname.startsWith(item.href))
@@ -276,7 +283,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           })}
         </nav>
 
-        <div style={{ padding: '12px 16px', borderTop: '1px solid #1E293B' }}>
+        <div style={{ padding: '12px 16px', borderTop: '1px solid #1E293B', position: 'relative', zIndex: 1, background: natal ? 'rgba(15,23,42,0.85)' : undefined }}>
           {loading ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
               <Spinner size={20} color="#64748B" />
@@ -322,6 +329,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           display: 'flex', alignItems: 'center', padding: '0 12px', gap: 6,
           flexShrink: 0, position: 'sticky', top: 0, zIndex: 10,
         }}>
+          {natal && <div aria-hidden style={{ position: 'absolute', left: 0, right: 0, bottom: -1, height: 3, background: 'linear-gradient(90deg, #7F1D1D, #B91C1C 30%, #D4AF37 50%, #166534 70%, #0C2B1E)' }} />}
           <button
             onClick={() => setSidebarOpen(true)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center' }}
