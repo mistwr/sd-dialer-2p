@@ -67,7 +67,7 @@ export default function GamificacaoPage() {
         <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#E8C766', fontWeight: 800 }}>Juntos Somos +</div>
         <h1 style={{ margin: '6px 0 4px', fontSize: 26, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 10 }}><Trophy size={24} color="#E8C766" /> Ranking da equipa</h1>
         <p style={{ margin: 0, fontSize: 13.5, color: 'rgba(255,255,255,0.8)', maxWidth: 560 }}>Os teus resultados e os dos colegas da tua empresa. Chamada {data?.pontos?.chamada ?? 1} pt · conversa real +{data?.pontos?.conversa ?? 3} · venda {data?.pontos?.venda ?? 50} · módulo de formação {data?.pontos?.modulo ?? 10}.</p>
-        {ranking.length >= 3 && (
+        {ranking.length >= 3 && ranking[2].pontos > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.15fr 1fr', gap: 10, alignItems: 'end', marginTop: 18 }}>
             {[1, 0, 2].map(pos => {
               const l = ranking[pos]
