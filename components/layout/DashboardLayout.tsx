@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, Building2, Megaphone, Volume2, VolumeX,
   PhoneCall, BarChart2, LogOut, Menu, X, Bell,
   ChevronRight, PhoneIncoming, History, UserCircle,
-  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag, MessageSquare, Users2, ArrowLeft, ArrowRight, GraduationCap, TrendingUp, ShieldCheck, Sparkles, Zap} from 'lucide-react'
+  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag, MessageSquare, Users2, ArrowLeft, ArrowRight, GraduationCap, TrendingUp, ShieldCheck, Sparkles, Zap, Trophy} from 'lucide-react'
 import useSWR from 'swr'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { createClient } from '@/lib/supabase/client'
@@ -61,6 +61,7 @@ const NAV: NavItem[] = [
   { section: 'Inteligência artificial', label: 'Assistente IA', href: '/parceiro/assistente-ia', icon: Brain,      roles: ['parceiro'] },
   // Formação e conta
   { section: 'Formação', label: 'Formação',   href: '/formacao',        icon: GraduationCap, roles: ['admin', 'supervisor', 'parceiro'] },
+  { section: 'Formação', label: 'Ranking',    href: '/gamificacao',     icon: Trophy,        roles: ['admin', 'supervisor', 'parceiro'] },
   { section: 'Formação', label: 'Meu perfil', href: '/parceiro/perfil', icon: UserCircle,    roles: ['parceiro'] },
   // Só superadmin (filtrado abaixo)
   { section: 'Superadmin', label: 'Empresas',      href: '/admin/empresas',     icon: Building2,   roles: ['admin'] },

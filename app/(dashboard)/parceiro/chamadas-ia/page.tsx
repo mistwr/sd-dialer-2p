@@ -1,4 +1,5 @@
 'use client'
+import { useAuth } from '@/lib/hooks/useAuth'
 
 /**
  * /parceiro/chamadas-ia
@@ -957,7 +958,11 @@ function AssistenteComercial() {
 }
 
 function ChamadasIAPageContent() {
-  const [tab, setTab] = useState<'ligar' | 'historico' | 'assistente'>('ligar')
+  const { profile } = useAuth()
+  // Robot só para admins/supervisores: o parceiro vê apenas o histórico.
+  const soHistorico = profile?.role === 'parceiro' && !profile?.is_super_admin
+  const [tabEscolhida, setTab] = useState<'ligar' | 'historico' | 'assistente'>('ligar')
+  const tab = soHistorico ? 'historico' : tabEscolhida
   const { data, isLoading, mutate } = useSWR(
     '/api/recordings?limit=50',
     fetcher,
@@ -1018,10 +1023,10 @@ function ChamadasIAPageContent() {
         </button>
       </div>
 
-      <RobotMinutesCard />
+      {!soHistorico && <RobotMinutesCard />}
 
       {/* Tabs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4, marginBottom: 20, width: '100%', boxSizing: 'border-box' }}>
+      {!soHistorico && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 4, background: '#F1F5F9', borderRadius: 10, padding: 4, marginBottom: 20, width: '100%', boxSizing: 'border-box' }}>
         {[
           { key: 'ligar' as const, label: 'Ligar com Lumin', icon: <PhoneCall size={14} /> },
           { key: 'historico' as const, label: 'Histórico', icon: <AudioLines size={14} /> },
@@ -1042,9 +1047,9 @@ function ChamadasIAPageContent() {
             {t.icon} {t.label}
           </button>
         ))}
-      </div>
+      </div>}
 
-      <div style={{ display: tab === 'ligar' ? 'block' : 'none' }}><LuminCallPanel /></div>
+      {!soHistorico && <div style={{ display: tab === 'ligar' ? 'block' : 'none' }}><LuminCallPanel /></div>}
       {tab === 'ligar' ? null : tab === 'assistente' ? <AssistenteComercial /> : (
         <>
       <VoiceCallHistory />

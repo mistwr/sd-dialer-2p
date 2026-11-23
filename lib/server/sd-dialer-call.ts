@@ -200,6 +200,10 @@ export async function startOutboundCall(
   const destination = normalizePtPhone(phone)
   if (!destination) throw new SdDialerError('Número de telefone inválido. Usa o formato internacional, por exemplo +351912345678.', 400)
   // O superadmin pode testar a qualquer hora (ex.: ligar para o próprio número à noite).
+  // Para já o robot é só para admins/supervisores (o parceiro vê o histórico mas não lança chamadas).
+  if (profile.role === 'parceiro' && profile.is_super_admin !== true) {
+    throw new SdDialerError('O robot está disponível só para admins e supervisores.', 403)
+  }
   const canBypassHours = profile.is_super_admin === true || profile.role === 'super_admin'
   if (!canBypassHours && !withinCallingHours()) {
     throw new SdDialerError('Fora do horário permitido para chamadas do robot (seg–sáb, 09:00–21:00).', 409)

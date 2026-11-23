@@ -1,5 +1,5 @@
-import { FormacaoPage } from "@/components/formacao/FormacaoPage";
+import { FormacaoHub } from "@/components/formacao/FormacaoHub";
 
 export default function Page() {
-  return <FormacaoPage />;
+  return <FormacaoHub />;
 }

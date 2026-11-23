@@ -232,10 +232,10 @@ export function FormacaoPage() {
   }
 
   return (
-    <div className="mx-auto min-w-0 max-w-5xl px-3 py-4 sm:px-4 sm:py-6">
+    <div className="min-w-0">
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900, color: "#0F172A" }}>Formação</h1>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: "#0F172A" }}>Materiais da empresa</h2>
           <p style={{ margin: "5px 0 0", fontSize: 14, color: "#64748B" }}>
             Conteúdos definidos pela sua empresa. Pode separar por operadora e categoria.
           </p>

@@ -15,6 +15,7 @@ import { leadService, followUpService } from '@/lib/services'
 import { createClient } from '@/lib/supabase/client'
 import FollowUpsTodayCard from '@/components/agenda/FollowUpsTodayCard'
 import DailyGoalBar from '@/components/agenda/DailyGoalBar'
+import PrimeirosPassos from '@/components/agenda/PrimeirosPassos'
 import { formatDateTimeShort } from '@/lib/utils/formatters'
 import { CustomFieldsRenderer, fetchCustomFieldDefs, type CustomFieldDef } from '@/components/common/CustomFields'
 import type { Lead, LeadStatus } from '@/lib/types'
@@ -352,6 +353,7 @@ function ParceiroDashboardInner() {
           </button>
         </div>
 
+        <PrimeirosPassos userId={profile?.id} />
         <DailyGoalBar userId={profile?.id} meta={(profile as any)?.meta_ligacoes_dia} />
         <FollowUpsTodayCard userId={profile?.id} />
 
