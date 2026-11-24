@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { Bot, PhoneCall, ShoppingBag, Users, UserPlus, AudioLines, Send, RefreshCw, Sparkles, Lock } from 'lucide-react'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { StatCard } from '@/components/ui/StatCard'
+import AnaliseIA from '../ia/page'
+import LuminGrowth from '../lumin-growth/page'
 
 type Proposta = { id: string; tipo: string; titulo: string; texto_proposto: string; motivo?: string; estado: string }
 type Msg = { role: 'user' | 'assistant'; content: string; propostas?: Proposta[] }
@@ -48,6 +50,11 @@ export default function ComandoPage() {
   const [messages, setMessages] = useState<Msg[]>([])
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
+  const [tab, setTab] = useState<'comando' | 'analise' | 'growth'>('comando')
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t === 'analise' || t === 'growth') setTab(t)
+  }, [])
   const endRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(async () => {
@@ -114,8 +121,19 @@ export default function ComandoPage() {
   const leads = d.leads || {}, vendas = d.vendas30d || {}, calls = d.chamadasIA30d || {}, equipa = d.equipa || {}
   const totalEquipa = Object.values(equipa).reduce((a: number, b: any) => a + Number(b || 0), 0) as number
 
+  const tabs = (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      {([['comando', 'Comando'], ['analise', 'Análise'], ['growth', 'LUMIN Growth']] as const).map(([k, l]) => (
+        <button key={k} onClick={() => setTab(k)} style={{ border: '1px solid ' + (tab === k ? '#2563EB' : '#E2E8F0'), background: tab === k ? '#2563EB' : '#fff', color: tab === k ? '#fff' : '#334155', borderRadius: 999, padding: '7px 16px', fontWeight: 700, cursor: 'pointer' }}>{l}</button>
+      ))}
+    </div>
+  )
+  if (tab === 'analise') return <div style={{ display: 'grid', gap: 16 }}>{tabs}<AnaliseIA /></div>
+  if (tab === 'growth') return <div style={{ display: 'grid', gap: 16 }}>{tabs}<LuminGrowth /></div>
+
   return (
     <div style={{ display: 'grid', gap: 20 }}>
+      {tabs}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0 }}>Comando IA</h1>
