@@ -1122,6 +1122,20 @@ function ChamadasIAPageContent() {
 
 
 export default function ChamadasIAPage() {
+  const { profile } = useAuth()
+  if (profile && profile.role === 'parceiro' && !(profile as any).is_super_admin) {
+    return (
+      <div style={{ maxWidth: 560, margin: '40px auto', padding: 20, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, textAlign: 'center' }}>
+        <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 6 }}>As chamadas do robot são geridas pelo admin</div>
+        <p style={{ color: '#64748B', fontSize: 14, margin: '0 0 14px' }}>As leads que o robot qualifica chegam-te em <b>Minhas Leads</b>, com a operadora, quanto pagam e o resumo da conversa.</p>
+        <a href="/parceiro" style={{ display: 'inline-block', background: '#2563EB', color: '#fff', padding: '10px 16px', borderRadius: 10, fontWeight: 800, textDecoration: 'none' }}>Ir para Minhas Leads</a>
+      </div>
+    )
+  }
+  return <ChamadasIAInterno />
+}
+
+function ChamadasIAInterno() {
   const [accessState, setAccessState] = useState<'loading' | 'active' | 'locked'>('loading')
   const [accessCode, setAccessCode] = useState('')
   const [accessError, setAccessError] = useState('')
