@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, Building2, Megaphone, Volume2, VolumeX,
   PhoneCall, BarChart2, LogOut, Menu, X, Bell,
   ChevronRight, PhoneIncoming, History, UserCircle,
-  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag, MessageSquare, Users2, ArrowLeft, ArrowRight, GraduationCap, ShieldCheck, Sparkles, Zap, Trophy} from 'lucide-react'
+  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag, MessageSquare, Users2, ArrowLeft, ArrowRight, GraduationCap, ShieldCheck, Sparkles, Zap, Trophy, Bot} from 'lucide-react'
 import useSWR from 'swr'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { createClient } from '@/lib/supabase/client'
@@ -36,7 +36,8 @@ const NAV: NavItem[] = [
   // Trabalho diário
   { section: 'Leads e chamadas', label: 'Minhas Leads',   href: '/parceiro',             icon: PhoneIncoming, roles: ['parceiro', 'admin', 'supervisor'] },
   { section: 'Leads e chamadas', label: 'Agenda',         href: '/parceiro/agenda',      icon: Calendar,      roles: ['parceiro', 'admin', 'supervisor'] },
-  { section: 'Leads e chamadas', label: 'Chamadas IA',    href: '/parceiro/chamadas-ia', icon: AudioLines,    roles: ['parceiro', 'admin', 'supervisor'] },
+  { section: 'Leads e chamadas', label: 'Chamadas IA',    href: '/parceiro/chamadas-ia', icon: AudioLines,    roles: ['admin', 'supervisor'] },
+  { section: 'Leads e chamadas', label: 'Fluxo do robot', href: '/admin/fluxo-robot',    icon: Bot,           roles: ['admin', 'supervisor'] },
   { section: 'Leads e chamadas', label: 'Histórico',      href: '/parceiro/historico',   icon: History,       roles: ['parceiro', 'admin', 'supervisor'] },
   { section: 'Leads e chamadas', label: 'SMS em massa',   href: '/parceiro/sms',         icon: MessageSquare, roles: ['parceiro', 'admin', 'supervisor'] },
   { section: 'Leads e chamadas', label: 'Porta → Lead',   href: '/parceiro/porta',       icon: MapPin,        roles: ['parceiro', 'admin', 'supervisor'] },
@@ -48,6 +49,7 @@ const NAV: NavItem[] = [
   { section: 'Vendas', label: 'Chamadas automáticas', href: '/campanhas-chamadas', icon: PhoneCall, roles: ['admin', 'supervisor'] },
   { section: 'Vendas', label: 'Campanhas operadoras', href: '/campanhas-operadoras', icon: Megaphone, roles: ['parceiro', 'admin', 'supervisor'] },
   { section: 'Vendas', label: 'Dívida Endesa (NIF)', href: '/consulta-divida', icon: ShieldCheck, roles: ['parceiro', 'admin', 'supervisor'] },
+  { section: 'Vendas', label: 'Cobertura (morada)', href: '/cobertura', icon: MapPin, roles: ['parceiro', 'admin', 'supervisor'] },
   // Gestão da equipa
   { section: 'Gestão', label: 'Base de leads',    href: '/admin/leads',           icon: PhoneCall, roles: ['admin', 'supervisor'] },
   { section: 'Gestão', label: 'Distribuição',     href: '/admin/distribuicao',    icon: Shuffle,   roles: ['admin', 'supervisor'] },
@@ -463,7 +465,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {children}
         </main>
       </div>
-      <GuiaIA userId={user?.id} />
+      <GuiaIA key={effectiveRole} userId={user?.id} verComo={effectiveRole} />
 
       <style>{`
         @media (min-width: 768px) {
