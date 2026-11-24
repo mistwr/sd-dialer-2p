@@ -58,13 +58,14 @@ export function ProspecaoPage() {
     setBusy(true);
     try {
       const r = await fetch("/api/prospecao", {
+        signal: AbortSignal.timeout(65000),
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ query, local, raioKm: raio, ...(pos ? { lat: pos.lat, lng: pos.lng } : {}) }),
       });
       const j = await r.json();
       if (!r.ok) setErro(j.error || "Não foi possível.");
       else { setRes(j.resultados || []); if (j.aviso) setAviso(j.aviso); else if (!(j.resultados || []).length) setAviso("Sem resultados. Tenta outro termo, cidade ou raio maior."); }
-    } catch { setErro("Sem ligação. Tenta outra vez."); }
+    } catch (e: any) { setErro(e?.name === "TimeoutError" ? "A pesquisa demorou demasiado. Tenta outra vez com um termo mais simples." : "Sem ligação. Tenta outra vez."); }
     setBusy(false);
   }
 
@@ -103,7 +104,7 @@ export function ProspecaoPage() {
           {RAIOS.map((r) => <button key={r} onClick={() => setRaio(r)} style={chip(raio === r)}>{r} km</button>)}
         </div>
         <button onClick={pesquisar} disabled={busy} style={{ ...btn("#4F46E5"), width: "100%", justifyContent: "center", padding: 13, fontSize: 16, opacity: busy ? 0.7 : 1 }}>
-          <Search size={18} /> {busy ? "A pesquisar..." : "Pesquisar empresas"}
+          <Search size={18} /> {busy ? "A pesquisar (até 30 s)..." : "Pesquisar empresas"}
         </button>
       </div>
 

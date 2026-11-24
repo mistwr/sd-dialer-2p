@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import 'leaflet/dist/leaflet.css'
 import { MapPin, RefreshCw } from 'lucide-react'
 
-type Pessoa = { user_id: string; nome: string; role: string; lat: number; lng: number; accuracy: number | null; updated_at: string }
+type Pessoa = { user_id: string; nome: string; role: string; empresa?: string | null; lat: number; lng: number; accuracy: number | null; updated_at: string }
 
 const minAtras = (iso: string) => Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000))
 const cor = (m: number) => (m <= 2 ? '#16A34A' : m <= 15 ? '#D97706' : '#94A3B8')
@@ -51,7 +51,7 @@ export default function EquipaNoMapaPage() {
     pessoas.forEach(p => {
       const m = minAtras(p.updated_at)
       L.current.circleMarker([p.lat, p.lng], { radius: 10, color: '#fff', weight: 2, fillColor: cor(m), fillOpacity: 1 })
-        .bindTooltip(`${p.nome} · ${txt(m)}`, { permanent: true, direction: 'top', offset: [0, -8] }).addTo(camada.current)
+        .bindTooltip(`${p.nome}${p.accuracy && p.accuracy >= 5000 ? ' (aprox.)' : ''} · ${txt(m)}`, { permanent: true, direction: 'top', offset: [0, -8] }).addTo(camada.current)
       pts.push([p.lat, p.lng])
     })
     if (pts.length && !centrado.current) { mapa.current.fitBounds(pts, { padding: [50, 50], maxZoom: 15 }); centrado.current = true }
@@ -77,7 +77,7 @@ export default function EquipaNoMapaPage() {
             return (
               <div key={p.user_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderTop: '1px solid #F1F5F9' }}>
                 <span style={{ width: 10, height: 10, borderRadius: 999, background: cor(m) }} />
-                <div style={{ flex: 1, fontSize: 13 }}><b>{p.nome}</b><div style={{ color: '#94A3B8', fontSize: 12 }}>{p.role} · {txt(m)}</div></div>
+                <div style={{ flex: 1, fontSize: 13 }}><b>{p.nome}</b><div style={{ color: '#94A3B8', fontSize: 12 }}>{p.empresa ? p.empresa + ' · ' : ''}{p.role} · {txt(m)}{p.accuracy && p.accuracy >= 5000 ? ' · aprox. (cidade)' : ''}</div></div>
                 <a href={`https://www.google.com/maps?q=${p.lat},${p.lng}`} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#2563EB', fontWeight: 700 }}>Google Maps</a>
               </div>
             )
