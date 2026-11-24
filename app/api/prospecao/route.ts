@@ -54,7 +54,6 @@ export async function POST(req: NextRequest) {
   if (!ctx) return NextResponse.json({ error: 'Nao autenticado' }, { status: 401 })
   const tavily = process.env.TAVILY_API_KEY
   const groq = process.env.GROQ_API_KEY
-  if (!tavily) return NextResponse.json({ error: 'Falta configurar a pesquisa (TAVILY_API_KEY no Netlify).' }, { status: 503 })
   if (!groq) return NextResponse.json({ error: 'IA não configurada.' }, { status: 503 })
 
   const body = (await req.json().catch(() => ({}))) as {
@@ -83,57 +82,91 @@ export async function POST(req: NextRequest) {
 
   await ctx.admin.from('prospecao_pesquisas').insert({ user_id: ctx.me.id, company_id: ctx.me.company_id, query, local, raio_km: raio || null })
 
-  // 1) pesquisa web
-  const buscas = [
-    `${query} ${local} telefone contacto`,
-    `${query} ${local} páginas amarelas facebook instagram`,
-  ]
-  const vistos = new Set<string>()
-  const fontes: Array<{ url: string; title: string; content: string }> = []
-  for (const q of buscas) {
-    try {
-      const r = await fetch('https://api.tavily.com/search', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', Authorization: `Bearer ${tavily}` },
-        body: JSON.stringify({ query: q, search_depth: 'advanced', max_results: 8, include_answer: false }),
-      })
-      if (!r.ok) continue
-      const j = (await r.json()) as any
-      for (const it of j?.results || []) {
-        if (!it?.url || vistos.has(it.url)) continue
-        vistos.add(it.url)
-        fontes.push({ url: String(it.url), title: clip(it.title, 120), content: clip(it.content, 1800) })
-      }
-    } catch {}
-  }
-  if (!fontes.length) return NextResponse.json({ resultados: [], aviso: 'A pesquisa não devolveu páginas. Tenta outro termo ou local.' })
+  let fontes: Array<{ url: string; title: string; content: string }> = []
+  let negocios: any[] = []
+  let baseDigitos = ''
 
-  const textoFontes = fontes.slice(0, 14).map((f, i) => `[${i}] ${f.title} | ${f.url}\n${f.content}`).join('\n\n')
-  const baseDigitos = digitos(fontes.map((f) => f.content).join(' '))
-
-  // 2) a IA extrai os negócios
-  const sistema = `Extrais negócios reais de resultados de pesquisa web. Responde APENAS com JSON: {"negocios":[{"nome":"","telefone":"","email":"","morada":"","localidade":"","site":"","redes":"","fonte":0,"sugestao":""}]}.
+  const regrasJson = `Responde APENAS com JSON: {"negocios":[{"nome":"","telefone":"","email":"","morada":"","localidade":"","site":"","redes":"","fonte":0,"sugestao":""}]}.
 Regras:
-- Só negócios que aparecem nos textos; nunca inventes telefones, emails ou moradas. Se não houver telefone no texto, deixa "".
-- Telefone em Portugal (9 dígitos). "fonte" é o número [i] do texto onde viste o negócio. "redes" é o link do Facebook/Instagram se existir.
+- Só negócios reais que encontraste; nunca inventes telefones, emails ou moradas. Se não houver telefone, deixa "".
+- Telefone em Portugal (9 dígitos). "redes" é o link do Facebook/Instagram se existir.
 - Ignora diretórios genéricos, notícias e listas ("Top 10"); queremos o negócio em si.
 - "sugestao": 1 frase em português de Portugal sobre o que oferecer (ex.: sem site → criação de site; várias linhas móveis → pacote empresarial de telecom; consumo de energia → poupança na fatura de luz).
 - Máx. 15 negócios.`
-  let negocios: any[] = []
-  try {
-    const r = await fetch(GROQ_API_URL, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', Authorization: `Bearer ${groq}` },
-      body: JSON.stringify({
-        model: MODEL, temperature: 0.1, response_format: { type: 'json_object' },
-        messages: [{ role: 'system', content: sistema }, { role: 'user', content: `Pesquisa: ${query} em ${local}\n\n${textoFontes}` }],
-      }),
-    })
-    const j = (await r.json()) as any
-    const parsed = JSON.parse(j?.choices?.[0]?.message?.content || '{}')
-    negocios = Array.isArray(parsed?.negocios) ? parsed.negocios : []
-  } catch {
-    return NextResponse.json({ error: 'A IA não conseguiu processar. Tenta outra vez.' }, { status: 502 })
+
+  if (tavily) {
+    // 1) pesquisa web (Tavily)
+    const buscas = [`${query} ${local} telefone contacto`, `${query} ${local} páginas amarelas facebook instagram`]
+    const vistos = new Set<string>()
+    for (const q of buscas) {
+      try {
+        const r = await fetch('https://api.tavily.com/search', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', Authorization: `Bearer ${tavily}` },
+          body: JSON.stringify({ query: q, search_depth: 'advanced', max_results: 8, include_answer: false }),
+        })
+        if (!r.ok) continue
+        const j = (await r.json()) as any
+        for (const it of j?.results || []) {
+          if (!it?.url || vistos.has(it.url)) continue
+          vistos.add(it.url)
+          fontes.push({ url: String(it.url), title: clip(it.title, 120), content: clip(it.content, 1800) })
+        }
+      } catch {}
+    }
+    if (!fontes.length) return NextResponse.json({ resultados: [], aviso: 'A pesquisa não devolveu páginas. Tenta outro termo ou local.' })
+    const textoFontes = fontes.slice(0, 14).map((f, i) => `[${i}] ${f.title} | ${f.url}\n${f.content}`).join('\n\n')
+    baseDigitos = digitos(fontes.map((f) => f.content).join(' '))
+    try {
+      const r = await fetch(GROQ_API_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', Authorization: `Bearer ${groq}` },
+        body: JSON.stringify({
+          model: MODEL, temperature: 0.1, response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: `Extrais negócios de resultados de pesquisa web. "fonte" é o número [i] do texto onde viste o negócio.\n${regrasJson}` },
+            { role: 'user', content: `Pesquisa: ${query} em ${local}\n\n${textoFontes}` },
+          ],
+        }),
+      })
+      const j = (await r.json()) as any
+      const parsed = JSON.parse(j?.choices?.[0]?.message?.content || '{}')
+      negocios = Array.isArray(parsed?.negocios) ? parsed.negocios : []
+    } catch {
+      return NextResponse.json({ error: 'A IA não conseguiu processar. Tenta outra vez.' }, { status: 502 })
+    }
+  } else {
+    // 1+2) sem Tavily: pesquisa web da própria Groq (groq/compound), com a mesma chave da IA
+    try {
+      const r = await fetch(GROQ_API_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', Authorization: `Bearer ${groq}` },
+        body: JSON.stringify({
+          model: process.env.PROSPECAO_GROQ_MODEL || 'groq/compound-mini', temperature: 0.1,
+          compound_custom: { tools: { enabled_tools: ['web_search'] } },
+          search_settings: { country: 'portugal' },
+          messages: [
+            { role: 'system', content: `Procuras na web empresas de Portugal com contacto telefónico para um vendedor ligar. Usa a pesquisa web (Páginas Amarelas, Facebook, sites dos negócios). "fonte" deixa 0.\n${regrasJson}` },
+            { role: 'user', content: `Encontra ${query} em ${local}${raio ? ` (até ${raio} km)` : ''}, com telefone.` },
+          ],
+        }),
+      })
+      if (!r.ok) return NextResponse.json({ error: 'A pesquisa da IA falhou. Tenta outra vez.' }, { status: 502 })
+      const j = (await r.json()) as any
+      const msg = j?.choices?.[0]?.message || {}
+      const m = String(msg.content || '').match(/\{[\s\S]*\}/)
+      const parsed = m ? JSON.parse(m[0]) : {}
+      negocios = Array.isArray(parsed?.negocios) ? parsed.negocios : []
+      const tools = JSON.stringify(msg.executed_tools || [])
+      baseDigitos = digitos(tools)
+      for (const et of msg.executed_tools || []) {
+        for (const it of et?.search_results?.results || []) {
+          if (it?.url) fontes.push({ url: String(it.url), title: clip(it.title, 120), content: '' })
+        }
+      }
+    } catch {
+      return NextResponse.json({ error: 'A IA não conseguiu pesquisar. Tenta outra vez.' }, { status: 502 })
+    }
   }
 
   // 3) validar telefones, filtrar por raio, deduplicar
@@ -156,13 +189,13 @@ Regras:
       if (c) distancia = Math.round(haversine(centro, c))
     }
     if (raio && distancia != null && distancia > raio) continue
-    const f = fontes[Number(n?.fonte)] || null
+    const f = tavily ? (fontes[Number(n?.fonte)] || null) : null
     const site = clip(n?.site, 200)
     const redes = clip(n?.redes, 200)
     out.push({
       nome, telefone: tel, email: clip(n?.email, 100) || null, morada: clip(n?.morada, 160) || null,
       localidade: localidade || null, site: /^https?:\/\//.test(site) ? site : null,
-      redes: /^https?:\/\//.test(redes) ? redes : null, fonte_url: f?.url || null,
+      redes: /^https?:\/\//.test(redes) ? redes : null, fonte_url: f?.url || (/^https?:\/\//.test(site) ? site : null),
       sugestao: clip(n?.sugestao, 220) || null, distancia_km: distancia,
     })
   }
