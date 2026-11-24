@@ -36,7 +36,7 @@ const NAV: NavItem[] = [
   // Trabalho diário
   { section: 'Leads e chamadas', label: 'Minhas Leads',   href: '/parceiro',             icon: PhoneIncoming, roles: ['parceiro', 'admin', 'supervisor'] },
   { section: 'Leads e chamadas', label: 'Agenda',         href: '/parceiro/agenda',      icon: Calendar,      roles: ['parceiro', 'admin', 'supervisor'] },
-  { section: 'Leads e chamadas', label: 'Chamadas IA',    href: '/parceiro/chamadas-ia', icon: AudioLines,    roles: ['parceiro', 'admin', 'supervisor'] },
+  { section: 'Leads e chamadas', label: 'Chamadas IA',    href: '/parceiro/chamadas-ia', icon: AudioLines,    roles: ['admin', 'supervisor'] },
   { section: 'Leads e chamadas', label: 'Histórico',      href: '/parceiro/historico',   icon: History,       roles: ['parceiro', 'admin', 'supervisor'] },
   { section: 'Leads e chamadas', label: 'SMS em massa',   href: '/parceiro/sms',         icon: MessageSquare, roles: ['parceiro', 'admin', 'supervisor'] },
   { section: 'Leads e chamadas', label: 'Porta → Lead',   href: '/parceiro/porta',       icon: MapPin,        roles: ['parceiro', 'admin', 'supervisor'] },
@@ -463,7 +463,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {children}
         </main>
       </div>
-      <GuiaIA userId={user?.id} />
+      <GuiaIA key={effectiveRole} userId={user?.id} verComo={effectiveRole} />
 
       <style>{`
         @media (min-width: 768px) {

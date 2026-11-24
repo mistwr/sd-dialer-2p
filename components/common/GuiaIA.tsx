@@ -30,7 +30,7 @@ function Texto({ text }: { text: string }) {
   )
 }
 
-export default function GuiaIA({ userId }: { userId?: string | null }) {
+export default function GuiaIA({ userId, verComo }: { userId?: string | null; verComo?: string }) {
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState<Msg[]>([])
   const [input, setInput] = useState('')
@@ -44,7 +44,7 @@ export default function GuiaIA({ userId }: { userId?: string | null }) {
     const next: Msg[] = primeiraVez ? base : [...base, { role: 'user', content: q }]
     setMessages(next); setInput(''); setThinking(true)
     try {
-      const r = await fetch('/api/sd-dialer/guia', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: q, messages: base, primeiraVez }) })
+      const r = await fetch('/api/sd-dialer/guia', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: q, messages: base, primeiraVez, verComo }) })
       const d = await r.json().catch(() => ({}))
       setMessages([...next, { role: 'assistant', content: r.ok ? d.reply : d?.error || 'Sem resposta agora.' }])
     } catch { setMessages([...next, { role: 'assistant', content: 'Falhou a ligação. Tenta outra vez.' }]) } finally { setThinking(false) }
