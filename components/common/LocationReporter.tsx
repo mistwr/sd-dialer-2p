@@ -8,7 +8,9 @@ export function LocationReporter({ userId }: { userId: string }) {
   const ultimo = useRef(0)
 
   useEffect(() => {
-    if (!userId || typeof navigator === 'undefined' || !('geolocation' in navigator)) return
+    if (!userId || typeof navigator === 'undefined') return
+    const semGps = () => { fetch('/api/localizacao', { method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true, body: JSON.stringify({ semGps: true }) }).catch(() => {}) }
+    if (!('geolocation' in navigator)) { semGps(); const t = setInterval(semGps, 60_000); return () => clearInterval(t) }
     const id = navigator.geolocation.watchPosition(
       pos => {
         const agora = Date.now()
@@ -19,7 +21,7 @@ export function LocationReporter({ userId }: { userId: string }) {
           body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
         }).then(r => setAtivo(r.ok)).catch(() => setAtivo(false))
       },
-      () => setAtivo(false),
+      () => { setAtivo(false); semGps() },
       { enableHighAccuracy: true, maximumAge: 20_000, timeout: 30_000 },
     )
     return () => navigator.geolocation.clearWatch(id)

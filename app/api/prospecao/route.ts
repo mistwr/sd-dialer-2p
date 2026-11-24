@@ -6,6 +6,7 @@ import { campanhasUser } from '@/lib/server/campanhas-auth'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
+const ORCAMENTO_MS = 50_000
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const MODEL = process.env.COMANDO_GROQ_MODEL || 'openai/gpt-oss-120b'
@@ -31,7 +32,7 @@ function haversine(a: [number, number], b: [number, number]) {
 async function geocode(q: string): Promise<[number, number] | null> {
   try {
     const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=pt&q=${encodeURIComponent(q)}`, {
-      headers: { 'User-Agent': 'SD-Dialer/1.0 (prospecao)' },
+      headers: { 'User-Agent': 'SD-Dialer/1.0 (prospecao)' }, signal: AbortSignal.timeout(4000),
     })
     const j = (await r.json()) as any[]
     return j?.[0] ? [Number(j[0].lat), Number(j[0].lon)] : null
@@ -148,9 +149,13 @@ Regras:
     ]
     let msg: any = null
     const erros: string[] = []
+    const inicio = Date.now()
     for (const t of tentativas) {
+      const resta = ORCAMENTO_MS - (Date.now() - inicio)
+      if (resta < 8000) { erros.push('sem tempo'); break }
       try {
         const r = await fetch(GROQ_API_URL, {
+          signal: AbortSignal.timeout(Math.min(resta, 28_000)),
           method: 'POST',
           headers: { 'content-type': 'application/json', Authorization: `Bearer ${groq}` },
           body: JSON.stringify({ temperature: 0.1, messages: msgs, ...t }),
@@ -194,7 +199,10 @@ Regras:
     let distancia: number | null = null
     if (centro && localidade) {
       const k = localidade.toLowerCase()
-      if (!cacheLoc.has(k)) { cacheLoc.set(k, await geocode(localidade + ', Portugal')); await new Promise((r) => setTimeout(r, 1100)) }
+      if (!cacheLoc.has(k)) {
+        if (cacheLoc.size < 3) { cacheLoc.set(k, await geocode(localidade + ', Portugal')); await new Promise((r) => setTimeout(r, 1000)) }
+        else cacheLoc.set(k, null)
+      }
       const c = cacheLoc.get(k)
       if (c) distancia = Math.round(haversine(centro, c))
     }
