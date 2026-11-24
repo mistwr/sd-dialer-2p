@@ -136,36 +136,46 @@ Regras:
       return NextResponse.json({ error: 'A IA não conseguiu processar. Tenta outra vez.' }, { status: 502 })
     }
   } else {
-    // 1+2) sem Tavily: pesquisa web da própria Groq (groq/compound), com a mesma chave da IA
+    // 1+2) sem Tavily: pesquisa web da própria Groq (mesma GROQ_API_KEY)
+    const msgs = [
+      { role: 'system', content: `Procuras na web empresas de Portugal com contacto telefónico para um vendedor ligar. Usa a pesquisa web (Páginas Amarelas, Facebook, sites dos negócios). "fonte" deixa 0.\n${regrasJson}` },
+      { role: 'user', content: `Encontra ${query} em ${local}${raio ? ` (até ${raio} km)` : ''}, com telefone.` },
+    ]
+    const tentativas: Array<Record<string, unknown>> = [
+      { model: process.env.PROSPECAO_GROQ_MODEL || 'groq/compound-mini', compound_custom: { tools: { enabled_tools: ['web_search'] } } },
+      { model: 'groq/compound' },
+      { model: MODEL, tools: [{ type: 'browser_search' }] },
+    ]
+    let msg: any = null
+    const erros: string[] = []
+    for (const t of tentativas) {
+      try {
+        const r = await fetch(GROQ_API_URL, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', Authorization: `Bearer ${groq}` },
+          body: JSON.stringify({ temperature: 0.1, messages: msgs, ...t }),
+        })
+        if (!r.ok) { erros.push(`${t.model}: ${r.status} ${clip(await r.text(), 160)}`); continue }
+        const j = (await r.json()) as any
+        const m0 = j?.choices?.[0]?.message
+        if (m0 && /\{[\s\S]*\}/.test(String(m0.content || ''))) { msg = m0; break }
+        erros.push(`${t.model}: resposta sem JSON`)
+      } catch (e: any) { erros.push(`${t.model}: ${clip(e?.message, 100)}`) }
+    }
+    if (!msg) {
+      console.error('prospecao groq falhou', erros)
+      return NextResponse.json({ error: `A pesquisa da IA falhou. (${erros.join(' | ').slice(0, 380)})` }, { status: 502 })
+    }
     try {
-      const r = await fetch(GROQ_API_URL, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', Authorization: `Bearer ${groq}` },
-        body: JSON.stringify({
-          model: process.env.PROSPECAO_GROQ_MODEL || 'groq/compound-mini', temperature: 0.1,
-          compound_custom: { tools: { enabled_tools: ['web_search'] } },
-          search_settings: { country: 'portugal' },
-          messages: [
-            { role: 'system', content: `Procuras na web empresas de Portugal com contacto telefónico para um vendedor ligar. Usa a pesquisa web (Páginas Amarelas, Facebook, sites dos negócios). "fonte" deixa 0.\n${regrasJson}` },
-            { role: 'user', content: `Encontra ${query} em ${local}${raio ? ` (até ${raio} km)` : ''}, com telefone.` },
-          ],
-        }),
-      })
-      if (!r.ok) return NextResponse.json({ error: 'A pesquisa da IA falhou. Tenta outra vez.' }, { status: 502 })
-      const j = (await r.json()) as any
-      const msg = j?.choices?.[0]?.message || {}
       const m = String(msg.content || '').match(/\{[\s\S]*\}/)
       const parsed = m ? JSON.parse(m[0]) : {}
       negocios = Array.isArray(parsed?.negocios) ? parsed.negocios : []
-      const tools = JSON.stringify(msg.executed_tools || [])
-      baseDigitos = digitos(tools)
-      for (const et of msg.executed_tools || []) {
-        for (const it of et?.search_results?.results || []) {
-          if (it?.url) fontes.push({ url: String(it.url), title: clip(it.title, 120), content: '' })
-        }
+    } catch { negocios = [] }
+    baseDigitos = digitos(JSON.stringify(msg.executed_tools || []) + String(msg.reasoning || ''))
+    for (const et of msg.executed_tools || []) {
+      for (const it of et?.search_results?.results || []) {
+        if (it?.url) fontes.push({ url: String(it.url), title: clip(it.title, 120), content: '' })
       }
-    } catch {
-      return NextResponse.json({ error: 'A IA não conseguiu pesquisar. Tenta outra vez.' }, { status: 502 })
     }
   }
 

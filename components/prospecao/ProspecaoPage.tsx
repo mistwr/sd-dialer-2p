@@ -21,13 +21,33 @@ export function ProspecaoPage() {
   const [res, setRes] = useState<Neg[]>([]);
   const [guardados, setGuardados] = useState<Record<string, boolean>>({});
 
+  async function ultimaGuardada() {
+    try {
+      const r = await fetch("/api/localizacao?me=1", { cache: "no-store" });
+      const j = await r.json();
+      return j?.posicao as { lat: number; lng: number; updated_at: string } | null;
+    } catch { return null; }
+  }
+
   function usarLocalizacao() {
-    setErro("");
-    if (!navigator.geolocation) return setErro("O telemóvel não deixa obter a localização.");
+    setErro(""); setAviso("");
+    const fallback = async (motivo: string) => {
+      const g = await ultimaGuardada();
+      if (g) {
+        const min = Math.max(1, Math.round((Date.now() - new Date(g.updated_at).getTime()) / 60000));
+        setPos({ lat: g.lat, lng: g.lng }); setLocal("");
+        setAviso(`Usei a tua última posição guardada (há ${min < 120 ? min + " min" : Math.round(min / 60) + " h"}).`);
+      } else setErro(motivo + " Escreve a cidade ou ativa a localização do site nas definições do browser.");
+    };
+    if (!navigator.geolocation) return void fallback("Este aparelho não dá a localização.");
     navigator.geolocation.getCurrentPosition(
-      (p) => { setPos({ lat: p.coords.latitude, lng: p.coords.longitude }); setLocal(""); },
-      () => setErro("Não deu para obter a localização. Escreve a cidade."),
-      { enableHighAccuracy: false, timeout: 10000 },
+      (p) => {
+        setPos({ lat: p.coords.latitude, lng: p.coords.longitude }); setLocal("");
+        fetch("/api/localizacao", { method: "POST", headers: { "content-type": "application/json" }, keepalive: true,
+          body: JSON.stringify({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }) }).catch(() => {});
+      },
+      () => { void fallback("Não deu para obter a localização."); },
+      { enableHighAccuracy: false, timeout: 12000, maximumAge: 600000 },
     );
   }
 

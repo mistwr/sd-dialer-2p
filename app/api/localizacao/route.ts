@@ -34,9 +34,13 @@ export async function POST(request: NextRequest) {
 }
 
 // Admin/supervisor: posição de toda a equipa da empresa.
-export async function GET() {
+export async function GET(request: NextRequest) {
   const c = await quem()
   if (!c) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  if (new URL(request.url).searchParams.get('me') === '1') {
+    const { data: eu } = await c.db.from('user_locations').select('lat, lng, accuracy, updated_at').eq('user_id', c.me.id).maybeSingle()
+    return NextResponse.json({ posicao: eu || null })
+  }
   if (!['admin', 'supervisor'].includes(String(c.me.role)) && !c.me.is_super_admin) return NextResponse.json({ error: 'Sem permissão.' }, { status: 403 })
   const { data: locs } = await c.db.from('user_locations').select('user_id, lat, lng, accuracy, updated_at').eq('company_id', c.me.company_id)
   const ids = (locs || []).map(l => l.user_id)
