@@ -1,8 +1,9 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, ArrowRight, CheckCircle2, CloudOff, Loader2, Lightbulb, XCircle } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CheckCircle2, CloudOff, Loader2, Lightbulb, MonitorSmartphone, XCircle } from 'lucide-react'
 import { useAuth } from '@/lib/hooks/useAuth'
+import ClienteView, { FASES_CLIENTE } from '@/components/porta/ClienteView'
 import { FASES, type Fase, type FunilState, guardarCaptura, guardarRascunho, lerFila, lerRascunho, limparRascunho, novoFunil, sincronizarFila } from '@/lib/porta-funil'
 
 const OPERADORAS = ['MEO', 'NOS', 'Vodafone', 'DIGI', 'Outra', 'Nenhuma']
@@ -56,6 +57,7 @@ export default function FunilPortaPage() {
   const [offlineOk, setOfflineOk] = useState(false)
   const [ident, setIdent] = useState<{ userId: string; companyId: string } | null>(null)
   const iniciado = useRef(false)
+  const [modoCliente, setModoCliente] = useState(false)
 
   const set = useCallback(<K extends keyof FunilState>(k: K, v: FunilState[K]) => setS(p => (p ? { ...p, [k]: v } : p)), [])
 
@@ -116,6 +118,24 @@ export default function FunilPortaPage() {
     setFase(FASES[idx + 1].id)
   }
 
+  const clienteAtivo = modoCliente && FASES_CLIENTE.includes(fase) && !terminar
+  function seguinteCliente() {
+    // Saídas que precisam do vendedor (motivo de recusa, passos finais) voltam à vista do vendedor.
+    if ((fase === 'resolver' && s!.interesse !== 'quer') || fase === 'fechar') setModoCliente(false)
+    seguinte()
+  }
+
+  if (clienteAtivo) {
+    return (
+      <ClienteView
+        s={s} set={set} fase={fase} vendedor={(profile?.full_name || '').split(' ')[0]}
+        podeAvancar={podeAvancar && !saving} onNext={seguinteCliente}
+        onBack={idx > 0 ? () => setFase(FASES[idx - 1].id) : undefined}
+        onSair={() => setModoCliente(false)}
+      />
+    )
+  }
+
   return (
     <div style={{ maxWidth: 560, margin: '0 auto', paddingBottom: 90 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -125,7 +145,14 @@ export default function FunilPortaPage() {
         </span>
       </div>
 
-      <h1 style={{ fontSize: 18, fontWeight: 800, margin: '0 0 10px' }}>Questionário MyPoupar</h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, margin: '0 0 10px' }}>
+        <h1 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>Questionário MyPoupar</h1>
+        {FASES_CLIENTE.includes(fase) && (
+          <button onClick={() => setModoCliente(true)} style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '9px 12px', borderRadius: 12, border: '1.5px solid #2563EB', background: '#EFF6FF', color: '#1D4ED8', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
+            <MonitorSmartphone size={16} /> Mostrar ao cliente
+          </button>
+        )}
+      </div>
       <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
         {FASES.map((f, i) => (
           <div key={f.id} title={f.nome} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 800, padding: '6px 0', borderRadius: 8, background: i === idx ? '#2563EB' : i < idx ? '#BFDBFE' : '#F1F5F9', color: i === idx ? '#fff' : '#334155' }}>{f.letra}</div>
