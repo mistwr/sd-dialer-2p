@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, Building2, Megaphone, Volume2, VolumeX,
   PhoneCall, BarChart2, LogOut, Menu, X, Bell,
   ChevronRight, PhoneIncoming, History, UserCircle,
-  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag, MessageSquare, Users2, ArrowLeft, ArrowRight, GraduationCap, TrendingUp, ShieldCheck, Sparkles, Zap, Trophy} from 'lucide-react'
+  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag, MessageSquare, Users2, ArrowLeft, ArrowRight, GraduationCap, ShieldCheck, Sparkles, Zap, Trophy} from 'lucide-react'
 import useSWR from 'swr'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { createClient } from '@/lib/supabase/client'
@@ -17,6 +17,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { formatDateTimeShort } from '@/lib/utils/formatters'
 import MensagemMotivacional from '@/components/common/MensagemMotivacional'
 import NatalNeve from '@/components/common/NatalNeve'
+import GuiaIA from '@/components/common/GuiaIA'
 import { epocaNatal } from '@/lib/formacao-conteudo'
 
 interface NavItem {
@@ -56,10 +57,7 @@ const NAV: NavItem[] = [
   { section: 'Gestão', label: 'Relatório porta',  href: '/admin/relatorio-porta', icon: MapPin,    roles: ['admin', 'supervisor'] },
   // Inteligência artificial
   { section: 'Inteligência artificial', label: 'Comando IA',    href: '/admin/comando',          icon: Sparkles,   roles: ['admin', 'supervisor'] },
-  { section: 'Inteligência artificial', label: 'Análise IA',    href: '/admin/ia',               icon: Brain,      roles: ['admin', 'supervisor'] },
   { section: 'Inteligência artificial', label: 'Assistente IA', href: '/admin/assistente-ia',    icon: Brain,      roles: ['admin', 'supervisor'] },
-  { section: 'Inteligência artificial', label: 'LUMIN Growth',  href: '/admin/lumin-growth',     icon: TrendingUp, roles: ['admin', 'supervisor'] },
-  { section: 'Inteligência artificial', label: 'Análise IA',    href: '/parceiro/ia',            icon: Brain,      roles: ['parceiro'] },
   { section: 'Inteligência artificial', label: 'Assistente IA', href: '/parceiro/assistente-ia', icon: Brain,      roles: ['parceiro'] },
   // Formação e conta
   { section: 'Formação', label: 'Formação',   href: '/formacao',        icon: GraduationCap, roles: ['admin', 'supervisor', 'parceiro'] },
@@ -464,6 +462,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {children}
         </main>
       </div>
+      <GuiaIA userId={user?.id} />
 
       <style>{`
         @media (min-width: 768px) {
