@@ -48,6 +48,7 @@ const NAV: NavItem[] = [
   { section: 'Vendas', label: 'Marcador (telefone)', href: '/marcador', icon: PhoneCall, roles: ['parceiro', 'admin', 'supervisor'] },
   { section: 'Vendas', label: 'Chamadas automáticas', href: '/campanhas-chamadas', icon: PhoneCall, roles: ['admin', 'supervisor'] },
   { section: 'Vendas', label: 'Campanhas operadoras', href: '/campanhas-operadoras', icon: Megaphone, roles: ['parceiro', 'admin', 'supervisor'] },
+  { section: 'Vendas', label: 'Dívida Endesa (NIF)', href: '/consulta-divida', icon: ShieldCheck, roles: ['parceiro', 'admin', 'supervisor'] },
   { section: 'Vendas', label: 'Cobertura (morada)', href: '/cobertura', icon: MapPin, roles: ['parceiro', 'admin', 'supervisor'] },
   // Gestão da equipa
   { section: 'Gestão', label: 'Base de leads',    href: '/admin/leads',           icon: PhoneCall, roles: ['admin', 'supervisor'] },
