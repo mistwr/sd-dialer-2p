@@ -14,12 +14,21 @@ function nifValido(n: string) {
 async function ultimaCarga(ctx: any) {
   const { data } = await ctx.admin
     .from('endesa_divida_cargas')
-    .select('id, ficheiro, data_lista, total, created_at')
-    .eq('company_id', ctx.me.company_id)
+    .select('id, company_id, ficheiro, data_lista, total, created_at')
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
   return data
+}
+
+// A lista é única para toda a plataforma: todos os parceiros consultam a mesma.
+// Só carrega/substitui quem é admin da empresa que a carregou (ou super admin).
+async function podeCarregar(ctx: any) {
+  if (!['admin', 'super_admin'].includes(String(ctx.me.role))) return false
+  const { data: u } = await ctx.admin.from('usuarios').select('is_super_admin').eq('id', ctx.me.id).maybeSingle()
+  if (u?.is_super_admin || ctx.me.role === 'super_admin') return true
+  const atual = await ultimaCarga(ctx)
+  return !atual || atual.company_id === ctx.me.company_id
 }
 
 // GET ?info=1 -> estado da lista | GET ?nif=123456789 -> consulta exata
@@ -30,7 +39,7 @@ export async function GET(req: NextRequest) {
   if (req.nextUrl.searchParams.get('info')) {
     return NextResponse.json({
       carga: await ultimaCarga(ctx),
-      pode_carregar: ['admin', 'super_admin'].includes(String(ctx.me.role)),
+      pode_carregar: await podeCarregar(ctx),
     })
   }
 
@@ -53,8 +62,8 @@ export async function GET(req: NextRequest) {
   const { data: hit } = await ctx.admin
     .from('endesa_divida_nifs')
     .select('nif')
-    .eq('company_id', ctx.me.company_id)
     .eq('nif', nif)
+    .limit(1)
     .maybeSingle()
 
   await ctx.admin.from('endesa_divida_consultas').insert({
@@ -78,8 +87,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const ctx = await campanhasUser()
   if (!ctx) return NextResponse.json({ error: 'Nao autenticado' }, { status: 401 })
-  if (!['admin', 'super_admin'].includes(String(ctx.me.role))) {
-    return NextResponse.json({ error: 'Só administradores carregam a lista.' }, { status: 403 })
+  if (!(await podeCarregar(ctx))) {
+    return NextResponse.json({ error: 'Só o administrador que gere a lista a pode carregar.' }, { status: 403 })
   }
   const body = await req.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Pedido inválido' }, { status: 400 })
@@ -90,9 +99,8 @@ export async function POST(req: NextRequest) {
     const { count } = await ctx.admin
       .from('endesa_divida_nifs')
       .select('nif', { count: 'exact', head: true })
-      .eq('company_id', companyId)
       .eq('carga_id', cargaId)
-    await ctx.admin.from('endesa_divida_nifs').delete().eq('company_id', companyId).neq('carga_id', cargaId)
+    await ctx.admin.from('endesa_divida_nifs').delete().neq('carga_id', cargaId)
     await ctx.admin.from('endesa_divida_cargas').update({ total: count ?? 0 }).eq('id', cargaId).eq('company_id', companyId)
     return NextResponse.json({ ok: true, total: count ?? 0 })
   }
