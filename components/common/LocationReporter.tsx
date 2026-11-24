@@ -22,7 +22,20 @@ export function LocationReporter({ userId }: { userId: string }) {
       () => setAtivo(false),
       { enableHighAccuracy: true, maximumAge: 20_000, timeout: 30_000 },
     )
-    return () => navigator.geolocation.clearWatch(id)
+    // batimento: mesmo parado, renova a posição de 60 em 60 s enquanto a app está visível
+    const enviar = () => {
+      if (document.visibilityState !== 'visible') return
+      navigator.geolocation.getCurrentPosition(pos => {
+        ultimo.current = Date.now()
+        fetch('/api/localizacao', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+          body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+        }).then(r => setAtivo(r.ok)).catch(() => setAtivo(false))
+      }, () => {}, { enableHighAccuracy: false, maximumAge: 30_000, timeout: 20_000 })
+    }
+    const hb = setInterval(enviar, 60_000)
+    document.addEventListener('visibilitychange', enviar)
+    return () => { navigator.geolocation.clearWatch(id); clearInterval(hb); document.removeEventListener('visibilitychange', enviar) }
   }, [userId])
 
   if (!ativo) return null
