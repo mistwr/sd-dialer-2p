@@ -2,7 +2,7 @@
  * Base de dados dos códigos D2D — MEO Fibra, MEO Satélite e MEO Energia.
  *
  * ⚠️ IMPORTANTE: estes códigos foram transcritos das "Folhas de Códigos D2D"
- * fornecidas (MEO Fibra 2026-JULHO-14, MEO Satélite 2026-ABRIL-20,
+ * fornecidas (MEO Fibra 2026-NOVEMBRO-20, MEO Satélite 2026-ABRIL-20,
  * MEO Energia 2025-08-MAIO). Sempre que a operadora enviar uma folha nova,
  * atualiza APENAS este ficheiro — todos os componentes (Campanhas e
  * Formação) leem daqui, por isso nunca ficam desatualizados em dois sítios.
@@ -34,127 +34,90 @@ export interface FolhaCodigos {
 }
 
 // ---------------------------------------------------------------------------
-// MEO FIBRA — Folha D2D 2026-JULHO-14
+// MEO FIBRA — Folha D2D 2026-NOVEMBRO-20
 // ---------------------------------------------------------------------------
 export const meoFibra: FolhaCodigos = {
   id: "meo-fibra",
   produto: "MEO Fibra",
-  atualizadoEm: "2026-07-14",
+  atualizadoEm: "2026-11-20",
   tabelas: [
     {
-      id: "m4e-gb-fixo",
-      titulo: "M4e — 1000 200GB / 1000 Ilimitado",
+      id: "m4",
+      titulo: "M4 — 1000 200GB / 1000 Ilimitado",
       colunas: [
         "1C · 1000 200GB",
-        "1C · 1000 200GB Desporto",
+        "1C · 1000 200GB 1ª Fila",
         "1C · 1000 Ilimitado",
-        "1C · 1000 Ilimitado Desporto",
+        "1C · 1000 Ilimitado 1ª Fila",
         "2C · 1000 Ilimitado",
-        "2C · 1000 Ilimitado Desporto",
-        "3C · 1000 Ilimitado",
-        "3C · 1000 Ilimitado Desporto",
+        "2C · 1000 Ilimitado 1ª Fila",
       ],
       linhas: [
+        { cenario: "Nova instalação sem portabilidade Voz Fixa", valores: ["1401484", "1481059", "1409532", "1480279", "1404210", "1480905"] },
+        { cenario: "Nova instalação com portabilidade Voz Fixa", valores: ["1401507", "1481351", "1409429", "1480532", "1404294", "1480818"] },
+        { cenario: "Migração de Net+Voz Fibra — acresce TV", valores: ["1401529", "1481033", "1405581", "1480587", "1404923", "1480993"] },
+        { cenario: "Upgrade de atual M3/M2/M1 · Alteração de atual M4", valores: ["1401211", "1481387", "1401185", "1481421", "1401187", "1481423"] },
         {
-          cenario: "Nova instalação sem portabilidade Voz Fixa",
-          valores: ["1196674", "1383949", "586175", "1384052", "1116874", "1384081", "1447593", "1445981"],
-        },
-        {
-          cenario: "Nova instalação com portabilidade Voz Fixa",
-          valores: ["1196462", "1384189", "588983", "1384208", "1116783", "1384256", "1447644", "1445932"],
-        },
-        {
-          cenario: "Migração de Net+Voz Fibra — acresce TV",
-          valores: ["1196316", "1382157", "1044522", "1382180", "1110934", "1382207", "1448094", "1446601"],
-        },
-        {
-          cenario: "Upgrade de atual M3e/M2e/M1e · Alteração de atual M4e",
-          valores: ["1200274", "1382301", "1200288", "1382320", "1200297", "1382401", "1447256", "1446588"],
-        },
-        {
-          cenario: "Acréscimo de cartões a atual cliente M4e nesse pacote",
-          valores: [null, null, null, null, "520628", null, "520628", null],
-          nota: "Colunas 1 Cartão: usar código de alteração de pacote para M4e 2 Cartões",
+          cenario: "Acréscimo de cartões a atual cliente M4 nesse pacote",
+          valores: [null, null, null, null, "1395276", "1395276"],
+          nota: "Colunas 1 Cartão: usar código de alteração de pacote para M4 2 Cartões",
         },
       ],
     },
     {
-      id: "m4e-gb-variavel",
-      titulo: "M4e — 2GB / 10GB Ilimitado",
+      id: "m4-gigas",
+      titulo: "M4 com Gigas — 2GB / 10GB Ilimitado",
       colunas: [
         "1C · 2GB Ilimitado",
+        "1C · 2GB Ilimitado 1ª Fila",
         "1C · 10GB Ilimitado",
+        "1C · 10GB Ilimitado 1ª Fila",
         "2C · 2GB Ilimitado",
-        "2C · 2GB Ilimitado Desporto",
+        "2C · 2GB Ilimitado 1ª Fila",
         "2C · 10GB Ilimitado",
-        "2C · 10GB Ilimitado Desporto",
-        "3C · 2GB Ilimitado",
-        "3C · 2GB Ilimitado Desporto",
-        "3C · 10GB Ilimitado",
-        "3C · 10GB Ilimitado Desporto",
+        "2C · 10GB Ilimitado 1ª Fila",
       ],
       linhas: [
+        { cenario: "Nova instalação sem portabilidade Voz Fixa", valores: ["1394856", "1482213", "1405223", "1480995", "1394886", "1482190", "1402618", "1481019"] },
+        { cenario: "Nova instalação com portabilidade Voz Fixa", valores: ["1394859", "1482216", "1405244", "1480628", "1394891", "1482195", "1402632", "1480998"] },
+        { cenario: "Migração de Net+Voz Fibra — acresce TV", valores: ["1395168", "1482165", "1397542", "1481643", "1394909", "1482152", "1397728", "1481605"] },
+        { cenario: "Upgrade de atual M3/M2/M1 · Alteração de atual M4", valores: ["1394926", "1482146", "1397621", "1481592", "1394927", "1482147", "1397742", "1481448"] },
         {
-          cenario: "Nova instalação sem portabilidade Voz Fixa",
-          valores: ["1377014", "1090167", "1376812", "1384109", "1186625", "1384094", "1446620", "1446008", "1447240", "1446013"],
-        },
-        {
-          cenario: "Nova instalação com portabilidade Voz Fixa",
-          valores: ["1376995", "1090169", "1376824", "1384293", "1186616", "1384281", "1446623", "1445910", "1447285", "1445924"],
-        },
-        {
-          cenario: "Migração de Net+Voz Fibra — acresce TV",
-          valores: ["1376147", "1307728", "1376442", "1382239", "1307430", "1382234", "1447234", "1446597", "1447223", "1446572"],
-        },
-        {
-          cenario: "Upgrade de atual M3e/M2e/M1e · Alteração de atual M4e",
-          valores: ["1376417", "1307446", "1376418", "1382462", "1307447", "1382411", "1447174", "1446509", "1447187", "1446561"],
-        },
-        {
-          cenario: "Acréscimo de cartões a atual cliente M4e nesse pacote",
-          valores: [null, null, "1376882", null, "1186578", null, "1376882", null, "1186578", null],
-          nota: "Colunas 1 Cartão: usar código de alteração de pacote para M4e 2 Cartões",
+          cenario: "Acréscimo de cartões a atual cliente M4 nesse pacote",
+          valores: [null, null, null, null, "1395276", "1395276", "1395276", "1395276"],
+          nota: "Colunas 1 Cartão: usar código de alteração de pacote para M4 2 Cartões",
         },
       ],
     },
     {
-      id: "m3e",
-      titulo: "M3e",
-      colunas: ["1000", "1000 Desporto", "2GB", "2GB Desporto", "10GB", "10GB Desporto"],
+      id: "m3",
+      titulo: "M3",
+      colunas: ["1000", "1000 1ª Fila", "2GB", "2GB 1ª Fila", "10GB", "10GB 1ª Fila"],
       linhas: [
-        { cenario: "Nova instalação sem portabilidade Voz Fixa", valores: ["1182926", "1384040", "1375954", "1384062", "1090220", "1383914"] },
-        { cenario: "Nova instalação com portabilidade Voz Fixa", valores: ["590105", "1384162", "1375937", "1384253", "1090223", "1384154"] },
-        { cenario: "Migração de Net+Voz Fibra — acresce TV", valores: ["1044031", "1382152", "1375895", "1382141", "AGUARDA", "1382133"] },
-        { cenario: "Upgrade de TV Fibra M1e/M2e", valores: ["1200149", "1382270", "1375930", "1382293", "1097968", "1382283"] },
+        { cenario: "Nova instalação sem portabilidade Voz Fixa", valores: ["1402934", "1479962", "1395241", "1480063", "1405237", "1479966"] },
+        { cenario: "Nova instalação com portabilidade Voz Fixa", valores: ["1409312", "1479887", "1395242", "1480064", "1405240", "1479938"] },
+        { cenario: "Migração de Net+Voz Fibra — acresce TV", valores: ["1405578", "1479926", "1395233", "1480056", "1437017", "1480006"] },
+        { cenario: "Upgrade de TV Fibra M1/M2", valores: ["1401244", "1479955", "1395255", "1480029", "1397783", "1479968"] },
       ],
     },
     {
-      id: "m2e-m1e",
-      titulo: "M2e / M1e",
+      id: "m2-m1",
+      titulo: "M2 / M1",
       colunas: [
-        "M2e · 1000 200GB",
-        "M2e · 1000 500GB",
-        "M2e · 1000 Ilimitado",
-        "M2e · 2GB",
-        "M2e · 10GB",
-        "M2e · 2ª Casa TV s/box+NET",
-        "M1e · TV",
-        "M1e · NET 1000",
-        "M1e · 2GB",
+        "M2 · 1000 200GB",
+        "M2 · 1000 500GB",
+        "M2 · 1000 Ilimitado",
+        "M2 · 2GB",
+        "M2 · 10GB",
+        "M2 · 2ª Casa TV s/box+NET",
+        "M1 · TV 120",
+        "M1 · NET 1000",
+        "M1 · 2GB",
       ],
       linhas: [
-        {
-          cenario: "Nova instalação sem portabilidade Voz Fixa",
-          valores: ["1300825", "1300833", "1300840", "1377167", "1377207", "593743", "593921", "593891", "1377096"],
-        },
-        {
-          cenario: "Upgrade de TV Fibra M1e/M2e",
-          valores: ["1300723", "1300755", "1300767", "1377145", "1377119", null, null, null, null],
-        },
-        {
-          cenario: "Acréscimo de cartões a atual cliente M2e",
-          valores: ["1300720", "1300733", "1300712", null, null, null, null, null, null],
-        },
+        { cenario: "Nova instalação sem portabilidade Voz Fixa", valores: ["1398072", "1398050", "1398057", "1394833", "1394788", "1409518", "1409242", "1409236", "1377096"] },
+        { cenario: "Upgrade de TV Fibra M1/M2", valores: ["1398190", "1398142", "1398123", "1394846", "1394860", null, null, null, null] },
+        { cenario: "Acréscimo de cartões a atual cliente M2", valores: ["1395297", "1398143", "1395276", null, null, null, null, null, null] },
       ],
     },
   ],
