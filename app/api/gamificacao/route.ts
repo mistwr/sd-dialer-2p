@@ -13,10 +13,12 @@ export const dynamic = 'force-dynamic'
 const BUCKET = 'campaign-files'
 const CONVERSA = new Set(['nao_interessado', 'ligar_depois', 'venda', 'outro'])
 const PAGE = 1000
+const VALOR_PONTO = Number(process.env.VALOR_PONTO_EUR) || 25
 const NATAL_GLOBAL = process.env.RANKING_NATAL_COMPANY_ID || 'e27c8324-989a-4a68-b3a3-902cba74696c'
 
 function inicioPeriodo(periodo: string, natal: { inicio: string; fim: string }) {
   const now = new Date()
+  if (periodo === 'hoje') { const d = new Date(now); d.setHours(0, 0, 0, 0); return { de: d, ate: null as Date | null } }
   if (periodo === 'mes') return { de: new Date(now.getFullYear(), now.getMonth(), 1), ate: null as Date | null }
   if (periodo === 'natal') return { de: new Date(`${natal.inicio}T00:00:00Z`), ate: new Date(`${natal.fim}T23:59:59Z`) }
   const d = new Date(now); const dow = (d.getDay() + 6) % 7
@@ -72,12 +74,13 @@ export async function GET(request: NextRequest) {
 
     // Resultados lançados à mão: entram nos períodos 'mês' e 'Natal' quando o mês cruza o período (não na semana).
     let ajustes: any[] = []
-    if (periodo !== 'semana') {
+    if (periodo !== 'semana' && periodo !== 'hoje') {
       const mesIni = new Date(Date.UTC(de.getUTCFullYear(), de.getUTCMonth(), 1)).toISOString().slice(0, 10)
-      const { data } = await admin.from('ranking_ajustes').select('id, mes, user_id, nome, tvs, energias, chamadas, nota')
+      const { data } = await admin.from('ranking_ajustes').select('id, mes, user_id, nome, tvs, energias, chamadas, nota, fora_ranking')
         .gte('mes', mesIni).lte('mes', ateIso.slice(0, 10))
       ajustes = data || []
       for (const a of ajustes) {
+        if (a.fora_ranking) continue
         let e = a.user_id ? equipa.get(String(a.user_id)) : null
         if (!e) {
           const k = 'aj:' + String(a.nome).trim().toLowerCase()
@@ -108,7 +111,8 @@ export async function GET(request: NextRequest) {
       return { ...e, pontos: pv.pontos, top: pv.top }
     }).sort((a, b) => b.pontos - a.pontos || b.vendas - a.vendas || b.conversas - a.conversas || b.chamadas - a.chamadas)
 
-    return NextResponse.json({ periodo, de: deIso, ate: ate ? ateIso : null, ranking, natal, pontos: PONTOS, pontosVendas: PONTOS_VENDAS, eu: profile.id, podeEditar: !!profile.is_super_admin,
+    return NextResponse.json({ periodo, de: deIso, ate: ate ? ateIso : null, ranking, natal, pontos: PONTOS, pontosVendas: PONTOS_VENDAS, eu: profile.id, podeEditar: !!profile.is_super_admin, valorPonto: VALOR_PONTO,
+      robot: ajustes.filter((a: any) => a.fora_ranking).reduce((t: any, a: any) => ({ vendas: t.vendas + (Number(a.tvs) || 0) + (Number(a.energias) || 0), chamadas: t.chamadas + (Number(a.chamadas) || 0) }), { vendas: 0, chamadas: 0 }),
       ajustes: profile.is_super_admin ? ajustes : undefined })
   } catch (err) {
     return errorResponse(err, 'gamificacao')

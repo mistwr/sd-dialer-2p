@@ -469,8 +469,7 @@ export const chatService = {
         .select('usuario_id, usuarios(id, full_name, avatar_url)')
         .eq('conversa_id', conversa.id)
       const participantes = (participantesRaw ?? [])
-        .map(p => p.usuarios)
-        .flat()
+        .map(p => (Array.isArray(p.usuarios) ? p.usuarios[0] : p.usuarios) ?? { id: p.usuario_id, full_name: '', avatar_url: null })
         .filter((u): u is Pick<Usuario, 'id' | 'full_name' | 'avatar_url'> => !!u)
 
       const { data: ultimaMsg } = await sb

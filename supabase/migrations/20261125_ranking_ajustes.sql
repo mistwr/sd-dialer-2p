@@ -8,6 +8,7 @@ create table if not exists public.ranking_ajustes (
   energias int not null default 0,
   chamadas int not null default 0,
   nota text,
+  fora_ranking boolean not null default false, -- ex.: robot: aparece à parte, não entra no ranking
   created_by uuid,
   created_at timestamptz not null default now()
 );

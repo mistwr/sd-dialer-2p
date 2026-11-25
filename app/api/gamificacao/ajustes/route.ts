@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     const n = (v: any) => Math.max(0, Math.min(100000, Math.round(Number(v) || 0)))
     const { data, error } = await admin.from('ranking_ajustes').insert({
       mes, user_id: userId, nome: nomeFinal, tvs: n(b.tvs), energias: n(b.energias), chamadas: n(b.chamadas),
-      nota: b.nota ? String(b.nota).slice(0, 200) : null, created_by: profile.id,
+      nota: b.nota ? String(b.nota).slice(0, 200) : null, created_by: profile.id, fora_ranking: !!b.fora_ranking,
     }).select('id').single()
     if (error) throw new SdDialerError(error.message, 500)
     return NextResponse.json({ ok: true, id: data.id })

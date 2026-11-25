@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import useSWR from 'swr'
-import { Gift, Phone, MessageCircle, Tv, Zap, Trophy, Pencil, Trash2, Plus } from 'lucide-react'
+import { Gift, Phone, MessageCircle, Tv, Zap, Trophy, Pencil, Trash2, Plus, Wallet, Bot } from 'lucide-react'
 import { NatalEstilos, Treno } from '@/components/common/NatalArte'
 import PaiNatalInterativo from '@/components/common/PaiNatalInterativo'
 import { epocaNatal } from '@/lib/formacao-conteudo'
@@ -10,8 +10,9 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { authFetch, authFetcher as fetcher } from '@/lib/client/authFetch'
 
 type Linha = { id: string; nome: string; avatar: string | null; role: string; empresa?: string | null; chamadas: number; conversas: number; vendas: number; tvs: number; energias: number; modulos: number; pontos: number; top?: boolean; manual?: boolean }
-type Ajuste = { id: string; mes: string; user_id: string | null; nome: string; tvs: number; energias: number; chamadas: number; nota: string | null }
-type Resp = { ranking: Linha[]; natal: { inicio: string; fim: string; premios: string[] }; pontos: { chamada: number; conversa: number; venda: number; modulo: number }; pontosVendas?: { tv: number; energia: number; tvTop: number; energiaTop: number; limiteTv: number; limiteEnergia: number }; eu: string; de: string; ate: string | null; podeEditar?: boolean; ajustes?: Ajuste[] }
+type Ajuste = { id: string; mes: string; user_id: string | null; nome: string; tvs: number; energias: number; chamadas: number; nota: string | null; fora_ranking?: boolean }
+const eur = (v: number) => v.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 })
+type Resp = { ranking: Linha[]; natal: { inicio: string; fim: string; premios: string[] }; pontos: { chamada: number; conversa: number; venda: number; modulo: number }; pontosVendas?: { tv: number; energia: number; tvTop: number; energiaTop: number; limiteTv: number; limiteEnergia: number }; eu: string; de: string; ate: string | null; podeEditar?: boolean; ajustes?: Ajuste[]; valorPonto?: number; robot?: { vendas: number; chamadas: number } }
 
 const card: React.CSSProperties = { background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, padding: 16, marginBottom: 14 }
 
@@ -70,10 +71,10 @@ function LancarResultados({ ranking, ajustes, onDone }: { ranking: Linha[]; ajus
   const inp: React.CSSProperties = { padding: '9px 10px', border: '1px solid #E2E8F0', borderRadius: 10, fontSize: 14, minWidth: 0 }
   async function lancar() {
     setMsg('')
-    if (!quem && !nome.trim()) return setMsg('Escolhe o vendedor ou escreve o nome.')
+    if (!quem || (quem === 'outro' && !nome.trim())) return setMsg('Escolhe o vendedor ou escreve o nome.')
     setBusy(true)
     const r = await authFetch('/api/gamificacao/ajustes', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: quem && quem !== 'outro' ? quem : null, nome: nome.trim(), tvs, energias, chamadas }) })
+      body: JSON.stringify({ user_id: quem && quem !== 'outro' && quem !== 'robot' ? quem : null, nome: quem === 'robot' ? 'Robot LUMIN' : nome.trim(), fora_ranking: quem === 'robot', tvs, energias, chamadas }) })
     const j = await r.json().catch(() => ({}))
     setBusy(false)
     if (!r.ok) return setMsg(j.error || 'Não foi possível lançar.')
@@ -91,6 +92,7 @@ function LancarResultados({ ranking, ajustes, onDone }: { ranking: Linha[]; ajus
           <option value="">Vendedor…</option>
           {pessoas.map(p => <option key={p.id} value={p.id}>{p.nome}{p.empresa ? ` · ${p.empresa}` : ''}</option>)}
           <option value="outro">Outro (sem conta)…</option>
+          <option value="robot">🤖 Robot (fora do ranking)</option>
         </select>
         {quem === 'outro' && <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome" style={inp} />}
         <input inputMode="numeric" value={tvs} onChange={e => setTvs(e.target.value)} placeholder="TVs" style={inp} />
@@ -103,7 +105,7 @@ function LancarResultados({ ranking, ajustes, onDone }: { ranking: Linha[]; ajus
         <div style={{ marginTop: 12, display: 'grid', gap: 6 }}>
           {ajustes.map(a => (
             <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, padding: '7px 10px', borderRadius: 10, background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
-              <b style={{ flex: 1, minWidth: 0, color: '#0F172A' }}>{a.nome}</b>
+              <b style={{ flex: 1, minWidth: 0, color: '#0F172A' }}>{a.fora_ranking ? '🤖 ' : ''}{a.nome}</b>
               <span>📺 {a.tvs}</span><span>⚡ {a.energias}</span><span>📞 {a.chamadas}</span>
               <span style={{ color: '#94A3B8' }}>{a.mes.slice(0, 7)}</span>
               <button onClick={() => apagar(a.id)} aria-label="Apagar" style={{ background: 'none', border: 0, color: '#B91C1C', cursor: 'pointer', padding: 2 }}><Trash2 size={15} /></button>
@@ -117,9 +119,13 @@ function LancarResultados({ ranking, ajustes, onDone }: { ranking: Linha[]; ajus
 
 export default function GamificacaoPage() {
   const { profile } = useAuth()
-  const [periodo, setPeriodo] = useState<'semana' | 'mes' | 'natal'>('natal')
+  const [periodo, setPeriodo] = useState<'hoje' | 'semana' | 'mes' | 'natal'>('hoje')
   const [editar, setEditar] = useState(false)
-  const { data, mutate, isLoading } = useSWR<Resp>(`/api/gamificacao?periodo=${periodo}`, fetcher, { refreshInterval: 60_000 })
+  const { data, mutate, isLoading } = useSWR<Resp>(`/api/gamificacao?periodo=${periodo}`, fetcher, { refreshInterval: periodo === 'hoje' ? 20_000 : 60_000 })
+  const { data: mesData } = useSWR<Resp>('/api/gamificacao?periodo=mes', fetcher, { refreshInterval: 30_000 })
+  const valorPonto = mesData?.valorPonto ?? data?.valorPonto ?? 25
+  const meuMes = (mesData?.ranking || []).find(l => l.id === mesData?.eu)
+  const totalComissoes = (mesData?.ranking || []).reduce((t, l) => t + l.pontos * valorPonto, 0)
   const ranking = Array.isArray(data?.ranking) ? data!.ranking : []
   const eu = ranking.findIndex(l => l.id === data?.eu)
   const gestor = !!(data as any)?.podeEditar || !!profile?.is_super_admin
@@ -150,7 +156,7 @@ export default function GamificacaoPage() {
       </div>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-        {([['natal', '🎄 Desafio de Natal'], ['semana', 'Esta semana'], ['mes', 'Este mês']] as const).map(([v, l]) => (
+        {([['hoje', '⚡ Hoje'], ['natal', '🎄 Desafio de Natal'], ['semana', 'Esta semana'], ['mes', 'Este mês']] as const).map(([v, l]) => (
           <button key={v} onClick={() => setPeriodo(v)} style={{ padding: '8px 14px', borderRadius: 999, fontSize: 13, fontWeight: 800, cursor: 'pointer', border: `1.5px solid ${periodo === v ? (v === 'natal' ? '#0C2B1E' : '#0F172A') : '#E2E8F0'}`, background: periodo === v ? (v === 'natal' ? '#0C2B1E' : '#0F172A') : '#fff', color: periodo === v ? '#fff' : '#334155' }}>{l}</button>
         ))}
       </div>
@@ -166,6 +172,32 @@ export default function GamificacaoPage() {
           </div>
           <div style={{ display: 'grid', gap: 6 }}>{data.natal.premios.map((p, i) => <div key={i} style={{ fontSize: 14, fontWeight: 700, padding: '8px 10px', borderRadius: 10, background: i === 0 ? '#FEF9E7' : '#F8FAFC', border: '1px solid ' + (i === 0 ? '#F1D98A' : '#E2E8F0') }}>{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '🎁'} {p}</div>)}</div>
           {editar && gestor && <div style={{ background: '#F8FAFC', color: '#0F172A', borderRadius: 12, padding: 12, marginTop: 10, border: '1px solid #E2E8F0' }}><EditarPremios natal={data.natal} onDone={() => { setEditar(false); mutate() }} /></div>}
+        </div>
+      )}
+
+      {meuMes && (
+        <div style={{ ...card, color: '#fff', border: 0, background: 'linear-gradient(135deg,#064E3B,#047857 55%,#10B981)', boxShadow: '0 16px 36px -18px #059669' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: '#A7F3D0' }}><Wallet size={16} /> A tua carteira · {new Date().toLocaleDateString('pt-PT', { month: 'long' })}</div>
+          <div style={{ fontSize: 34, fontWeight: 900, margin: '6px 0 2px', letterSpacing: '-.02em' }}>{eur(meuMes.pontos * valorPonto)}</div>
+          <div style={{ fontSize: 13.5, color: '#D1FAE5' }}>{String(meuMes.pontos).replace('.', ',')} pontos × {eur(valorPonto)} · 📺 {meuMes.tvs} TVs · ⚡ {meuMes.energias} energias{meuMes.top ? ' · 🔥 escalão top' : ''}</div>
+          {!meuMes.top && (mesData?.pontosVendas) && <div style={{ fontSize: 12.5, color: '#A7F3D0', marginTop: 6 }}>Faltam {Math.max(0, mesData.pontosVendas.limiteTv - meuMes.tvs)} TVs (ou {Math.max(0, mesData.pontosVendas.limiteEnergia - meuMes.energias)} energias) para o escalão 🔥: todas passam a valer mais.</div>}
+        </div>
+      )}
+
+      {gestor && mesData && (
+        <div style={{ ...card, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 13.5, color: '#334155', fontWeight: 700, display: 'flex', gap: 6, alignItems: 'center' }}><Wallet size={16} /> Comissões a pagar este mês (toda a equipa)</div>
+          <div style={{ fontSize: 20, fontWeight: 900, color: '#0F172A' }}>{eur(totalComissoes)}</div>
+        </div>
+      )}
+
+      {(mesData?.robot?.vendas || 0) > 0 && (
+        <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 12, background: 'linear-gradient(135deg,#0F172A,#312E81)', color: '#fff', border: 0 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 14, display: 'grid', placeItems: 'center', background: 'rgba(255,255,255,.12)' }}><Bot size={22} /></div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 900, fontSize: 16 }}>Robot LUMIN · {mesData!.robot!.vendas.toLocaleString('pt-PT')} vendas este mês</div>
+            <div style={{ fontSize: 12.5, color: '#C7D2FE' }}>Sozinho, sem intervenção. Fica fora do ranking: o ranking é só dos vendedores.</div>
+          </div>
         </div>
       )}
 
@@ -198,7 +230,7 @@ export default function GamificacaoPage() {
               </div>
               {medalhas(l).length > 0 && <div style={{ fontSize: 11.5, color: '#92400E', marginTop: 3 }}>{medalhas(l).join(' · ')}</div>}
             </div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: '#0F172A' }}>{String(l.pontos).replace('.', ',')}<span style={{ fontSize: 11, color: '#94A3B8', fontWeight: 700 }}> pts</span></div>
+            <div style={{ textAlign: 'right' }}><div style={{ fontSize: 18, fontWeight: 900, color: '#0F172A' }}>{String(l.pontos).replace('.', ',')}<span style={{ fontSize: 11, color: '#94A3B8', fontWeight: 700 }}> pts</span></div>{(gestor || l.id === data?.eu) && periodo === 'mes' && l.pontos > 0 && <div style={{ fontSize: 12, fontWeight: 800, color: '#047857' }}>{eur(l.pontos * valorPonto)}</div>}</div>
           </div>
         ))}
       </div>
