@@ -143,9 +143,8 @@ Regras:
       { role: 'user', content: `Encontra ${query} em ${local}${raio ? ` (até ${raio} km)` : ''}, com telefone.` },
     ]
     const tentativas: Array<Record<string, unknown>> = [
+      { model: MODEL, tools: [{ type: 'browser_search' }], tool_choice: 'required', reasoning_effort: 'low' },
       { model: process.env.PROSPECAO_GROQ_MODEL || 'groq/compound-mini', compound_custom: { tools: { enabled_tools: ['web_search'] } } },
-      { model: 'groq/compound' },
-      { model: MODEL, tools: [{ type: 'browser_search' }] },
     ]
     let msg: any = null
     const erros: string[] = []
@@ -155,21 +154,35 @@ Regras:
       if (resta < 8000) { erros.push('sem tempo'); break }
       try {
         const r = await fetch(GROQ_API_URL, {
-          signal: AbortSignal.timeout(Math.min(resta, 28_000)),
+          signal: AbortSignal.timeout(Math.min(resta, 30_000)),
           method: 'POST',
           headers: { 'content-type': 'application/json', Authorization: `Bearer ${groq}` },
           body: JSON.stringify({ temperature: 0.1, messages: msgs, ...t }),
         })
-        if (!r.ok) { erros.push(`${t.model}: ${r.status} ${clip(await r.text(), 160)}`); continue }
+        if (!r.ok) { erros.push(`${String(t.model).split('/').pop()} ${r.status} ${clip(await r.text(), 90)}`); continue }
         const j = (await r.json()) as any
         const m0 = j?.choices?.[0]?.message
-        if (m0 && /\{[\s\S]*\}/.test(String(m0.content || ''))) { msg = m0; break }
-        erros.push(`${t.model}: resposta sem JSON`)
-      } catch (e: any) { erros.push(`${t.model}: ${clip(e?.message, 100)}`) }
+        if (!m0) { erros.push(`${t.model}: vazio`); continue }
+        if (/\{[\s\S]*\}/.test(String(m0.content || ''))) { msg = m0; break }
+        // resposta em texto: pede à IA para converter em JSON (sem pesquisa)
+        const texto = clip(m0.content, 6000)
+        if (texto.length > 40) {
+          const r2 = await fetch(GROQ_API_URL, {
+            signal: AbortSignal.timeout(15_000), method: 'POST',
+            headers: { 'content-type': 'application/json', Authorization: `Bearer ${groq}` },
+            body: JSON.stringify({ model: MODEL, temperature: 0, response_format: { type: 'json_object' },
+              messages: [{ role: 'system', content: `Converte o texto numa lista de negócios. Não acrescentes nada que não esteja no texto.\n${regrasJson}` }, { role: 'user', content: texto }] }),
+          })
+          const j2 = (await r2.json()) as any
+          const c2 = j2?.choices?.[0]?.message?.content
+          if (c2) { msg = { ...m0, content: c2 }; break }
+        }
+        erros.push(`${String(t.model).split('/').pop()}: sem resultados`)
+      } catch (e: any) { erros.push(`${String(t.model).split('/').pop()}: ${clip(e?.message, 60)}`) }
     }
     if (!msg) {
       console.error('prospecao groq falhou', erros)
-      return NextResponse.json({ error: `A pesquisa da IA falhou. (${erros.join(' | ').slice(0, 380)})` }, { status: 502 })
+      return NextResponse.json({ error: `A pesquisa da IA falhou. (${erros.join(' | ').slice(0, 300)})` }, { status: 502 })
     }
     try {
       const m = String(msg.content || '').match(/\{[\s\S]*\}/)
@@ -192,7 +205,7 @@ Regras:
     const nome = clip(n?.nome, 100)
     if (!nome) continue
     let tel = telPT(n?.telefone)
-    if (tel && !baseDigitos.includes(tel)) tel = null // anti-alucinação
+    if (tel && baseDigitos.length >= 100 && !baseDigitos.includes(tel)) tel = null // anti-alucinação
     if (tel && tels.has(tel)) continue
     if (tel) tels.add(tel)
     const localidade = clip(n?.localidade, 60)
