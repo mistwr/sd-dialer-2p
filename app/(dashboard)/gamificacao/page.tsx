@@ -120,13 +120,17 @@ function LancarResultados({ ranking, ajustes, onDone }: { ranking: Linha[]; ajus
 export default function GamificacaoPage() {
   const { profile } = useAuth()
   const [periodo, setPeriodo] = useState<'hoje' | 'semana' | 'mes' | 'natal'>('hoje')
+  const [ordem, setOrdem] = useState<'pontos' | 'chamadas'>('pontos')
   const [editar, setEditar] = useState(false)
-  const { data, mutate, isLoading } = useSWR<Resp>(`/api/gamificacao?periodo=${periodo}`, fetcher, { refreshInterval: periodo === 'hoje' ? 20_000 : 60_000 })
+  const { data, mutate, isLoading } = useSWR<Resp>(`/api/gamificacao?periodo=${periodo}`, fetcher, { refreshInterval: periodo === 'hoje' ? 10_000 : 60_000 })
   const { data: mesData } = useSWR<Resp>('/api/gamificacao?periodo=mes', fetcher, { refreshInterval: 30_000 })
   const valorPonto = mesData?.valorPonto ?? data?.valorPonto ?? 25
   const meuMes = (mesData?.ranking || []).find(l => l.id === mesData?.eu)
   const totalComissoes = (mesData?.ranking || []).reduce((t, l) => t + l.pontos * valorPonto, 0)
-  const ranking = Array.isArray(data?.ranking) ? data!.ranking : []
+  const base = Array.isArray(data?.ranking) ? data!.ranking : []
+  const porChamadas = ordem === 'chamadas'
+  const ranking = porChamadas ? [...base].sort((a, b) => b.chamadas - a.chamadas || b.conversas - a.conversas || b.pontos - a.pontos) : base
+  const valor = (l: Linha) => (porChamadas ? l.chamadas : l.pontos)
   const eu = ranking.findIndex(l => l.id === data?.eu)
   const gestor = !!(data as any)?.podeEditar || !!profile?.is_super_admin
 
@@ -137,7 +141,7 @@ export default function GamificacaoPage() {
         <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#E8C766', fontWeight: 800 }}>Juntos Somos +</div>
         <h1 style={{ margin: '6px 0 4px', fontSize: 26, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 10 }}><Trophy size={24} color="#E8C766" /> Ranking SD Dialer</h1>
         <p style={{ margin: 0, fontSize: 13.5, color: 'rgba(255,255,255,0.8)', maxWidth: 560 }}>Todos os comerciais do SD Dialer, de todas as equipas. 📺 TV {data?.pontosVendas?.tv ?? 3} pts · ⚡ energia {String(data?.pontosVendas?.energia ?? 0.5).replace('.', ',')} pt. A partir de {data?.pontosVendas?.limiteTv ?? 8} TVs ou {data?.pontosVendas?.limiteEnergia ?? 20} energias, 🔥 TV {data?.pontosVendas?.tvTop ?? 4} pts e energia {data?.pontosVendas?.energiaTop ?? 1} pt. Chamadas desempatam.</p>
-        {ranking.length >= 3 && ranking[2].pontos > 0 && (
+        {ranking.length >= 3 && valor(ranking[2]) > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.15fr 1fr', gap: 10, alignItems: 'end', marginTop: 18 }}>
             {[1, 0, 2].map(pos => {
               const l = ranking[pos]
@@ -146,7 +150,7 @@ export default function GamificacaoPage() {
                 <div key={pos} style={{ textAlign: 'center', minWidth: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 6 }}><Avatar l={l} size={pos === 0 ? 48 : 40} /></div>
                   <div style={{ fontSize: 13, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.nome.split(' ')[0]}</div>
-                  <div style={{ fontSize: 12, color: '#E8C766', fontWeight: 800 }}>{l.pontos} pts</div>
+                  <div style={{ fontSize: 12, color: '#E8C766', fontWeight: 800 }}>{porChamadas ? `${l.chamadas} chamadas` : `${String(l.pontos).replace('.', ',')} pts`}</div>
                   <div style={{ height: alturas[pos], marginTop: 6, borderRadius: '10px 10px 0 0', background: pos === 0 ? 'linear-gradient(180deg,#E8C766,#A8862B)' : pos === 1 ? 'linear-gradient(180deg,#E2E8F0,#94A3B8)' : 'linear-gradient(180deg,#D6A27A,#8A5A36)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 6, color: '#1F2937', fontWeight: 900, fontSize: 18 }}>{pos + 1}</div>
                 </div>
               )
@@ -159,6 +163,20 @@ export default function GamificacaoPage() {
         {([['hoje', '⚡ Hoje'], ['natal', '🎄 Desafio de Natal'], ['semana', 'Esta semana'], ['mes', 'Este mês']] as const).map(([v, l]) => (
           <button key={v} onClick={() => setPeriodo(v)} style={{ padding: '8px 14px', borderRadius: 999, fontSize: 13, fontWeight: 800, cursor: 'pointer', border: `1.5px solid ${periodo === v ? (v === 'natal' ? '#0C2B1E' : '#0F172A') : '#E2E8F0'}`, background: periodo === v ? (v === 'natal' ? '#0C2B1E' : '#0F172A') : '#fff', color: periodo === v ? '#fff' : '#334155' }}>{l}</button>
         ))}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', background: '#F1F5F9', borderRadius: 12, padding: 3, gap: 2 }}>
+          {([['pontos', '🏆 Pontos (vendas)'], ['chamadas', '📞 Chamadas']] as const).map(([v, l]) => (
+            <button key={v} onClick={() => setOrdem(v)} style={{ border: 0, borderRadius: 9, padding: '7px 12px', fontSize: 13, fontWeight: 800, cursor: 'pointer', background: ordem === v ? '#fff' : 'transparent', color: ordem === v ? '#0F172A' : '#64748B', boxShadow: ordem === v ? '0 1px 3px rgba(15,23,42,.15)' : 'none' }}>{l}</button>
+          ))}
+        </div>
+        {periodo === 'hoje' && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 800, color: '#B91C1C' }}>
+            <span style={{ width: 8, height: 8, borderRadius: 99, background: '#EF4444', boxShadow: '0 0 0 4px rgba(239,68,68,.18)', animation: 'rkPulse 1.4s ease-in-out infinite' }} /> AO VIVO
+            <style>{`@keyframes rkPulse{0%,100%{opacity:1}50%{opacity:.35}}`}</style>
+          </span>
+        )}
       </div>
 
       {periodo === 'natal' && data?.natal && (
@@ -204,8 +222,8 @@ export default function GamificacaoPage() {
       {eu >= 0 && (
         <div style={{ ...card, borderColor: '#BFDBFE', background: '#EFF6FF' }}>
           <div style={{ fontSize: 13, color: '#1E40AF', fontWeight: 700 }}>A tua posição</div>
-          <div style={{ fontSize: 22, fontWeight: 900, color: '#0F172A' }}>{eu + 1}.º lugar · {ranking[eu].pontos} pontos</div>
-          {eu > 0 && <div style={{ fontSize: 13, color: '#334155', marginTop: 2 }}>Faltam {String(Math.round((ranking[eu - 1].pontos - ranking[eu].pontos + 0.5) * 10) / 10).replace('.', ',')} pontos para passares {ranking[eu - 1].nome.split(' ')[0]}.</div>}
+          <div style={{ fontSize: 22, fontWeight: 900, color: '#0F172A' }}>{eu + 1}.º lugar · {porChamadas ? `${ranking[eu].chamadas} chamadas` : `${String(ranking[eu].pontos).replace('.', ',')} pontos`}</div>
+          {eu > 0 && <div style={{ fontSize: 13, color: '#334155', marginTop: 2 }}>{porChamadas ? `Faltam ${ranking[eu - 1].chamadas - ranking[eu].chamadas + 1} chamadas` : `Faltam ${String(Math.round((ranking[eu - 1].pontos - ranking[eu].pontos + 0.5) * 10) / 10).replace('.', ',')} pontos`} para passares {ranking[eu - 1].nome.split(' ')[0]}.</div>}
         </div>
       )}
 
@@ -230,7 +248,7 @@ export default function GamificacaoPage() {
               </div>
               {medalhas(l).length > 0 && <div style={{ fontSize: 11.5, color: '#92400E', marginTop: 3 }}>{medalhas(l).join(' · ')}</div>}
             </div>
-            <div style={{ textAlign: 'right' }}><div style={{ fontSize: 18, fontWeight: 900, color: '#0F172A' }}>{String(l.pontos).replace('.', ',')}<span style={{ fontSize: 11, color: '#94A3B8', fontWeight: 700 }}> pts</span></div>{(gestor || l.id === data?.eu) && periodo === 'mes' && l.pontos > 0 && <div style={{ fontSize: 12, fontWeight: 800, color: '#047857' }}>{eur(l.pontos * valorPonto)}</div>}</div>
+            <div style={{ textAlign: 'right' }}><div style={{ fontSize: 18, fontWeight: 900, color: '#0F172A' }}>{porChamadas ? l.chamadas : String(l.pontos).replace('.', ',')}<span style={{ fontSize: 11, color: '#94A3B8', fontWeight: 700 }}>{porChamadas ? ' chamadas' : ' pts'}</span></div>{porChamadas && <div style={{ fontSize: 11.5, color: '#64748B', fontWeight: 700 }}>{String(l.pontos).replace('.', ',')} pts</div>}{(gestor || l.id === data?.eu) && periodo === 'mes' && l.pontos > 0 && <div style={{ fontSize: 12, fontWeight: 800, color: '#047857' }}>{eur(l.pontos * valorPonto)}</div>}</div>
           </div>
         ))}
       </div>
