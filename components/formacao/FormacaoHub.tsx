@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import { BookOpen, CheckCircle2, ExternalLink, Gift, GraduationCap, Rocket, Store, Trophy, Zap } from "lucide-react";
-import { MODULOS, PONTOS, type Modulo } from "@/lib/formacao-conteudo";
+import { MODULOS, type Modulo } from "@/lib/formacao-conteudo";
 import { FormacaoPage as MateriaisEmpresa } from "@/components/formacao/FormacaoPage";
 import { authFetch, authFetcher } from "@/lib/client/authFetch";
 
@@ -54,7 +54,7 @@ function Quiz({ modulo, feito, onPassou }: { modulo: Modulo; feito: boolean; onP
             <CheckCircle2 size={15} /> Concluído
           </span>
         ) : (
-          <span style={{ fontSize: 12.5, color: "#64748B" }}>Acerta tudo e ganhas {PONTOS.modulo} pontos</span>
+          <span style={{ fontSize: 12.5, color: "#64748B" }}>Acerta tudo para concluir o módulo</span>
         )}
       </div>
       {modulo.quiz.map((q, i) => (
@@ -83,7 +83,7 @@ function Quiz({ modulo, feito, onPassou }: { modulo: Modulo; feito: boolean; onP
         style={{ padding: "10px 16px", borderRadius: 10, border: 0, background: tudo ? "#2563EB" : "#CBD5E1", color: "#fff", fontWeight: 800, cursor: tudo ? "pointer" : "default" }}>
         {aGuardar ? "A guardar…" : "Verificar respostas"}
       </button>
-      {passou && !feito && !aGuardar && <span style={{ marginLeft: 10, fontSize: 13, color: "#15803D", fontWeight: 700 }}>Boa! +{PONTOS.modulo} pontos 🎉</span>}
+      {passou && !feito && !aGuardar && <span style={{ marginLeft: 10, fontSize: 13, color: "#15803D", fontWeight: 700 }}>Boa! Módulo concluído 🎉</span>}
     </div>
   );
 }

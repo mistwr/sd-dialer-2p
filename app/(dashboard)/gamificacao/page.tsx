@@ -2,22 +2,25 @@
 
 import { useState } from 'react'
 import useSWR from 'swr'
-import { Gift, Phone, MessageCircle, ShoppingBag, GraduationCap, Trophy, Pencil } from 'lucide-react'
+import { Gift, Phone, MessageCircle, Tv, Zap, Trophy, Pencil, Trash2, Plus } from 'lucide-react'
 import { NatalEstilos, Treno } from '@/components/common/NatalArte'
 import PaiNatalInterativo from '@/components/common/PaiNatalInterativo'
 import { epocaNatal } from '@/lib/formacao-conteudo'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { authFetch, authFetcher as fetcher } from '@/lib/client/authFetch'
 
-type Linha = { id: string; nome: string; avatar: string | null; role: string; chamadas: number; conversas: number; vendas: number; modulos: number; pontos: number }
-type Resp = { ranking: Linha[]; natal: { inicio: string; fim: string; premios: string[] }; pontos: { chamada: number; conversa: number; venda: number; modulo: number }; eu: string; de: string; ate: string | null }
+type Linha = { id: string; nome: string; avatar: string | null; role: string; empresa?: string | null; chamadas: number; conversas: number; vendas: number; tvs: number; energias: number; modulos: number; pontos: number; top?: boolean; manual?: boolean }
+type Ajuste = { id: string; mes: string; user_id: string | null; nome: string; tvs: number; energias: number; chamadas: number; nota: string | null }
+type Resp = { ranking: Linha[]; natal: { inicio: string; fim: string; premios: string[] }; pontos: { chamada: number; conversa: number; venda: number; modulo: number }; pontosVendas?: { tv: number; energia: number; tvTop: number; energiaTop: number; limiteTv: number; limiteEnergia: number }; eu: string; de: string; ate: string | null; podeEditar?: boolean; ajustes?: Ajuste[] }
 
 const card: React.CSSProperties = { background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, padding: 16, marginBottom: 14 }
 
 function medalhas(l: Linha) {
   const m: string[] = []
+  if (l.top) m.push('🔥 Escalão top')
   if (l.vendas >= 1) m.push('🏆 Primeira venda')
   if (l.vendas >= 5) m.push('💎 5 vendas')
+  if (l.tvs >= 50) m.push('📺 50 TVs')
   if (l.chamadas >= 100) m.push('📞 100 chamadas')
   if (l.conversas >= 25) m.push('🗣️ 25 conversas')
   if (l.modulos >= 3) m.push('🎓 Estudioso')
@@ -55,6 +58,63 @@ function EditarPremios({ natal, onDone }: { natal: Resp['natal']; onDone: () => 
   )
 }
 
+function LancarResultados({ ranking, ajustes, onDone }: { ranking: Linha[]; ajustes: Ajuste[]; onDone: () => void }) {
+  const [quem, setQuem] = useState('')
+  const [nome, setNome] = useState('')
+  const [tvs, setTvs] = useState('')
+  const [energias, setEnergias] = useState('')
+  const [chamadas, setChamadas] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const pessoas = ranking.filter(l => !l.manual).sort((a, b) => a.nome.localeCompare(b.nome))
+  const inp: React.CSSProperties = { padding: '9px 10px', border: '1px solid #E2E8F0', borderRadius: 10, fontSize: 14, minWidth: 0 }
+  async function lancar() {
+    setMsg('')
+    if (!quem && !nome.trim()) return setMsg('Escolhe o vendedor ou escreve o nome.')
+    setBusy(true)
+    const r = await authFetch('/api/gamificacao/ajustes', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: quem && quem !== 'outro' ? quem : null, nome: nome.trim(), tvs, energias, chamadas }) })
+    const j = await r.json().catch(() => ({}))
+    setBusy(false)
+    if (!r.ok) return setMsg(j.error || 'Não foi possível lançar.')
+    setTvs(''); setEnergias(''); setChamadas(''); setNome(''); setQuem(''); setMsg('Lançado ✓'); onDone()
+  }
+  async function apagar(id: string) {
+    await authFetch(`/api/gamificacao/ajustes?id=${id}`, { method: 'DELETE' }); onDone()
+  }
+  return (
+    <div style={card}>
+      <div style={{ fontSize: 16, fontWeight: 900, color: '#0F172A', marginBottom: 4 }}>Lançar resultados do mês</div>
+      <div style={{ fontSize: 13, color: '#64748B', marginBottom: 10 }}>Vendas e chamadas feitas fora do SD Dialer. Só tu vês isto.</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
+        <select value={quem} onChange={e => setQuem(e.target.value)} style={{ ...inp, gridColumn: 'span 2' }}>
+          <option value="">Vendedor…</option>
+          {pessoas.map(p => <option key={p.id} value={p.id}>{p.nome}{p.empresa ? ` · ${p.empresa}` : ''}</option>)}
+          <option value="outro">Outro (sem conta)…</option>
+        </select>
+        {quem === 'outro' && <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome" style={inp} />}
+        <input inputMode="numeric" value={tvs} onChange={e => setTvs(e.target.value)} placeholder="TVs" style={inp} />
+        <input inputMode="numeric" value={energias} onChange={e => setEnergias(e.target.value)} placeholder="Energias" style={inp} />
+        <input inputMode="numeric" value={chamadas} onChange={e => setChamadas(e.target.value)} placeholder="Chamadas" style={inp} />
+        <button disabled={busy} onClick={lancar} style={{ padding: '9px 14px', borderRadius: 10, border: 0, background: 'linear-gradient(135deg,#4F46E5,#7C3AED)', color: '#fff', fontWeight: 800, cursor: 'pointer', display: 'inline-flex', gap: 6, alignItems: 'center', justifyContent: 'center' }}><Plus size={15} /> {busy ? 'A lançar…' : 'Lançar'}</button>
+      </div>
+      {msg && <div style={{ fontSize: 13, marginTop: 8, color: msg.includes('✓') ? '#15803D' : '#B91C1C' }}>{msg}</div>}
+      {ajustes.length > 0 && (
+        <div style={{ marginTop: 12, display: 'grid', gap: 6 }}>
+          {ajustes.map(a => (
+            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, padding: '7px 10px', borderRadius: 10, background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+              <b style={{ flex: 1, minWidth: 0, color: '#0F172A' }}>{a.nome}</b>
+              <span>📺 {a.tvs}</span><span>⚡ {a.energias}</span><span>📞 {a.chamadas}</span>
+              <span style={{ color: '#94A3B8' }}>{a.mes.slice(0, 7)}</span>
+              <button onClick={() => apagar(a.id)} aria-label="Apagar" style={{ background: 'none', border: 0, color: '#B91C1C', cursor: 'pointer', padding: 2 }}><Trash2 size={15} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function GamificacaoPage() {
   const { profile } = useAuth()
   const [periodo, setPeriodo] = useState<'semana' | 'mes' | 'natal'>('natal')
@@ -70,7 +130,7 @@ export default function GamificacaoPage() {
         {epocaNatal() && (<><NatalEstilos /><Treno width={200} /><div className="hidden sm:block" style={{ position: 'absolute', right: 16, top: 10, zIndex: 2 }}><PaiNatalInterativo tamanho={104} balao="esquerda" dica="Toca-me" mensagens={['Cada chamada conta para o Desafio de Natal. Força!', 'Uma boa conversa hoje pode ser a venda de amanhã.', 'A melhor prenda para um cliente: uma fatura mais baixa.', 'Quem fizer mais pontos até ao Natal leva os prémios. Bora!', 'Juntos Somos + — e no Natal ainda mais.']} /></div></>)}
         <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#E8C766', fontWeight: 800 }}>Juntos Somos +</div>
         <h1 style={{ margin: '6px 0 4px', fontSize: 26, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 10 }}><Trophy size={24} color="#E8C766" /> Ranking SD Dialer</h1>
-        <p style={{ margin: 0, fontSize: 13.5, color: 'rgba(255,255,255,0.8)', maxWidth: 560 }}>Todos os comerciais do SD Dialer, de todas as equipas. Chamada {data?.pontos?.chamada ?? 1} pt · conversa real +{data?.pontos?.conversa ?? 3} · venda {data?.pontos?.venda ?? 50} · módulo de formação {data?.pontos?.modulo ?? 10}.</p>
+        <p style={{ margin: 0, fontSize: 13.5, color: 'rgba(255,255,255,0.8)', maxWidth: 560 }}>Todos os comerciais do SD Dialer, de todas as equipas. 📺 TV {data?.pontosVendas?.tv ?? 3} pts · ⚡ energia {String(data?.pontosVendas?.energia ?? 0.5).replace('.', ',')} pt. A partir de {data?.pontosVendas?.limiteTv ?? 8} TVs ou {data?.pontosVendas?.limiteEnergia ?? 20} energias, 🔥 TV {data?.pontosVendas?.tvTop ?? 4} pts e energia {data?.pontosVendas?.energiaTop ?? 1} pt. Chamadas desempatam.</p>
         {ranking.length >= 3 && ranking[2].pontos > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.15fr 1fr', gap: 10, alignItems: 'end', marginTop: 18 }}>
             {[1, 0, 2].map(pos => {
@@ -113,9 +173,11 @@ export default function GamificacaoPage() {
         <div style={{ ...card, borderColor: '#BFDBFE', background: '#EFF6FF' }}>
           <div style={{ fontSize: 13, color: '#1E40AF', fontWeight: 700 }}>A tua posição</div>
           <div style={{ fontSize: 22, fontWeight: 900, color: '#0F172A' }}>{eu + 1}.º lugar · {ranking[eu].pontos} pontos</div>
-          {eu > 0 && <div style={{ fontSize: 13, color: '#334155', marginTop: 2 }}>Faltam {ranking[eu - 1].pontos - ranking[eu].pontos + 1} pontos para passares {ranking[eu - 1].nome.split(' ')[0]}.</div>}
+          {eu > 0 && <div style={{ fontSize: 13, color: '#334155', marginTop: 2 }}>Faltam {String(Math.round((ranking[eu - 1].pontos - ranking[eu].pontos + 0.5) * 10) / 10).replace('.', ',')} pontos para passares {ranking[eu - 1].nome.split(' ')[0]}.</div>}
         </div>
       )}
+
+      {gestor && data && periodo !== 'semana' && <LancarResultados ranking={ranking} ajustes={data.ajustes || []} onDone={() => mutate()} />}
 
       {isLoading && <div style={{ color: '#64748B' }}>A carregar…</div>}
       {!isLoading && ranking.length === 0 && <div style={card}>Ainda não há comerciais ativos.</div>}
@@ -131,12 +193,12 @@ export default function GamificacaoPage() {
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 12.5, color: '#64748B', marginTop: 2 }}>
                 <span style={{ display: 'inline-flex', gap: 3, alignItems: 'center' }}><Phone size={12} /> {l.chamadas}</span>
                 <span style={{ display: 'inline-flex', gap: 3, alignItems: 'center' }}><MessageCircle size={12} /> {l.conversas}</span>
-                <span style={{ display: 'inline-flex', gap: 3, alignItems: 'center' }}><ShoppingBag size={12} /> {l.vendas}</span>
-                <span style={{ display: 'inline-flex', gap: 3, alignItems: 'center' }}><GraduationCap size={12} /> {l.modulos}</span>
+                <span style={{ display: 'inline-flex', gap: 3, alignItems: 'center' }}><Tv size={12} /> {l.tvs}</span>
+                <span style={{ display: 'inline-flex', gap: 3, alignItems: 'center' }}><Zap size={12} /> {l.energias}</span>
               </div>
               {medalhas(l).length > 0 && <div style={{ fontSize: 11.5, color: '#92400E', marginTop: 3 }}>{medalhas(l).join(' · ')}</div>}
             </div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: '#0F172A' }}>{l.pontos}<span style={{ fontSize: 11, color: '#94A3B8', fontWeight: 700 }}> pts</span></div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: '#0F172A' }}>{String(l.pontos).replace('.', ',')}<span style={{ fontSize: 11, color: '#94A3B8', fontWeight: 700 }}> pts</span></div>
           </div>
         ))}
       </div>
