@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { campanhasUser } from '@/lib/server/campanhas-auth'
 import { contextoVendas } from '@/lib/server/ia-vendas'
+import { groqFetch } from '@/lib/server/groq'
 
 // Coach de vendas: ajuda o vendedor a escolher a oferta, abrir a chamada, responder a objeções e fechar,
 // usando só as campanhas, tarifários, guiões e objeções guardados no SD Dialer (e a lead aberta, se houver).
@@ -55,7 +56,7 @@ ${c.texto}`
   let ultimoErro = ''
   for (const model of MODELOS) {
     try {
-      const r = await fetch(GROQ_API_URL, {
+      const r = await groqFetch(GROQ_API_URL, {
         method: 'POST', signal: AbortSignal.timeout(35_000),
         headers: { 'content-type': 'application/json', Authorization: `Bearer ${key}` },
         body: JSON.stringify({ model, temperature: 0.35, max_tokens: 1100, messages: [{ role: 'system', content: sistema }, ...historico] }),
