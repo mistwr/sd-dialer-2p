@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { groqFetch } from '@/lib/server/groq'
 export async function POST(req:NextRequest){
  const jwt=req.headers.get('authorization')?.replace(/^Bearer\s+/i,'')
  if(!jwt)return NextResponse.json({error:'Sessão necessária'},{status:401})
@@ -28,7 +29,7 @@ export async function POST(req:NextRequest){
  if(!ranked.length)return NextResponse.json({error:'A conta de IA não tem modelos de texto disponíveis.'},{status:503})
  let lastError='Modelo indisponível'
  for(const model of ranked.slice(0,5)){
-  const response=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers,body:JSON.stringify({model,temperature:0.65,max_completion_tokens:350,messages:prompt}),cache:'no-store'})
+  const response=await groqFetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers,body:JSON.stringify({model,temperature:0.65,max_completion_tokens:350,messages:prompt}),cache:'no-store'})
   const data=await response.json().catch(()=>({}))
   if(!response.ok){
    const reason=String(data?.error?.code||data?.error?.type||('HTTP '+response.status))

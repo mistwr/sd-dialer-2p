@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { groqFetch } from '@/lib/server/groq'
 
 async function getCallerSession() {
   const cookieStore = await cookies()
@@ -64,7 +65,7 @@ ${objecoesLista || '(sem banco de objecoes configurado)'}
 Analisa as notas e devolve o JSON pedido.`
 
   try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const res = await groqFetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

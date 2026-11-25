@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
+import { groqFetch } from '@/lib/server/groq'
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const GROQ_MODEL   = 'openai/gpt-oss-120b'
@@ -72,7 +73,7 @@ ${objecoesLista}` : ''}
 Analisa e devolve o JSON.`
 
   try {
-    const groqRes = await fetch(GROQ_API_URL, {
+    const groqRes = await groqFetch(GROQ_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

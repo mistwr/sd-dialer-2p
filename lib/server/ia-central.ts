@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { computeVoiceAnalytics } from '@/lib/server/voice-analytics'
 
+import { groqFetch } from '@/lib/server/groq'
 // IA central do SD Dialer: junta números da empresa, análise do robot, funil da porta e
 // transcrições MASCARADAS (sem nomes, telefones, moradas, emails). Só lê. Propõe, nunca aplica.
 
@@ -84,7 +85,7 @@ ROBOT (${days} dias): ${JSON.stringify(robot)}
 PORTA (30 dias): ${JSON.stringify(porta)}
 CONVERSAS (mascaradas, ${conversas.length}): ${JSON.stringify(conversas)}`
 
-  const r = await fetch(GROQ_API_URL, {
+  const r = await groqFetch(GROQ_API_URL, {
     method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: MODEL, temperature: 0.3, max_tokens: 1800, messages: [{ role: 'system', content: system }, ...opts.history, { role: 'user', content: opts.question }] }),
     signal: AbortSignal.timeout(50_000),
