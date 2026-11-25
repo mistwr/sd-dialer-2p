@@ -14,7 +14,7 @@ const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const MODEL = process.env.COMANDO_GROQ_MODEL || 'openai/gpt-oss-120b'
 
 const MENU_POR_PERFIL: Record<string, string> = {
-  parceiro: 'Chat, Minhas Leads, Agenda, Histórico, SMS em massa, Porta → Lead, Vendas, Fidelizações, Simulador energia, Marcador (telefone), Campanhas operadoras, Formação, Ranking, Meu perfil, Assistente IA (com o Coach de Vendas, que conhece as campanhas e ajuda a fechar cada lead), Empresas (pesquisa IA).',
+  parceiro: 'Chat, Minhas Leads, Agenda, Histórico, SMS em massa, Porta → Lead, Vendas, Fidelizações, Simulador energia, Campanhas operadoras, Formação, Ranking, Meu perfil, Assistente IA (com o Coach de Vendas, que conhece as campanhas e ajuda a fechar cada lead), Empresas (pesquisa IA).',
   supervisor: 'Tudo o que o parceiro vê, mais Chamadas IA (robot), Base de leads, Distribuição, Campanhas, Parceiros, Relatórios, Equipa no mapa, Relatório porta e Comando IA.',
   admin: 'Tudo o que o supervisor vê, com gestão completa da empresa (parceiros, campanhas, distribuição, relatórios) e Comando IA.',
 }
