@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   const { data: tarifas } = await ctx.admin
     .from('tarifarios_referencia')
     .select('operador, nome_pacote, preco_mensal, detalhes')
-    .eq('company_id', ctx.me.company_id)
+    .in('company_id', Array.from(new Set([ctx.me.company_id, process.env.CATALOGO_COMPANY_ID || 'e27c8324-989a-4a68-b3a3-902cba74696c'])))
     .eq('segmento', 'telecom')
     .order('preco_mensal', { ascending: true })
 

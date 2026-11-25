@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     .eq('id', id)
     .maybeSingle()
   const owner = (f as any)?.campanhas_operadoras?.company_id
-  if (!f || owner !== ctx.me.company_id) return NextResponse.json({ error: 'Ficheiro nao encontrado' }, { status: 404 })
+  if (!f || (owner !== ctx.me.company_id && owner !== (process.env.CATALOGO_COMPANY_ID || 'e27c8324-989a-4a68-b3a3-902cba74696c'))) return NextResponse.json({ error: 'Ficheiro nao encontrado' }, { status: 404 })
   const url = process.env.CAMPANHAS_SIGN_URL
   const token = process.env.CAMPANHAS_SIGN_TOKEN
   if (!url || !token) return NextResponse.json({ error: 'Servico de ficheiros nao configurado' }, { status: 503 })
