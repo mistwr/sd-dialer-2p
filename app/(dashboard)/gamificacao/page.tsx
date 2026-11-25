@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import useSWR from 'swr'
+import Link from 'next/link'
 import { Gift, Phone, MessageCircle, Tv, Zap, Trophy, Pencil, Trash2, Plus, Wallet, Bot } from 'lucide-react'
 import { NatalEstilos, Treno } from '@/components/common/NatalArte'
 import PaiNatalInterativo from '@/components/common/PaiNatalInterativo'
@@ -120,13 +121,12 @@ function LancarResultados({ ranking, ajustes, onDone }: { ranking: Linha[]; ajus
 export default function GamificacaoPage() {
   const { profile } = useAuth()
   const [periodo, setPeriodo] = useState<'hoje' | 'semana' | 'mes' | 'natal'>('hoje')
-  const [ordem, setOrdem] = useState<'pontos' | 'chamadas'>('pontos')
+  const [ordem, setOrdem] = useState<'pontos' | 'chamadas'>('chamadas')
   const [editar, setEditar] = useState(false)
   const { data, mutate, isLoading } = useSWR<Resp>(`/api/gamificacao?periodo=${periodo}`, fetcher, { refreshInterval: periodo === 'hoje' ? 10_000 : 60_000 })
   const { data: mesData } = useSWR<Resp>('/api/gamificacao?periodo=mes', fetcher, { refreshInterval: 30_000 })
   const valorPonto = mesData?.valorPonto ?? data?.valorPonto ?? 25
   const meuMes = (mesData?.ranking || []).find(l => l.id === mesData?.eu)
-  const totalComissoes = (mesData?.ranking || []).reduce((t, l) => t + l.pontos * valorPonto, 0)
   const base = Array.isArray(data?.ranking) ? data!.ranking : []
   const porChamadas = ordem === 'chamadas'
   const ranking = porChamadas ? [...base].sort((a, b) => b.chamadas - a.chamadas || b.conversas - a.conversas || b.pontos - a.pontos) : base
@@ -161,7 +161,7 @@ export default function GamificacaoPage() {
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
         {([['hoje', '⚡ Hoje'], ['natal', '🎄 Desafio de Natal'], ['semana', 'Esta semana'], ['mes', 'Este mês']] as const).map(([v, l]) => (
-          <button key={v} onClick={() => setPeriodo(v)} style={{ padding: '8px 14px', borderRadius: 999, fontSize: 13, fontWeight: 800, cursor: 'pointer', border: `1.5px solid ${periodo === v ? (v === 'natal' ? '#0C2B1E' : '#0F172A') : '#E2E8F0'}`, background: periodo === v ? (v === 'natal' ? '#0C2B1E' : '#0F172A') : '#fff', color: periodo === v ? '#fff' : '#334155' }}>{l}</button>
+          <button key={v} onClick={() => { setPeriodo(v); setOrdem(v === 'hoje' ? 'chamadas' : 'pontos') }} style={{ padding: '8px 14px', borderRadius: 999, fontSize: 13, fontWeight: 800, cursor: 'pointer', border: `1.5px solid ${periodo === v ? (v === 'natal' ? '#0C2B1E' : '#0F172A') : '#E2E8F0'}`, background: periodo === v ? (v === 'natal' ? '#0C2B1E' : '#0F172A') : '#fff', color: periodo === v ? '#fff' : '#334155' }}>{l}</button>
         ))}
       </div>
 
@@ -194,19 +194,14 @@ export default function GamificacaoPage() {
       )}
 
       {meuMes && (
-        <div style={{ ...card, color: '#fff', border: 0, background: 'linear-gradient(135deg,#064E3B,#047857 55%,#10B981)', boxShadow: '0 16px 36px -18px #059669' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: '#A7F3D0' }}><Wallet size={16} /> A tua carteira · {new Date().toLocaleDateString('pt-PT', { month: 'long' })}</div>
-          <div style={{ fontSize: 34, fontWeight: 900, margin: '6px 0 2px', letterSpacing: '-.02em' }}>{eur(meuMes.pontos * valorPonto)}</div>
-          <div style={{ fontSize: 13.5, color: '#D1FAE5' }}>{String(meuMes.pontos).replace('.', ',')} pontos × {eur(valorPonto)} · 📺 {meuMes.tvs} TVs · ⚡ {meuMes.energias} energias{meuMes.top ? ' · 🔥 escalão top' : ''}</div>
-          {!meuMes.top && (mesData?.pontosVendas) && <div style={{ fontSize: 12.5, color: '#A7F3D0', marginTop: 6 }}>Faltam {Math.max(0, mesData.pontosVendas.limiteTv - meuMes.tvs)} TVs (ou {Math.max(0, mesData.pontosVendas.limiteEnergia - meuMes.energias)} energias) para o escalão 🔥: todas passam a valer mais.</div>}
-        </div>
-      )}
-
-      {gestor && mesData && (
-        <div style={{ ...card, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 13.5, color: '#334155', fontWeight: 700, display: 'flex', gap: 6, alignItems: 'center' }}><Wallet size={16} /> Comissões a pagar este mês (toda a equipa)</div>
-          <div style={{ fontSize: 20, fontWeight: 900, color: '#0F172A' }}>{eur(totalComissoes)}</div>
-        </div>
+        <Link href="/carteira" style={{ ...card, display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', color: '#fff', border: 0, background: 'linear-gradient(135deg,#064E3B,#047857 55%,#10B981)' }}>
+          <Wallet size={22} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: '#A7F3D0' }}>A tua carteira este mês</div>
+            <div style={{ fontSize: 22, fontWeight: 900 }}>{eur(meuMes.pontos * valorPonto)}</div>
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 800 }}>Ver carteira →</span>
+        </Link>
       )}
 
       {(mesData?.robot?.vendas || 0) > 0 && (
@@ -248,7 +243,11 @@ export default function GamificacaoPage() {
               </div>
               {medalhas(l).length > 0 && <div style={{ fontSize: 11.5, color: '#92400E', marginTop: 3 }}>{medalhas(l).join(' · ')}</div>}
             </div>
-            <div style={{ textAlign: 'right' }}><div style={{ fontSize: 18, fontWeight: 900, color: '#0F172A' }}>{porChamadas ? l.chamadas : String(l.pontos).replace('.', ',')}<span style={{ fontSize: 11, color: '#94A3B8', fontWeight: 700 }}>{porChamadas ? ' chamadas' : ' pts'}</span></div>{porChamadas && <div style={{ fontSize: 11.5, color: '#64748B', fontWeight: 700 }}>{String(l.pontos).replace('.', ',')} pts</div>}{(gestor || l.id === data?.eu) && periodo === 'mes' && l.pontos > 0 && <div style={{ fontSize: 12, fontWeight: 800, color: '#047857' }}>{eur(l.pontos * valorPonto)}</div>}</div>
+            <div style={{ textAlign: 'right', minWidth: 78 }}>
+              <div style={{ fontSize: 18, fontWeight: 900, color: '#0F172A' }}>{porChamadas ? l.chamadas : String(l.pontos).replace('.', ',')}<span style={{ fontSize: 11, color: '#94A3B8', fontWeight: 700 }}>{porChamadas ? ' chamadas' : ' pts'}</span></div>
+              <div style={{ fontSize: 11.5, color: '#64748B', fontWeight: 700 }}>{porChamadas ? `${String(l.pontos).replace('.', ',')} pts` : `📞 ${l.chamadas} chamadas`}</div>
+              <div style={{ fontSize: 12.5, fontWeight: 900, color: '#047857' }}>{eur(l.pontos * valorPonto)}</div>
+            </div>
           </div>
         ))}
       </div>
