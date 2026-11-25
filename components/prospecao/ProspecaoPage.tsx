@@ -110,7 +110,7 @@ export function ProspecaoPage() {
     const reserva = async () => {
       const g = await ultimaGuardada();
       if (g) { setPos({ lat: g.lat, lng: g.lng }); setLocal(""); setAviso("Usei a tua última posição conhecida."); }
-      else setErro("Sem acesso à localização. Escreve a cidade.");
+      else setErro("Sem acesso à localização. Escreve a morada ou a cidade.");
     };
     if (!navigator.geolocation) return void reserva();
     navigator.geolocation.getCurrentPosition(
@@ -127,7 +127,7 @@ export function ProspecaoPage() {
   async function pesquisar(q = query) {
     setErro(""); setAviso("");
     if (q.trim().length < 2) return setErro("Escolhe um tipo de negócio em cima ou escreve um.");
-    if (!pos && !local.trim()) return setErro("Escreve a cidade ou toca em Perto de mim.");
+    if (!pos && !local.trim()) return setErro("Escreve uma morada ou cidade, ou toca em Perto de mim.");
     setBusy(true); setFrase(0); setSel(null);
     try {
       const r = await fetch("/api/prospecao", {
@@ -186,7 +186,7 @@ export function ProspecaoPage() {
           <label className="px-field grow">
             <MapPin size={18} />
             <input value={pos ? "📍 Perto de mim" : local} onChange={(e) => { setPos(null); setLocal(e.target.value.replace("📍 Perto de mim", "")); }}
-              onKeyDown={(e) => e.key === "Enter" && pesquisar()} placeholder="Cidade (Porto, Lisboa, Gaia…)" />
+              onKeyDown={(e) => e.key === "Enter" && pesquisar()} placeholder="Morada, código postal ou cidade" />
           </label>
           <button className={"px-locate" + (pos ? " on" : "")} onClick={pertoDeMim}><LocateFixed size={18} /> {pos ? "Ativo" : "Perto de mim"}</button>
         </div>

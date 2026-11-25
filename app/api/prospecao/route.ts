@@ -304,7 +304,7 @@ export async function POST(req: NextRequest) {
   } else if (local) {
     centro = await geocode(local + ', Portugal')
   }
-  if (!centro) return NextResponse.json({ error: local ? `Não encontrei "${local}". Escreve só a cidade (ex.: Porto).` : 'Escreve a cidade ou toca em Perto de mim.' }, { status: 400 })
+  if (!centro) return NextResponse.json({ error: local ? `Não encontrei "${local}". Confirma a morada ou escreve só a cidade (ex.: Porto).` : 'Escreve uma morada ou cidade, ou toca em Perto de mim.' }, { status: 400 })
 
   await ctx.admin.from('prospecao_pesquisas').insert({ user_id: ctx.me.id, company_id: ctx.me.company_id, query, local, raio_km: raio })
 
