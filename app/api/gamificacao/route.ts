@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { errorResponse, requireSdDialerUser, SdDialerError } from '@/lib/server/sd-dialer-livekit'
-import { NATAL_PADRAO, PONTOS } from '@/lib/formacao-conteudo'
+import { NATAL_PADRAO, PONTOS, PONTOS_VENDAS, eEnergia, pontosVendas } from '@/lib/formacao-conteudo'
 
 // Ranking único do SD Dialer: todos os comerciais ativos de todas as empresas, e todos veem todos.
-// Pontos por chamadas, conversas reais, vendas e formação. Períodos: semana, mês e Desafio de Natal.
+// Pontos por vendas: TV 3 / energia 0,5; a partir de 8 TVs ou 20 energias, TV 4 / energia 1. Chamadas e conversas desempatam.
+// Inclui resultados lançados à mão pelo super admin (tabela ranking_ajustes). Períodos: semana, mês e Desafio de Natal.
 // O Desafio de Natal (datas e prémios) é um só para todo o SD Dialer e só o super admin o altera.
 
 export const runtime = 'nodejs'
@@ -12,10 +13,12 @@ export const dynamic = 'force-dynamic'
 const BUCKET = 'campaign-files'
 const CONVERSA = new Set(['nao_interessado', 'ligar_depois', 'venda', 'outro'])
 const PAGE = 1000
+const VALOR_PONTO = Number(process.env.VALOR_PONTO_EUR) || 25
 const NATAL_GLOBAL = process.env.RANKING_NATAL_COMPANY_ID || 'e27c8324-989a-4a68-b3a3-902cba74696c'
 
 function inicioPeriodo(periodo: string, natal: { inicio: string; fim: string }) {
   const now = new Date()
+  if (periodo === 'hoje') { const d = new Date(now); d.setHours(0, 0, 0, 0); return { de: d, ate: null as Date | null } }
   if (periodo === 'mes') return { de: new Date(now.getFullYear(), now.getMonth(), 1), ate: null as Date | null }
   if (periodo === 'natal') return { de: new Date(`${natal.inicio}T00:00:00Z`), ate: new Date(`${natal.fim}T23:59:59Z`) }
   const d = new Date(now); const dow = (d.getDay() + 6) % 7
@@ -54,7 +57,7 @@ export async function GET(request: NextRequest) {
     const { data: emps } = await admin.from('companies').select('id, name')
     const nomeEmpresa = new Map<string, string>((emps || []).map((e: any) => [String(e.id), String(e.name || '')]))
     const equipa = new Map<string, any>()
-    for (const u of users || []) equipa.set(String(u.id), { id: u.id, nome: u.full_name || 'Sem nome', avatar: u.avatar_url, role: u.role, empresa: nomeEmpresa.get(String(u.company_id)) || null, chamadas: 0, conversas: 0, vendas: 0, modulos: 0, pontos: 0 })
+    for (const u of users || []) equipa.set(String(u.id), { id: u.id, nome: u.full_name || 'Sem nome', avatar: u.avatar_url, role: u.role, empresa: nomeEmpresa.get(String(u.company_id)) || null, chamadas: 0, conversas: 0, vendas: 0, tvs: 0, energias: 0, modulos: 0, pontos: 0, top: false })
 
     const calls = await todos(() => admin.from('call_history').select('parceiro_id,result').gte('called_at', deIso).lte('called_at', ateIso))
     for (const c of calls) {
@@ -62,8 +65,34 @@ export async function GET(request: NextRequest) {
       e.chamadas += 1
       if (CONVERSA.has(String(c.result))) e.conversas += 1
     }
-    const vendas = await todos(() => admin.from('vendas').select('seller_id').is('deleted_at', null).gte('created_at', deIso).lte('created_at', ateIso))
-    for (const v of vendas) { const e = equipa.get(String(v.seller_id)); if (e) e.vendas += 1 }
+    const vendas = await todos(() => admin.from('vendas').select('seller_id, service_type, operator').is('deleted_at', null).gte('created_at', deIso).lte('created_at', ateIso))
+    for (const v of vendas) {
+      const e = equipa.get(String(v.seller_id)); if (!e) continue
+      e.vendas += 1
+      if (eEnergia(v.service_type, v.operator)) e.energias += 1; else e.tvs += 1
+    }
+
+    // Resultados lançados à mão: entram nos períodos 'mês' e 'Natal' quando o mês cruza o período (não na semana).
+    let ajustes: any[] = []
+    if (periodo !== 'semana' && periodo !== 'hoje') {
+      const mesIni = new Date(Date.UTC(de.getUTCFullYear(), de.getUTCMonth(), 1)).toISOString().slice(0, 10)
+      const { data } = await admin.from('ranking_ajustes').select('id, mes, user_id, nome, tvs, energias, chamadas, nota, fora_ranking')
+        .gte('mes', mesIni).lte('mes', ateIso.slice(0, 10))
+      ajustes = data || []
+      for (const a of ajustes) {
+        if (a.fora_ranking) continue
+        let e = a.user_id ? equipa.get(String(a.user_id)) : null
+        if (!e) {
+          const k = 'aj:' + String(a.nome).trim().toLowerCase()
+          e = equipa.get(k)
+          if (!e) { e = { id: k, nome: a.nome, avatar: null, role: 'parceiro', empresa: null, chamadas: 0, conversas: 0, vendas: 0, tvs: 0, energias: 0, modulos: 0, pontos: 0, top: false, manual: true }; equipa.set(k, e) }
+        }
+        e.tvs += Number(a.tvs) || 0
+        e.energias += Number(a.energias) || 0
+        e.vendas += (Number(a.tvs) || 0) + (Number(a.energias) || 0)
+        e.chamadas += Number(a.chamadas) || 0
+      }
+    }
 
     // Formação: módulos passados dentro do período (app_metadata.formacao).
     for (let page = 1; page <= 10; page++) {
@@ -77,12 +106,14 @@ export async function GET(request: NextRequest) {
       if (lista.length < 1000) break
     }
 
-    const ranking = [...equipa.values()].map((e) => ({
-      ...e,
-      pontos: e.chamadas * PONTOS.chamada + e.conversas * PONTOS.conversa + e.vendas * PONTOS.venda + e.modulos * PONTOS.modulo,
-    })).sort((a, b) => b.pontos - a.pontos || b.vendas - a.vendas || b.chamadas - a.chamadas)
+    const ranking = [...equipa.values()].map((e) => {
+      const pv = pontosVendas(e.tvs, e.energias)
+      return { ...e, pontos: pv.pontos, top: pv.top }
+    }).sort((a, b) => b.pontos - a.pontos || b.vendas - a.vendas || b.conversas - a.conversas || b.chamadas - a.chamadas)
 
-    return NextResponse.json({ periodo, de: deIso, ate: ate ? ateIso : null, ranking, natal, pontos: PONTOS, eu: profile.id, podeEditar: !!profile.is_super_admin })
+    return NextResponse.json({ periodo, de: deIso, ate: ate ? ateIso : null, ranking, natal, pontos: PONTOS, pontosVendas: PONTOS_VENDAS, eu: profile.id, podeEditar: !!profile.is_super_admin, valorPonto: VALOR_PONTO,
+      robot: ajustes.filter((a: any) => a.fora_ranking).reduce((t: any, a: any) => ({ vendas: t.vendas + (Number(a.tvs) || 0) + (Number(a.energias) || 0), chamadas: t.chamadas + (Number(a.chamadas) || 0) }), { vendas: 0, chamadas: 0 }),
+      ajustes: profile.is_super_admin ? ajustes : undefined })
   } catch (err) {
     return errorResponse(err, 'gamificacao')
   }

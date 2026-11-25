@@ -2,12 +2,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import useSWR from 'swr'
 import { Send, Plus, ArrowLeft, MessageCircle, Users, X, Search, Trash2, Paperclip, Sparkles, FileText, Loader2 } from 'lucide-react'
-import { chatService, usuarioService } from '@/lib/services'
+import { chatService } from '@/lib/services'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { createClient } from '@/lib/supabase/client'
-import type { Conversa, Mensagem, Usuario } from '@/lib/types'
+import { authFetcher } from '@/lib/client/authFetch'
+
+type Pessoa = { id: string; full_name: string; avatar_url: string | null; role: string; empresa: string; online: boolean; visto_em: string | null }
+import type { Conversa, Mensagem } from '@/lib/types'
 
 function initials(name?: string | null) {
   if (!name) return '?'
@@ -26,10 +29,10 @@ function Avatar({ name, size = 38 }: { name?: string | null; size?: number }) {
   )
 }
 
-function conversaTitulo(conversa: Conversa, myId: string) {
+function conversaTitulo(conversa: Conversa, myId: string, nomes?: Map<string, string>) {
   if (conversa.tipo === 'grupo') return conversa.nome ?? 'Grupo'
   const outro = conversa.participantes?.find(p => p.id !== myId)
-  return outro?.full_name ?? 'Conversa'
+  return outro?.full_name || (outro ? nomes?.get(outro.id) : '') || 'Conversa'
 }
 
 function AnexoPreview({ path, nome, mine }: { path: string; nome?: string | null; mine: boolean }) {
@@ -51,10 +54,27 @@ function AnexoPreview({ path, nome, mine }: { path: string; nome?: string | null
   )
 }
 
+function LinhaColega({ c, onClick }: { c: Pessoa; onClick: () => void }) {
+  return (
+    <button onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', border: 'none', borderBottom: '1px solid #F8FAFC', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}>
+      <div style={{ position: 'relative' }}>
+        <Avatar name={c.full_name} size={36} />
+        <span style={{ position: 'absolute', right: -1, bottom: -1, width: 11, height: 11, borderRadius: 99, border: '2px solid #fff', background: c.online ? '#22C55E' : '#CBD5E1' }} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.full_name}</div>
+        <div style={{ fontSize: 11.5, color: '#94A3B8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.online ? 'Online agora' : c.role} {c.empresa ? `· ${c.empresa}` : ''}</div>
+      </div>
+      <MessageCircle size={16} color="#94A3B8" />
+    </button>
+  )
+}
+
 export default function ChatPage() {
   const { user, profile } = useAuth()
   const [activeId, setActiveId] = useState<string | null>(null)
   const [showNewChat, setShowNewChat] = useState(false)
+  const [aba, setAba] = useState<'conversas' | 'colegas'>('conversas')
   const [search, setSearch] = useState('')
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
@@ -74,10 +94,20 @@ export default function ChatPage() {
     () => chatService.getConversas(user!.id),
     { refreshInterval: 15000 }
   )
-  const { data: colegas = [] } = useSWR(
-    profile?.company_id ? ['colegas', profile.company_id] : null,
-    () => usuarioService.getByCompany(profile!.company_id!)
-  )
+  // Lista de todos os utilizadores do SD Dialer (todas as empresas), vinda do servidor
+  const { data: dir } = useSWR<{ utilizadores: Pessoa[] }>(user?.id ? '/api/chat/utilizadores' : null, authFetcher, { refreshInterval: 60_000 })
+  const colegas: Pessoa[] = Array.isArray(dir?.utilizadores) ? dir!.utilizadores : []
+  const nomes = new Map(colegas.map(c => [c.id, c.full_name]))
+
+  // Tempo real: qualquer mensagem nova numa das minhas conversas atualiza logo a lista
+  useEffect(() => {
+    if (!user?.id) return
+    const sb = createClient()
+    const ch = sb.channel(`inbox:${user.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens' }, () => { mutateConversas() })
+      .subscribe()
+    return () => { sb.removeChannel(ch) }
+  }, [user?.id, mutateConversas])
 
   const activeConversa = conversas.find(c => c.id === activeId)
 
@@ -159,7 +189,10 @@ export default function ChatPage() {
     setActiveId(conversa.id)
   }
 
-  const filteredColegas = colegas.filter(c => c.id !== user?.id && c.full_name.toLowerCase().includes(search.toLowerCase()))
+  const filteredColegas = colegas
+    .filter(c => c.id !== user?.id && `${c.full_name} ${c.empresa}`.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => Number(b.online) - Number(a.online) || a.full_name.localeCompare(b.full_name))
+  const onlineAgora = colegas.filter(c => c.online && c.id !== user?.id).length
 
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - 100px)', maxHeight: 720, border: '1px solid #E2E8F0', borderRadius: 16, overflow: 'hidden', background: '#fff' }}>
@@ -167,13 +200,30 @@ export default function ChatPage() {
       <div className={activeId ? 'chat-list-mobile-hidden' : ''} style={{ width: 300, flexShrink: 0, borderRight: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '16px 16px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #F1F5F9' }}>
           <h2 style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', margin: 0 }}>Mensagens</h2>
+          <div style={{ display: 'flex', background: '#F1F5F9', borderRadius: 10, padding: 3, gap: 2 }}>
+            {([['conversas', 'Conversas'], ['colegas', `Colegas${onlineAgora ? ` · ${onlineAgora} 🟢` : ''}`]] as const).map(([k, l]) => (
+              <button key={k} onClick={() => setAba(k)} style={{ border: 0, borderRadius: 8, padding: '5px 9px', fontSize: 12, fontWeight: 800, cursor: 'pointer', background: aba === k ? '#fff' : 'transparent', color: aba === k ? '#0F172A' : '#64748B', boxShadow: aba === k ? '0 1px 3px rgba(15,23,42,.12)' : 'none' }}>{l}</button>
+            ))}
+          </div>
           <button onClick={() => setShowNewChat(true)} style={{ background: '#2563EB', border: 'none', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
             <Plus size={16} color="#fff" />
           </button>
         </div>
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        {aba === 'colegas' && (
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '10px 12px' }}>
+              <div style={{ position: 'relative' }}>
+                <Search size={14} color="#94A3B8" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)' }} />
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Pesquisar colega ou empresa..." style={{ width: '100%', padding: '9px 12px 9px 32px', borderRadius: 10, border: '1.5px solid #E2E8F0', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+            </div>
+            {filteredColegas.map(c => <LinhaColega key={c.id} c={c} onClick={() => startDirectChat(c.id)} />)}
+            {filteredColegas.length === 0 && <div style={{ padding: 16, color: '#94A3B8', fontSize: 13, textAlign: 'center' }}>{colegas.length ? 'Ninguém com esse nome.' : 'A carregar colegas…'}</div>}
+          </div>
+        )}
+        <div style={{ flex: 1, overflowY: 'auto', display: aba === 'conversas' ? 'block' : 'none' }}>
           {loadingConversas ? <PageSpinner /> : conversas.length === 0 ? (
-            <EmptyState icon={MessageCircle} title="Sem conversas" description="Toca no + para começares uma conversa." />
+            <EmptyState icon={MessageCircle} title="Sem conversas" description="Abre Colegas e toca em alguém para começares a falar." />
           ) : conversas.map(c => (
             <button key={c.id} onClick={() => setActiveId(c.id)} style={{
               display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '12px 16px',
@@ -182,10 +232,10 @@ export default function ChatPage() {
             }}>
               {c.tipo === 'grupo'
                 ? <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Users size={16} color="#64748B" /></div>
-                : <Avatar name={conversaTitulo(c, user?.id ?? '')} />}
+                : <Avatar name={conversaTitulo(c, user?.id ?? '', nomes)} />}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {conversaTitulo(c, user?.id ?? '')}
+                  {conversaTitulo(c, user?.id ?? '', nomes)}
                 </div>
                 <div style={{ fontSize: 12, color: '#94A3B8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {c.ultima_mensagem?.conteudo ?? 'Sem mensagens ainda'}
@@ -213,8 +263,8 @@ export default function ChatPage() {
               <button onClick={() => setActiveId(null)} className="chat-back-btn" style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'none', padding: 4 }}>
                 <ArrowLeft size={18} color="#0F172A" />
               </button>
-              <Avatar name={conversaTitulo(activeConversa, user?.id ?? '')} size={32} />
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', flex: 1 }}>{conversaTitulo(activeConversa, user?.id ?? '')}</div>
+              <Avatar name={conversaTitulo(activeConversa, user?.id ?? '', nomes)} size={32} />
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', flex: 1 }}>{conversaTitulo(activeConversa, user?.id ?? '', nomes)}</div>
               <button onClick={() => setShowAiHelp(true)} title="Ajuda IA" style={{ background: '#EFF6FF', border: 'none', borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                 <Sparkles size={15} color="#2563EB" />
               </button>
@@ -293,18 +343,7 @@ export default function ChatPage() {
               </div>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px 8px' }}>
-              {filteredColegas.map((c: Usuario) => (
-                <button key={c.id} onClick={() => startDirectChat(c.id)} style={{
-                  display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 8px',
-                  border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', borderRadius: 10,
-                }}>
-                  <Avatar name={c.full_name} size={32} />
-                  <div>
-                    <div style={{ fontSize: 13.5, fontWeight: 600, color: '#0F172A' }}>{c.full_name}</div>
-                    <div style={{ fontSize: 11.5, color: '#94A3B8', textTransform: 'capitalize' }}>{c.role}</div>
-                  </div>
-                </button>
-              ))}
+              {filteredColegas.map(c => <LinhaColega key={c.id} c={c} onClick={() => startDirectChat(c.id)} />)}
             </div>
           </div>
         </div>

@@ -16,6 +16,19 @@ export type Modulo = {
 
 export const PONTOS = { chamada: 1, conversa: 3, venda: 50, modulo: 10 }
 
+// Pontos do ranking por vendas: TV (telecom) 3 pts, energia 0,5 pt.
+// A partir de 8 TVs OU 20 energias no período, todas passam a valer mais: TV 4 pts, energia 1 pt.
+export const PONTOS_VENDAS = { tv: 3, energia: 0.5, tvTop: 4, energiaTop: 1, limiteTv: 8, limiteEnergia: 20 }
+export function pontosVendas(tvs: number, energias: number) {
+  const top = tvs >= PONTOS_VENDAS.limiteTv || energias >= PONTOS_VENDAS.limiteEnergia
+  const p = tvs * (top ? PONTOS_VENDAS.tvTop : PONTOS_VENDAS.tv) + energias * (top ? PONTOS_VENDAS.energiaTop : PONTOS_VENDAS.energia)
+  return { pontos: Math.round(p * 10) / 10, top }
+}
+export function eEnergia(servico?: string | null, operador?: string | null) {
+  const t = `${servico || ''} ${operador || ''}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  return /energ|energu|luz|\bgas\b|eletric|electric|endesa|iberdrola|edp|galp|repsol|goldenergy|plenitude|coopernico|luzboa|mel ?energia/.test(t)
+}
+
 // ── Começar aqui ────────────────────────────────────────────────────────────
 const comecar: Modulo = {
   id: 'comecar',
