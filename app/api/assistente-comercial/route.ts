@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getCoverage } from '@/lib/providers/geoAnacom'
+import { groqFetch } from '@/lib/server/groq'
 
 export async function POST(request: NextRequest) {
   const apiKey = process.env.GROQ_API_KEY
@@ -98,7 +99,7 @@ ${coverageNote || 'Sem dados de cobertura disponiveis para esta consulta (nenhum
 
   let response: Response
   try {
-    response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    response = await groqFetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

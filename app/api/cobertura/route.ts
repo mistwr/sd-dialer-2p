@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { campanhasUser } from '@/lib/server/campanhas-auth'
 
+import { groqFetch } from '@/lib/server/groq'
 // Recomendação da melhor operadora para uma morada.
 // A cobertura (que operadoras/tecnologias chegam à morada) é lida pelo vendedor no mapa oficial da ANACOM
 // (geo.anacom.pt) e indicada aqui; a IA só compara pacotes e preços reais guardados no SD Dialer.
@@ -93,7 +94,7 @@ ${linhas.join('\n') || '(sem pacotes carregados para estas operadoras)'}`
   const pedido = `Cliente: operadora atual ${clip(cli.operadoraAtual, 30) || 'não indicada'}; quer TV: ${cli.tv ? 'sim' : 'não'}; quer móvel: ${cli.movel ? 'sim' : 'não'}; paga hoje: ${clip(cli.paga, 12) || 'não indicado'} €/mês. Qual a melhor operadora?`
 
   try {
-    const r = await fetch(GROQ_API_URL, {
+    const r = await groqFetch(GROQ_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify({

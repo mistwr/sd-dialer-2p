@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+import { groqFetch } from '@/lib/server/groq'
 // Guia IA do SD Dialer — grátis para todos os perfis. Explica a plataforma e ensina a vender de ponta a ponta.
 // Não lê dados de clientes nem da empresa; não altera nada.
 
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
   const role = pedido in nivel && nivel[pedido] < nivel[real] ? pedido : real
 
   try {
-    const r = await fetch(GROQ_API_URL, {
+    const r = await groqFetch(GROQ_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify({

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+import { groqFetch } from '@/lib/server/groq'
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const GROQ_MODEL = 'openai/gpt-oss-120b'
 
@@ -102,7 +103,7 @@ Gera um script PRÁTICO, DIRETO, CONTROLADO. Pronto para usar já.`
         },
       ]
 
-      const groqRes = await fetch(GROQ_API_URL, {
+      const groqRes = await groqFetch(GROQ_API_URL, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${groqKey}`,
@@ -169,7 +170,7 @@ A excelência não é um ato, é um hábito de execução.`
         { role: 'user', content: pergunta! },
       ]
 
-      const groqRes = await fetch(GROQ_API_URL, {
+      const groqRes = await groqFetch(GROQ_API_URL, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${groqKey}`,

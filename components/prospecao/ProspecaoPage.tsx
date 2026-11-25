@@ -5,12 +5,9 @@ import "leaflet/dist/leaflet.css";
 import {
   Building2, Check, ExternalLink, Globe, LocateFixed, MapPin, MessageCircle, Phone, Radar, Save, Search, Sparkles,
 } from "lucide-react";
+import { geocode, juntar, pesquisarMapa, type Neg as NegOSM } from "@/lib/prospecao/osm";
 
-type Neg = {
-  nome: string; telefone: string | null; email: string | null; morada: string | null; localidade: string | null;
-  site: string | null; redes: string | null; fonte_url: string | null; sugestao: string | null; distancia_km: number | null;
-  categoria: string | null; lat: number | null; lng: number | null; origem: "mapa" | "web";
-};
+type Neg = NegOSM;
 type Stats = { total: number; comTelefone: number; mapa: number; web: number };
 
 const RAIOS = [2, 5, 15, 30, 50];
@@ -127,23 +124,32 @@ export function ProspecaoPage() {
   async function pesquisar(q = query) {
     setErro(""); setAviso("");
     if (q.trim().length < 2) return setErro("Escolhe um tipo de negócio em cima ou escreve um.");
-    if (!pos && !local.trim()) return setErro("Escreve a cidade ou toca em Perto de mim.");
+    if (!pos && !local.trim()) return setErro("Escreve uma morada ou cidade, ou toca em Perto de mim.");
     setBusy(true); setFrase(0); setSel(null);
     try {
-      const r = await fetch("/api/prospecao", {
-        method: "POST", headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(65000),
-        body: JSON.stringify({ query: q, local, raioKm: raio, ...(pos ? { lat: pos.lat, lng: pos.lng } : {}) }),
-      });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) setErro(j.error || "Não deu desta vez. Toca outra vez em Pesquisar.");
-      else {
-        setRes(j.resultados || []); setStats(j.stats || null); setCentro(j.centro || null);
-        if (!(j.resultados || []).length) setAviso("Nada neste raio. Aumenta o raio ou experimenta outro tipo de negócio.");
-      }
+      const c: [number, number] | null = pos ? [pos.lat, pos.lng] : await geocode(local.trim() + ", Portugal");
+      if (!c) { setErro(`Não encontrei "${local}". Confirma a morada ou escreve só a cidade.`); setBusy(false); return; }
+      // web (opcional) em paralelo; o mapa corre aqui no telemóvel, sem limite de tempo do servidor
+      const webP: Promise<NegOSM[]> = fetch("/api/prospecao", {
+        method: "POST", headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(11000),
+        body: JSON.stringify({ query: q, local: local || "", raioKm: raio }),
+      }).then((r) => r.json()).then((j) => (Array.isArray(j?.resultados) ? j.resultados : [])).catch(() => []);
+      const mapa = await pesquisarMapa(q, c, raio);
+      const lista = juntar([mapa]);
+      setCentro(c); setRes(lista);
+      setStats({ total: lista.length, comTelefone: lista.filter((x) => x.telefone).length, mapa: mapa.length, web: 0 });
+      setBusy(false);
+      if (!lista.length) setAviso("A procurar também na web…");
+      const web = await webP;
+      if (web.length) {
+        const tudo = juntar([mapa, web]);
+        setRes(tudo); setStats({ total: tudo.length, comTelefone: tudo.filter((x) => x.telefone).length, mapa: mapa.length, web: web.length });
+        setAviso("");
+      } else if (!lista.length) setAviso("Nada neste raio. Aumenta o raio ou experimenta outro tipo de negócio.");
     } catch {
-      setErro("A ligação falhou. Toca outra vez em Pesquisar.");
+      setErro("A ligação falhou. Toca outra vez em Encontrar empresas.");
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   async function guardar(itens: Neg[]) {

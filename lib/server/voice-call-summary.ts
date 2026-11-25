@@ -1,3 +1,4 @@
+import { groqFetch } from '@/lib/server/groq'
 // Resumo automático de chamadas de IA do SD Dialer.
 // Gera summary / interest_level / next_action APENAS a partir da transcrição real
 // guardada em voice_call_transcripts. Nunca inventa: sem transcrição, não faz nada.
@@ -60,7 +61,7 @@ export async function ensureCallSummary(admin: any, callId: string, timeoutMs = 
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const res = await fetch(GROQ_API_URL, {
+    const res = await groqFetch(GROQ_API_URL, {
       method: 'POST',
       signal: controller.signal,
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
