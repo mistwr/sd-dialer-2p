@@ -12,6 +12,8 @@ const txt = (m: number) => (m < 1 ? 'agora' : m < 60 ? `há ${m} min` : m < 1440
 export default function EquipaNoMapaPage() {
   const [pessoas, setPessoas] = useState<Pessoa[]>([])
   const [erro, setErro] = useState('')
+  const [aba, setAba] = useState<'agora' | 'todos'>('agora')
+  const [tick, setTick] = useState(0)
   const mapaRef = useRef<HTMLDivElement>(null)
   const mapa = useRef<any>(null)
   const camada = useRef<any>(null)
@@ -27,7 +29,7 @@ export default function EquipaNoMapaPage() {
     } catch (e: any) { setErro(e?.message || 'Erro') }
   }
 
-  useEffect(() => { carregar(); const t = setInterval(carregar, 15_000); return () => clearInterval(t) }, [])
+  useEffect(() => { carregar(); const t = setInterval(() => { carregar(); setTick(x => x + 1) }, 15_000); return () => clearInterval(t) }, [])
 
   useEffect(() => {
     let cancelado = false
@@ -44,18 +46,21 @@ export default function EquipaNoMapaPage() {
     return () => { cancelado = true; if (mapa.current) { mapa.current.remove(); mapa.current = null } }
   }, [])
 
+  const naApp = pessoas.filter(p => minAtras(p.updated_at) <= 3)
+  const visiveis = aba === 'agora' ? naApp : pessoas
+
   useEffect(() => {
     if (!mapa.current || !camada.current || !L.current) return
     camada.current.clearLayers()
     const pts: [number, number][] = []
-    pessoas.forEach(p => {
+    visiveis.forEach(p => {
       const m = minAtras(p.updated_at)
       L.current.circleMarker([p.lat, p.lng], { radius: 10, color: '#fff', weight: 2, fillColor: cor(m), fillOpacity: 1 })
         .bindTooltip(`${p.nome}${p.accuracy && p.accuracy >= 5000 ? ' (aprox.)' : ''} · ${txt(m)}`, { permanent: true, direction: 'top', offset: [0, -8] }).addTo(camada.current)
       pts.push([p.lat, p.lng])
     })
     if (pts.length && !centrado.current) { mapa.current.fitBounds(pts, { padding: [50, 50], maxZoom: 15 }); centrado.current = true }
-  }, [pessoas])
+  }, [pessoas, aba, tick])
 
   return (
     <div>
@@ -66,13 +71,18 @@ export default function EquipaNoMapaPage() {
         </div>
         <button onClick={carregar} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', border: '1px solid #E2E8F0', background: '#fff', borderRadius: 999, padding: '8px 14px', cursor: 'pointer' }}><RefreshCw size={14} /> Atualizar</button>
       </div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        {([['agora', `Na app agora (${naApp.length})`], ['todos', `Todos (${pessoas.length})`]] as const).map(([k, l]) => (
+          <button key={k} onClick={() => { setAba(k); centrado.current = false }} style={{ padding: '8px 14px', borderRadius: 999, cursor: 'pointer', fontWeight: 600, fontSize: 13, border: '1.5px solid ' + (aba === k ? '#2563EB' : '#E2E8F0'), background: aba === k ? '#2563EB' : '#fff', color: aba === k ? '#fff' : '#334155' }}>{l}</button>
+        ))}
+      </div>
       {erro && <div style={{ color: '#B91C1C', marginBottom: 10 }}>{erro}</div>}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
         <div ref={mapaRef} style={{ gridColumn: 'span 2', minHeight: 460, borderRadius: 14, border: '1px solid #E2E8F0', zIndex: 0 }} />
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 14, padding: 14, alignSelf: 'start' }}>
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>Pessoas ({pessoas.length})</div>
-          {pessoas.length === 0 && <div style={{ fontSize: 13, color: '#94A3B8' }}>Ainda ninguém partilhou posição. Cada utilizador tem de abrir a app e aceitar a permissão de localização do telemóvel.</div>}
-          {[...pessoas].sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at)).map(p => {
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>{aba === 'agora' ? 'Na app agora' : 'Todos'} ({visiveis.length})</div>
+          {visiveis.length === 0 && <div style={{ fontSize: 13, color: '#94A3B8' }}>{aba === 'agora' ? 'Ninguém com a app aberta neste momento. Vê o separador Todos para a última posição de cada um.' : 'Ainda ninguém partilhou posição.'} Cada utilizador tem de abrir a app e aceitar a permissão de localização do telemóvel.</div>}
+          {[...visiveis].sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at)).map(p => {
             const m = minAtras(p.updated_at)
             return (
               <div key={p.user_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderTop: '1px solid #F1F5F9' }}>
