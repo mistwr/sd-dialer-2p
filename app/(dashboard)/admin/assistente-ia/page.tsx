@@ -1,4 +1,5 @@
 'use client'
+import { CoachVendas } from '@/components/ia/CoachVendas'
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import useSWR from 'swr'
@@ -212,6 +213,8 @@ export default function AssistenteIAManagement() {
 
   return (
     <div className="anim-fade-in" style={{ maxWidth: 900 }}>
+      <CoachVendas />
+      <h2 style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', margin: '8px 0 12px' }}>Guiões e objeções da empresa</h2>
       {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
         <div>

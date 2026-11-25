@@ -1,4 +1,5 @@
 'use client'
+import { CoachVendas } from '@/components/ia/CoachVendas'
 import { useState } from 'react'
 import useSWR from 'swr'
 import { createClient } from '@/lib/supabase/client'
@@ -68,6 +69,8 @@ export default function AssistenteIAParceiro() {
 
   return (
     <div className="anim-fade-in" style={{ maxWidth: 900 }}>
+      <CoachVendas />
+      <h2 style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', margin: '8px 0 12px' }}>Guiões e objeções da empresa</h2>
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: 0 }}>Assistente IA</h1>
         <p style={{ color: '#64748B', fontSize: 13, margin: '4px 0 0' }}>

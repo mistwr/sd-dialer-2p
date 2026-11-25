@@ -448,6 +448,17 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
             </div>
 
             <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+              <Link
+                href={`/parceiro/assistente-ia?lead=${lead.id}`}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '8px 14px', borderRadius: 8, border: '1px solid rgba(167,139,250,0.45)',
+                  background: 'linear-gradient(135deg, rgba(124,58,237,0.35), rgba(5,150,105,0.25))', color: '#fff', fontSize: 12.5, fontWeight: 700,
+                  textDecoration: 'none',
+                }}
+              >
+                <Sparkles size={14} /> Coach IA: como fecho esta lead?
+              </Link>
               {(lead as any).campanhas && (
                 <Link
                   href={`/parceiro?campanha=${(lead as any).campanhas.id}`}

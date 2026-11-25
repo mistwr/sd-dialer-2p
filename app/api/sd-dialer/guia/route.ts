@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { campanhasUser } from '@/lib/server/campanhas-auth'
+import { contextoVendas } from '@/lib/server/ia-vendas'
 
 import { groqFetch } from '@/lib/server/groq'
 // Guia IA do SD Dialer — grátis para todos os perfis. Explica a plataforma e ensina a vender de ponta a ponta.
@@ -12,7 +14,7 @@ const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const MODEL = process.env.COMANDO_GROQ_MODEL || 'openai/gpt-oss-120b'
 
 const MENU_POR_PERFIL: Record<string, string> = {
-  parceiro: 'Chat, Minhas Leads, Agenda, Histórico, SMS em massa, Porta → Lead, Vendas, Fidelizações, Simulador energia, Marcador (telefone), Campanhas operadoras, Formação, Ranking, Meu perfil, Assistente IA.',
+  parceiro: 'Chat, Minhas Leads, Agenda, Histórico, SMS em massa, Porta → Lead, Vendas, Fidelizações, Simulador energia, Marcador (telefone), Campanhas operadoras, Formação, Ranking, Meu perfil, Assistente IA (com o Coach de Vendas, que conhece as campanhas e ajuda a fechar cada lead), Empresas (pesquisa IA).',
   supervisor: 'Tudo o que o parceiro vê, mais Chamadas IA (robot), Base de leads, Distribuição, Campanhas, Parceiros, Relatórios, Equipa no mapa, Relatório porta e Comando IA.',
   admin: 'Tudo o que o supervisor vê, com gestão completa da empresa (parceiros, campanhas, distribuição, relatórios) e Comando IA.',
 }
@@ -50,13 +52,22 @@ export async function POST(request: NextRequest) {
   const pedido = String(body.verComo || '')
   const role = pedido in nivel && nivel[pedido] < nivel[real] ? pedido : real
 
+  let campanhasAtivas = ''
+  try {
+    const ctx = await campanhasUser()
+    if (ctx) {
+      const c = await contextoVendas(ctx.admin, ctx.me as any)
+      if (c.titulos.length) campanhasAtivas = `\nCAMPANHAS ATIVAS AGORA (só títulos; para condições manda abrir Campanhas operadoras ou o Coach de Vendas em Assistente IA): ${c.titulos.join(' · ')}`
+    }
+  } catch {}
+
   try {
     const r = await groqFetch(GROQ_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify({
         model: MODEL, temperature: 0.4, max_tokens: 700,
-        messages: [{ role: 'system', content: sistema(String(me?.full_name || ''), role, !!body.primeiraVez) }, ...history, { role: 'user', content: question }],
+        messages: [{ role: 'system', content: sistema(String(me?.full_name || ''), role, !!body.primeiraVez) + campanhasAtivas }, ...history, { role: 'user', content: question }],
       }),
     })
     const d = await r.json().catch(() => ({}))
