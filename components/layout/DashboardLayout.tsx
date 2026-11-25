@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, Building2, Megaphone, Volume2, VolumeX,
   PhoneCall, BarChart2, LogOut, Menu, X, Bell,
   ChevronRight, PhoneIncoming, History, UserCircle,
-  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag, MessageSquare, Users2, ArrowLeft, ArrowRight, GraduationCap, ShieldCheck, Sparkles, Zap, Trophy, Bot} from 'lucide-react'
+  Shuffle, CheckCircle2, Calendar, BellOff, Brain, AudioLines, MapPin, MessageCircle, ShoppingBag, MessageSquare, Users2, ArrowLeft, ArrowRight, GraduationCap, ShieldCheck, Sparkles, Zap, Trophy, Bot, Wallet} from 'lucide-react'
 import useSWR from 'swr'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { createClient } from '@/lib/supabase/client'
@@ -44,6 +44,7 @@ const NAV: NavItem[] = [
   { section: 'Leads e chamadas', label: 'Porta → Lead',   href: '/parceiro/porta',       icon: MapPin,        roles: ['parceiro', 'admin', 'supervisor'] },
   // Vendas
   { section: 'Vendas', label: 'Vendas',        href: '/parceiro/vendas', icon: ShoppingBag, roles: ['parceiro', 'admin', 'supervisor'] },
+  { section: 'Vendas', label: 'Carteira de comissões', href: '/carteira', icon: Wallet, roles: ['parceiro', 'admin', 'supervisor'] },
   { section: 'Vendas', label: 'Fidelizações',  href: '/fidelizacoes',    icon: Calendar,    roles: ['parceiro', 'admin', 'supervisor'] },
   { section: 'Vendas', label: 'Simulador energia', href: '/simulador-energia', icon: Zap, roles: ['parceiro', 'admin', 'supervisor'] },
   { section: 'Vendas', label: 'Marcador (telefone)', href: '/marcador', icon: PhoneCall, roles: ['parceiro', 'admin', 'supervisor'] },
