@@ -2,15 +2,17 @@
 
 import { useEffect, useRef, useState } from 'react'
 import useSWR from 'swr'
-import { Phone, Pencil, Check, Tv, Zap, Users } from 'lucide-react'
+import { Phone, Pencil, Check, Tv, Zap, Users, Timer, X } from 'lucide-react'
 import { authFetch, authFetcher } from '@/lib/client/authFetch'
 
 type Pessoa = { id: string; nome: string; empresa: string; avatar: string | null; chamadas: number; conversas: number; vendas: number; euros: number }
-type Feed = { id: string; vendedor: string; empresa: string; tipo: 'tv' | 'energia'; operador: string; euros: number; quando: string }
+type Feed = { id: string; vendedor: string; empresa: string; tipo: 'tv' | 'energia'; operador: string; euros: number; quando: string; quantidade?: number }
+type Desafio = { id: string; metrica: 'chamadas' | 'vendas'; alvo: number; premio: string | null; inicio: string; fim: string; terminado: boolean; vencedor: { id: string; nome: string; quando: string } | null; lideres: { id: string; nome: string; n: number }[]; meu: number }
 type Resp = {
   eu: string; podeEditar: boolean; valorPonto: number
   total: { euros: number; vendas: number; tvs: number; energias: number; chamadas: number; ativos: number }
   objetivo: number; rankingChamadas: Pessoa[]; feed: Feed[]; atualizado: string; error?: string
+  rival: { recorde: number; chamadas: number } | null; desafio: Desafio | null
 }
 
 const eur = (v: number) => (v || 0).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
@@ -26,6 +28,35 @@ export function PainelHoje() {
   const [obj, setObj] = useState('')
   const vistos = useRef<Set<string> | null>(null)
   const [novos, setNovos] = useState<Set<string>>(new Set())
+  const [alerta, setAlerta] = useState('')
+  const [agora, setAgora] = useState(Date.now())
+  const [novoDesafio, setNovoDesafio] = useState(false)
+  const [dMet, setDMet] = useState<'chamadas' | 'vendas'>('chamadas')
+  const [dAlvo, setDAlvo] = useState('50')
+  const [dMin, setDMin] = useState('120')
+  const [dPremio, setDPremio] = useState('')
+  const posAnterior = useRef<{ pos: number; frente: string[] } | null>(null)
+
+  useEffect(() => { const t = setInterval(() => setAgora(Date.now()), 1000); return () => clearInterval(t) }, [])
+
+  // Alerta de ultrapassagem: alguém que estava atrás de mim nas chamadas de hoje passou-me
+  useEffect(() => {
+    const rk = data?.rankingChamadas
+    if (!rk || !data?.eu) return
+    const pos = rk.findIndex((p) => p.id === data.eu)
+    if (pos < 0) return
+    const frente = rk.slice(0, pos).map((p) => p.id)
+    const ant = posAnterior.current
+    if (ant && pos > ant.pos) {
+      const quem = rk.slice(0, pos).find((p) => !ant.frente.includes(p.id))
+      if (quem) {
+        setAlerta(`⚠️ ${quem.nome.split(' ')[0]} passou-te nas chamadas de hoje! Estás em ${pos + 1}.º`)
+        try { navigator.vibrate?.([120, 60, 120]) } catch {}
+        setTimeout(() => setAlerta(''), 9000)
+      }
+    }
+    posAnterior.current = { pos, frente }
+  }, [data?.rankingChamadas, data?.eu])
 
   // destacar vendas que chegaram desde a última atualização
   useEffect(() => {
@@ -44,6 +75,18 @@ export function PainelHoje() {
   const rk = data.rankingChamadas
   const euPos = rk.findIndex((p) => p.id === data.eu)
 
+  async function lancarDesafio() {
+    await authFetch('/api/gamificacao/hoje', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ metrica: dMet, alvo: dAlvo, minutos: dMin, premio: dPremio }) })
+    setNovoDesafio(false); setDPremio(''); mutate()
+  }
+  async function cancelarDesafio(id: string) {
+    await authFetch('/api/gamificacao/hoje', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cancelar: id }) })
+    mutate()
+  }
+  const dz = data.desafio
+  const resta = dz ? Math.max(0, new Date(dz.fim).getTime() - agora) : 0
+  const relogio = `${String(Math.floor(resta / 3600000)).padStart(2, '0')}:${String(Math.floor((resta % 3600000) / 60000)).padStart(2, '0')}:${String(Math.floor((resta % 60000) / 1000)).padStart(2, '0')}`
+
   async function guardarObjetivo() {
     await authFetch('/api/gamificacao/hoje', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eur: obj }) })
     setEditar(false); mutate()
@@ -52,6 +95,41 @@ export function PainelHoje() {
   return (
     <div className="ph">
       <style>{CSS}</style>
+      {alerta && <div className="ph-alert" onClick={() => setAlerta('')}>{alerta}</div>}
+
+      {dz && !dz.terminado && (
+        <section className="ph-dz">
+          <div className="ph-dz-top"><span><Timer size={15} /> DESAFIO RELÂMPAGO</span><b className="ph-clock">{relogio}</b></div>
+          <div className="ph-dz-t">O primeiro a <b>{dz.alvo} {dz.metrica}</b> ganha{dz.premio ? <> <b>{dz.premio}</b></> : ' o desafio'}! 🏁</div>
+          <div className="ph-dz-l">
+            {dz.lideres.length === 0 && <span>Ainda ninguém pontuou. Arranca já!</span>}
+            {dz.lideres.map((l, i) => (
+              <div key={l.id} className="ph-dz-r"><span>{['🥇', '🥈', '🥉'][i]} {l.nome.split(' ')[0]}</span><div className="ph-dz-b"><i style={{ width: `${Math.min(100, (l.n / dz.alvo) * 100)}%` }} /></div><b>{l.n}/{dz.alvo}</b></div>
+            ))}
+          </div>
+          <div className="ph-dz-me">Tu: <b>{dz.meu}/{dz.alvo}</b>{dz.meu < dz.alvo ? ` · faltam ${dz.alvo - dz.meu}` : ''}</div>
+          {data.podeEditar && <button className="ph-dz-x" onClick={() => cancelarDesafio(dz.id)}><X size={13} /> cancelar</button>}
+        </section>
+      )}
+      {dz && dz.terminado && dz.vencedor && (
+        <section className="ph-dz win">🏆 <b>{dz.vencedor.nome}</b> ganhou o desafio relâmpago ({dz.alvo} {dz.metrica}){dz.premio ? ` e leva ${dz.premio}` : ''}! Parabéns! 🎉</section>
+      )}
+      {data.podeEditar && (!dz || dz.terminado) && (
+        <div style={{ marginBottom: 12 }}>
+          {!novoDesafio ? (
+            <button className="ph-new" onClick={() => setNovoDesafio(true)}><Timer size={15} /> Lançar desafio relâmpago</button>
+          ) : (
+            <div className="ph-form">
+              <select value={dMet} onChange={(e) => setDMet(e.target.value as any)}><option value="chamadas">Chamadas</option><option value="vendas">Vendas</option></select>
+              <input inputMode="numeric" value={dAlvo} onChange={(e) => setDAlvo(e.target.value)} placeholder="Alvo" />
+              <select value={dMin} onChange={(e) => setDMin(e.target.value)}><option value="30">30 min</option><option value="60">1 hora</option><option value="120">2 horas</option><option value="240">4 horas</option><option value="480">Até ao fim do dia</option></select>
+              <input value={dPremio} onChange={(e) => setDPremio(e.target.value)} placeholder="Prémio (ex.: vale 20 €)" style={{ gridColumn: 'span 2' }} />
+              <button onClick={lancarDesafio} className="ph-go">Lançar ⚡</button>
+              <button onClick={() => setNovoDesafio(false)} className="ph-cancel">Cancelar</button>
+            </div>
+          )}
+        </div>
+      )}
 
       <section className="ph-hero">
         <div className="ph-top">
@@ -88,7 +166,7 @@ export function PainelHoje() {
           {data.feed.slice(0, 6).map((f) => (
             <div key={f.id} className={'ph-fi' + (novos.has(f.id) ? ' new' : '')}>
               <span className="ph-fe">{f.tipo === 'energia' ? '⚡' : '🎉'}</span>
-              <span className="ph-ft"><b>{f.vendedor.split(' ')[0]}</b> fechou {f.tipo === 'energia' ? 'uma energia' : 'uma TV'}{f.operador ? ` ${f.operador}` : ''}</span>
+              <span className="ph-ft"><b>{f.vendedor.split(' ')[0]}</b> fechou {(f.quantidade || 1) > 1 ? `${f.quantidade} ${f.tipo === 'energia' ? 'energias' : 'TVs'}` : f.tipo === 'energia' ? 'uma energia' : 'uma TV'}{f.operador ? ` ${f.operador}` : ''}</span>
               <span className="ph-fv">+{eur(f.euros)}</span>
               <span className="ph-fw">{ha(f.quando)}</span>
             </div>
@@ -117,6 +195,17 @@ export function PainelHoje() {
         {euPos > 0 && <div className="ph-me">Estás em <b>{euPos + 1}.º</b> com {rk[euPos].chamadas} chamadas · faltam <b>{rk[euPos - 1].chamadas - rk[euPos].chamadas + 1}</b> para passares {rk[euPos - 1].nome.split(' ')[0]}.</div>}
         {euPos === 0 && <div className="ph-me lead">👑 Estás a liderar as chamadas de hoje! Não pares.</div>}
         <div className="ph-list">
+          {data.rival && (
+            <div className="ph-row rival">
+              <span className="ph-n">🤖</span>
+              <span className="ph-av bot">AI</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="ph-nm">Ritmo do Campeão</div>
+                <div className="ph-sub"><span className="ph-tag" style={{ marginLeft: 0, marginRight: 4 }}>virtual</span>Recorde do mês: {data.rival.recorde} chamadas num dia. Anda ao ritmo do horário (9h–20h). Bate-o!</div>
+              </div>
+              <div className="ph-val">{data.rival.chamadas}<small> chamadas</small></div>
+            </div>
+          )}
           {rk.slice(0, 15).map((p, i) => (
             <div key={p.id} className={'ph-row' + (p.id === data.eu ? ' eu' : '')}>
               <span className="ph-n">{i + 1}</span>
@@ -180,6 +269,28 @@ const CSS = `
 .ph-list{display:grid;gap:6px}
 .ph-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:14px;background:#F8FAFC;border:1px solid #EEF2F7}
 .ph-row.eu{border-color:#818CF8;background:#EEF2FF}
+.ph-row.rival{border-style:dashed;border-color:#A5B4FC;background:linear-gradient(90deg,#EEF2FF,#F5F3FF)}
+.ph-av.bot{background:linear-gradient(135deg,#0F172A,#4338CA)}
+.ph-tag{font-size:10.5px;font-weight:800;color:#4338CA;background:#E0E7FF;border-radius:999px;padding:2px 7px;margin-left:4px}
+.ph-alert{position:sticky;top:8px;z-index:20;margin-bottom:10px;padding:12px 14px;border-radius:14px;background:linear-gradient(135deg,#B91C1C,#EA580C);color:#fff;font-weight:800;font-size:14px;box-shadow:0 14px 30px -12px rgba(185,28,28,.7);animation:phIn .4s ease both;cursor:pointer}
+.ph-dz{border-radius:22px;padding:16px;margin-bottom:12px;color:#fff;background:radial-gradient(500px 220px at 0% 0%,rgba(251,191,36,.45),transparent 60%),linear-gradient(135deg,#7C2D12,#B45309 55%,#F59E0B);box-shadow:0 20px 44px -20px rgba(180,83,9,.9);position:relative}
+.ph-dz.win{font-size:15px;line-height:1.45;background:linear-gradient(135deg,#065F46,#10B981)}
+.ph-dz-top{display:flex;justify-content:space-between;align-items:center;font-size:11.5px;letter-spacing:.14em;font-weight:900;color:#FEF3C7}
+.ph-dz-top span{display:inline-flex;gap:6px;align-items:center}
+.ph-clock{font-size:22px;letter-spacing:.04em;font-variant-numeric:tabular-nums;color:#fff}
+.ph-dz-t{font-size:17px;margin:8px 0 10px;line-height:1.35}
+.ph-dz-l{display:grid;gap:6px}
+.ph-dz-r{display:grid;grid-template-columns:110px 1fr 54px;gap:8px;align-items:center;font-size:13px;font-weight:700}
+.ph-dz-r span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ph-dz-b{height:9px;border-radius:99px;background:rgba(255,255,255,.25);overflow:hidden}
+.ph-dz-b i{display:block;height:100%;background:#fff;border-radius:99px;transition:width .6s}
+.ph-dz-me{margin-top:8px;font-size:13px;color:#FEF3C7}
+.ph-dz-x{position:absolute;right:12px;bottom:10px;border:0;background:rgba(0,0,0,.2);color:#fff;border-radius:8px;padding:4px 8px;font-size:11.5px;cursor:pointer;display:inline-flex;gap:4px;align-items:center}
+.ph-new{width:100%;border:1.5px dashed #F59E0B;background:#FFFBEB;color:#92400E;border-radius:14px;padding:11px;font-weight:800;cursor:pointer;display:flex;gap:8px;align-items:center;justify-content:center}
+.ph-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:12px;border-radius:16px;background:#FFFBEB;border:1px solid #FDE68A}
+.ph-form select,.ph-form input{padding:9px 10px;border-radius:10px;border:1px solid #FCD34D;background:#fff;font-size:14px;min-width:0}
+.ph-go{border:0;border-radius:10px;background:linear-gradient(135deg,#D97706,#F59E0B);color:#fff;font-weight:900;cursor:pointer}
+.ph-cancel{border:1px solid #E2E8F0;border-radius:10px;background:#fff;color:#334155;font-weight:700;cursor:pointer;grid-column:span 3;padding:8px}
 .ph-n{width:22px;text-align:center;font-weight:900;color:#64748B}
 .ph-nm{font-weight:800;color:#0F172A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ph-sub{font-size:12px;color:#64748B}

@@ -67,6 +67,7 @@ function LancarResultados({ ranking, ajustes, onDone }: { ranking: Linha[]; ajus
   const [tvs, setTvs] = useState('')
   const [energias, setEnergias] = useState('')
   const [chamadas, setChamadas] = useState('')
+  const [hoje, setHoje] = useState(true)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const pessoas = ranking.filter(l => !l.manual).sort((a, b) => a.nome.localeCompare(b.nome))
@@ -76,7 +77,7 @@ function LancarResultados({ ranking, ajustes, onDone }: { ranking: Linha[]; ajus
     if (!quem || (quem === 'outro' && !nome.trim())) return setMsg('Escolhe o vendedor ou escreve o nome.')
     setBusy(true)
     const r = await authFetch('/api/gamificacao/ajustes', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: quem && quem !== 'outro' && quem !== 'robot' ? quem : null, nome: quem === 'robot' ? 'Robot LUMIN' : nome.trim(), fora_ranking: quem === 'robot', tvs, energias, chamadas }) })
+      body: JSON.stringify({ user_id: quem && quem !== 'outro' && quem !== 'robot' ? quem : null, nome: quem === 'robot' ? 'Robot LUMIN' : nome.trim(), fora_ranking: quem === 'robot', hoje: hoje && quem !== 'robot', tvs, energias, chamadas }) })
     const j = await r.json().catch(() => ({}))
     setBusy(false)
     if (!r.ok) return setMsg(j.error || 'Não foi possível lançar.')
@@ -102,6 +103,7 @@ function LancarResultados({ ranking, ajustes, onDone }: { ranking: Linha[]; ajus
         <input inputMode="numeric" value={chamadas} onChange={e => setChamadas(e.target.value)} placeholder="Chamadas" style={inp} />
         <button disabled={busy} onClick={lancar} style={{ padding: '9px 14px', borderRadius: 10, border: 0, background: 'linear-gradient(135deg,#4F46E5,#7C3AED)', color: '#fff', fontWeight: 800, cursor: 'pointer', display: 'inline-flex', gap: 6, alignItems: 'center', justifyContent: 'center' }}><Plus size={15} /> {busy ? 'A lançar…' : 'Lançar'}</button>
       </div>
+      <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: '#334155', marginTop: 8 }}><input type="checkbox" checked={hoje} onChange={e => setHoje(e.target.checked)} /> São vendas de hoje (aparecem no painel Hoje e no feed)</label>
       {msg && <div style={{ fontSize: 13, marginTop: 8, color: msg.includes('✓') ? '#15803D' : '#B91C1C' }}>{msg}</div>}
       {ajustes.length > 0 && (
         <div style={{ marginTop: 12, display: 'grid', gap: 6 }}>
