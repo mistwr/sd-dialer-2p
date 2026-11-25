@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { errorResponse, requireSdDialerUser, SdDialerError } from '@/lib/server/sd-dialer-livekit'
 import { NATAL_PADRAO, PONTOS } from '@/lib/formacao-conteudo'
 
-// Ranking da equipa (só a própria empresa): chamadas, conversas reais, vendas e formação.
-// Períodos: semana, mês e Desafio de Natal. Os prémios do Natal são guardados por empresa no storage.
+// Ranking único do SD Dialer: todos os comerciais ativos de todas as empresas, e todos veem todos.
+// Pontos por chamadas, conversas reais, vendas e formação. Períodos: semana, mês e Desafio de Natal.
+// O Desafio de Natal (datas e prémios) é um só para todo o SD Dialer e só o super admin o altera.
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -11,6 +12,7 @@ export const dynamic = 'force-dynamic'
 const BUCKET = 'campaign-files'
 const CONVERSA = new Set(['nao_interessado', 'ligar_depois', 'venda', 'outro'])
 const PAGE = 1000
+const NATAL_GLOBAL = process.env.RANKING_NATAL_COMPANY_ID || 'e27c8324-989a-4a68-b3a3-902cba74696c'
 
 function inicioPeriodo(periodo: string, natal: { inicio: string; fim: string }) {
   const now = new Date()
@@ -41,25 +43,26 @@ async function todos(q: () => any) {
 export async function GET(request: NextRequest) {
   try {
     const { admin, profile } = await requireSdDialerUser(request)
-    const companyId = String(profile.company_id)
     const periodo = request.nextUrl.searchParams.get('periodo') || 'semana'
-    const natal = await lerNatal(admin, companyId)
+    const natal = await lerNatal(admin, NATAL_GLOBAL)
     const { de, ate } = inicioPeriodo(periodo, natal)
     const deIso = de.toISOString(), ateIso = (ate || new Date(Date.now() + 86400000)).toISOString()
 
     const { data: users } = await admin.from('usuarios')
-      .select('id, full_name, avatar_url, role, status')
-      .eq('company_id', companyId).eq('status', 'active').in('role', ['parceiro', 'supervisor'])
+      .select('id, full_name, avatar_url, role, status, company_id')
+      .eq('status', 'active').in('role', ['parceiro', 'supervisor'])
+    const { data: emps } = await admin.from('companies').select('id, name')
+    const nomeEmpresa = new Map<string, string>((emps || []).map((e: any) => [String(e.id), String(e.name || '')]))
     const equipa = new Map<string, any>()
-    for (const u of users || []) equipa.set(String(u.id), { id: u.id, nome: u.full_name || 'Sem nome', avatar: u.avatar_url, role: u.role, chamadas: 0, conversas: 0, vendas: 0, modulos: 0, pontos: 0 })
+    for (const u of users || []) equipa.set(String(u.id), { id: u.id, nome: u.full_name || 'Sem nome', avatar: u.avatar_url, role: u.role, empresa: nomeEmpresa.get(String(u.company_id)) || null, chamadas: 0, conversas: 0, vendas: 0, modulos: 0, pontos: 0 })
 
-    const calls = await todos(() => admin.from('call_history').select('parceiro_id,result').eq('company_id', companyId).gte('called_at', deIso).lte('called_at', ateIso))
+    const calls = await todos(() => admin.from('call_history').select('parceiro_id,result').gte('called_at', deIso).lte('called_at', ateIso))
     for (const c of calls) {
       const e = equipa.get(String(c.parceiro_id)); if (!e) continue
       e.chamadas += 1
       if (CONVERSA.has(String(c.result))) e.conversas += 1
     }
-    const vendas = await todos(() => admin.from('vendas').select('seller_id').eq('company_id', companyId).is('deleted_at', null).gte('created_at', deIso).lte('created_at', ateIso))
+    const vendas = await todos(() => admin.from('vendas').select('seller_id').is('deleted_at', null).gte('created_at', deIso).lte('created_at', ateIso))
     for (const v of vendas) { const e = equipa.get(String(v.seller_id)); if (e) e.vendas += 1 }
 
     // Formação: módulos passados dentro do período (app_metadata.formacao).
@@ -79,24 +82,24 @@ export async function GET(request: NextRequest) {
       pontos: e.chamadas * PONTOS.chamada + e.conversas * PONTOS.conversa + e.vendas * PONTOS.venda + e.modulos * PONTOS.modulo,
     })).sort((a, b) => b.pontos - a.pontos || b.vendas - a.vendas || b.chamadas - a.chamadas)
 
-    return NextResponse.json({ periodo, de: deIso, ate: ate ? ateIso : null, ranking, natal, pontos: PONTOS, eu: profile.id })
+    return NextResponse.json({ periodo, de: deIso, ate: ate ? ateIso : null, ranking, natal, pontos: PONTOS, eu: profile.id, podeEditar: !!profile.is_super_admin })
   } catch (err) {
     return errorResponse(err, 'gamificacao')
   }
 }
 
-// Admin/supervisor define os prémios e datas do Desafio de Natal da sua empresa.
+// Só o super admin define os prémios e as datas do Desafio de Natal (um só para todo o SD Dialer).
 export async function PUT(request: NextRequest) {
   try {
     const { admin, profile } = await requireSdDialerUser(request)
-    if (!['admin', 'supervisor'].includes(String(profile.role)) && !profile.is_super_admin) throw new SdDialerError('Só admin ou supervisor.', 403)
+    if (!profile.is_super_admin) throw new SdDialerError('Só o super admin altera o Desafio de Natal.', 403)
     const body = await request.json().catch(() => ({}))
     const natal = {
       inicio: /^\d{4}-\d{2}-\d{2}$/.test(body?.inicio) ? body.inicio : NATAL_PADRAO.inicio,
       fim: /^\d{4}-\d{2}-\d{2}$/.test(body?.fim) ? body.fim : NATAL_PADRAO.fim,
       premios: (Array.isArray(body?.premios) ? body.premios : NATAL_PADRAO.premios).slice(0, 5).map((p: any) => String(p).slice(0, 120)),
     }
-    const { error } = await admin.storage.from(BUCKET).upload(`gamificacao/${profile.company_id}.json`,
+    const { error } = await admin.storage.from(BUCKET).upload(`gamificacao/${NATAL_GLOBAL}.json`,
       new Blob([JSON.stringify({ natal })], { type: 'application/json' }), { upsert: true, contentType: 'application/json' })
     if (error) throw new SdDialerError(error.message, 500)
     return NextResponse.json({ natal })

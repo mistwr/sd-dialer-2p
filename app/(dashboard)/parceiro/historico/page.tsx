@@ -4,13 +4,14 @@ import useSWR from 'swr'
 import {
   History, Phone, CheckCircle2, PhoneOff, PhoneMissed,
   AlertCircle, Calendar, Wifi, HelpCircle, Clock,
-  TrendingUp, Search, Filter,
+  TrendingUp, Search,
 } from 'lucide-react'
 import { callHistoryService } from '@/lib/services'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useAuth } from '@/lib/hooks/useAuth'
 import type { CallResult } from '@/lib/types'
+import { HistoricoTodos } from '@/components/historico/HistoricoTodos'
 
 const RESULT_CONFIG: Record<CallResult, { label: string; color: string; bg: string; Icon: React.ElementType }> = {
   venda:           { label: 'Venda',          color: '#16A34A', bg: '#F0FDF4', Icon: CheckCircle2 },
@@ -20,6 +21,9 @@ const RESULT_CONFIG: Record<CallResult, { label: string; color: string; bg: stri
   ligar_depois:    { label: 'Ligar Depois',    color: '#0891B2', bg: '#ECFEFF', Icon: Calendar },
   sem_cobertura:   { label: 'Sem Cobertura',   color: '#EA580C', bg: '#FFF7ED', Icon: Wifi },
   outro:           { label: 'Outro',           color: '#6B7280', bg: '#F9FAFB', Icon: HelpCircle },
+  desligado:       { label: 'Desligou',        color: '#B45309', bg: '#FFFBEB', Icon: PhoneOff },
+  numero_nao_atribuido: { label: 'Número não atribuído', color: '#7C3AED', bg: '#F5F3FF', Icon: AlertCircle },
+  pertence_outra_pessoa: { label: 'Pertence a outra pessoa', color: '#7C3AED', bg: '#F5F3FF', Icon: AlertCircle },
 }
 
 function formatDuration(seconds: number): string {
@@ -41,6 +45,8 @@ export default function HistoricoPage() {
   const { user, profile } = useAuth()
   const [search, setSearch] = useState('')
   const [resultFilter, setResultFilter] = useState<CallResult | ''>('')
+  const [vista, setVista] = useState<'minhas' | 'todos'>('minhas')
+  const superAdmin = !!profile?.is_super_admin
 
   const { data: history = [], isLoading } = useSWR(
     user?.id ? ['call-history-all', user.id] : null,
@@ -74,6 +80,15 @@ export default function HistoricoPage() {
         <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: 0 }}>Histórico de Chamadas</h1>
         <p style={{ color: '#64748B', fontSize: 14, margin: '3px 0 0' }}>Todas as chamadas registadas</p>
       </div>
+
+      {superAdmin && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+          {([['minhas', 'As minhas'], ['todos', 'Todos os vendedores']] as const).map(([v, l]) => (
+            <button key={v} onClick={() => setVista(v)} style={{ padding: '8px 14px', borderRadius: 999, fontSize: 13, fontWeight: 800, cursor: 'pointer', border: '1.5px solid ' + (vista === v ? '#4F46E5' : '#E2E8F0'), background: vista === v ? 'linear-gradient(135deg,#4F46E5,#7C3AED)' : '#fff', color: vista === v ? '#fff' : '#334155' }}>{l}</button>
+          ))}
+        </div>
+      )}
+      {superAdmin && vista === 'todos' ? <HistoricoTodos /> : (<>
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 24 }}>
@@ -189,6 +204,7 @@ export default function HistoricoPage() {
           })}
         </div>
       )}
+      </>)}
     </div>
   )
 }

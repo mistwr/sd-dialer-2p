@@ -62,15 +62,15 @@ export default function GamificacaoPage() {
   const { data, mutate, isLoading } = useSWR<Resp>(`/api/gamificacao?periodo=${periodo}`, fetcher, { refreshInterval: 60_000 })
   const ranking = Array.isArray(data?.ranking) ? data!.ranking : []
   const eu = ranking.findIndex(l => l.id === data?.eu)
-  const gestor = profile?.role === 'admin' || profile?.role === 'supervisor' || profile?.is_super_admin
+  const gestor = !!(data as any)?.podeEditar || !!profile?.is_super_admin
 
   return (
     <div className="mx-auto min-w-0 max-w-4xl px-3 py-4 sm:px-4 sm:py-6">
       <div style={{ borderRadius: 20, padding: '22px 22px 18px', marginBottom: 16, color: '#fff', background: 'radial-gradient(120% 140% at 0% 0%, #1F4D36 0%, #0C2B1E 45%, #2A0A0A 100%)', border: '1px solid rgba(212,175,55,0.35)', position: 'relative', overflow: 'hidden', minHeight: 170 }}>
         {epocaNatal() && (<><NatalEstilos /><Treno width={200} /><div className="hidden sm:block" style={{ position: 'absolute', right: 16, top: 10, zIndex: 2 }}><PaiNatalInterativo tamanho={104} balao="esquerda" dica="Toca-me" mensagens={['Cada chamada conta para o Desafio de Natal. Força!', 'Uma boa conversa hoje pode ser a venda de amanhã.', 'A melhor prenda para um cliente: uma fatura mais baixa.', 'Quem fizer mais pontos até ao Natal leva os prémios. Bora!', 'Juntos Somos + — e no Natal ainda mais.']} /></div></>)}
         <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#E8C766', fontWeight: 800 }}>Juntos Somos +</div>
-        <h1 style={{ margin: '6px 0 4px', fontSize: 26, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 10 }}><Trophy size={24} color="#E8C766" /> Ranking da equipa</h1>
-        <p style={{ margin: 0, fontSize: 13.5, color: 'rgba(255,255,255,0.8)', maxWidth: 560 }}>Os teus resultados e os dos colegas da tua empresa. Chamada {data?.pontos?.chamada ?? 1} pt · conversa real +{data?.pontos?.conversa ?? 3} · venda {data?.pontos?.venda ?? 50} · módulo de formação {data?.pontos?.modulo ?? 10}.</p>
+        <h1 style={{ margin: '6px 0 4px', fontSize: 26, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 10 }}><Trophy size={24} color="#E8C766" /> Ranking SD Dialer</h1>
+        <p style={{ margin: 0, fontSize: 13.5, color: 'rgba(255,255,255,0.8)', maxWidth: 560 }}>Todos os comerciais do SD Dialer, de todas as equipas. Chamada {data?.pontos?.chamada ?? 1} pt · conversa real +{data?.pontos?.conversa ?? 3} · venda {data?.pontos?.venda ?? 50} · módulo de formação {data?.pontos?.modulo ?? 10}.</p>
         {ranking.length >= 3 && ranking[2].pontos > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.15fr 1fr', gap: 10, alignItems: 'end', marginTop: 18 }}>
             {[1, 0, 2].map(pos => {
@@ -118,7 +118,7 @@ export default function GamificacaoPage() {
       )}
 
       {isLoading && <div style={{ color: '#64748B' }}>A carregar…</div>}
-      {!isLoading && ranking.length === 0 && <div style={card}>Ainda não há comerciais ativos nesta empresa.</div>}
+      {!isLoading && ranking.length === 0 && <div style={card}>Ainda não há comerciais ativos.</div>}
 
       <div style={{ display: 'grid', gap: 8 }}>
         {ranking.map((l, i) => (
@@ -127,6 +127,7 @@ export default function GamificacaoPage() {
             <Avatar l={l} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 800, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.nome}{l.id === data?.eu ? ' (tu)' : ''}</div>
+              {(l as any).empresa && <div style={{ fontSize: 11.5, color: '#94A3B8', fontWeight: 600 }}>{(l as any).empresa}</div>}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 12.5, color: '#64748B', marginTop: 2 }}>
                 <span style={{ display: 'inline-flex', gap: 3, alignItems: 'center' }}><Phone size={12} /> {l.chamadas}</span>
                 <span style={{ display: 'inline-flex', gap: 3, alignItems: 'center' }}><MessageCircle size={12} /> {l.conversas}</span>
