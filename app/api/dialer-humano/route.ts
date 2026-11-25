@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { errorResponse, requireSdDialerUser, requireVoiceCallAccess, SdDialerError } from '@/lib/server/sd-dialer-livekit'
 import { finishCall, nextCall, startSession } from '@/lib/server/human-dialer'
+import { podeMarcador } from '@/lib/marcador-acesso'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -8,6 +9,7 @@ export const maxDuration = 30
 export async function POST(request: NextRequest) {
   try {
     const { admin, user, profile } = await requireSdDialerUser(request)
+    if (!podeMarcador(user.id)) return NextResponse.json({ error: 'O Marcador não está disponível para esta conta.' }, { status: 403 })
     await requireVoiceCallAccess(admin, user.id, profile)
     const body = await request.json().catch(() => ({})) as any
     switch (String(body.action || '')) {

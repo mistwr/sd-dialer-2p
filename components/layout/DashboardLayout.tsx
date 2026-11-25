@@ -19,6 +19,7 @@ import MensagemMotivacional from '@/components/common/MensagemMotivacional'
 import NatalNeve from '@/components/common/NatalNeve'
 import GuiaIA from '@/components/common/GuiaIA'
 import { epocaNatal } from '@/lib/formacao-conteudo'
+import { podeMarcador } from '@/lib/marcador-acesso'
 
 interface NavItem {
   label: string
@@ -144,7 +145,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const effectiveRole = canSwitchView ? viewRole : role
   const visibleNav = NAV.filter(n =>
     n.roles.includes(effectiveRole) &&
-    (!['/admin/chamadas-ia', '/admin/empresas', '/admin/utilizadores'].includes(n.href) || profile?.is_super_admin === true)
+    (!['/admin/chamadas-ia', '/admin/empresas', '/admin/utilizadores'].includes(n.href) || profile?.is_super_admin === true) &&
+    (n.href !== '/marcador' || podeMarcador(profile?.id))
   )
   const activeNavItem = visibleNav.find(item => pathname === item.href || (item.href !== '/admin' && item.href !== '/parceiro' && pathname.startsWith(item.href)))
 
