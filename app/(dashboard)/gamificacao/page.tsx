@@ -132,7 +132,9 @@ export default function GamificacaoPage() {
   const meuMes = (mesData?.ranking || []).find(l => l.id === mesData?.eu)
   const base = Array.isArray(data?.ranking) ? data!.ranking : []
   const porChamadas = ordem === 'chamadas'
-  const ranking = porChamadas ? [...base].sort((a, b) => b.chamadas - a.chamadas || b.conversas - a.conversas || b.pontos - a.pontos) : base
+  // Acumulado: só quem já tem dinheiro (pontos > 0)
+  const ranking = (porChamadas ? [...base].sort((a, b) => b.chamadas - a.chamadas || b.conversas - a.conversas || b.pontos - a.pontos) : base).filter(l => l.pontos > 0)
+  const euSemVendas = !!data && base.some(l => l.id === data.eu) && !ranking.some(l => l.id === data.eu)
   const eu = ranking.findIndex(l => l.id === data?.eu)
   const gestor = !!(data as any)?.podeEditar || !!profile?.is_super_admin
 
@@ -202,7 +204,8 @@ export default function GamificacaoPage() {
       {gestor && data && periodo !== 'semana' && <LancarResultados ranking={ranking} ajustes={data.ajustes || []} onDone={() => mutate()} />}
 
       {isLoading && <div style={{ color: '#64748B' }}>A carregar…</div>}
-      {!isLoading && ranking.length === 0 && <div style={card}>Ainda não há comerciais ativos.</div>}
+      {!isLoading && ranking.length === 0 && <div style={card}>Ainda ninguém tem vendas neste período. A primeira venda abre o ranking! 🚀</div>}
+      {euSemVendas && <div style={{ ...card, borderColor: '#FDE68A', background: '#FFFBEB', color: '#92400E', fontSize: 14 }}>Ainda não estás neste ranking: só entra quem já tem vendas. Fecha a tua primeira TV e entras com {(mesData?.pontosVendas?.tv ?? 3) * valorPonto} €! 💪</div>}
 
       <div style={{ display: 'grid', gap: 8 }}>
         {ranking.map((l, i) => (
