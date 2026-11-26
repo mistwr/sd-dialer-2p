@@ -173,6 +173,14 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
     }
   }, [stopTimer])
 
+  // O iPhone bloqueia chamadas abertas por código (window.location = tel:) e pede "Permitir chamada".
+  // Com uma ligação tel: verdadeira o toque abre logo a chamada; aqui só arranca o cronómetro.
+  const iniciarChamada = () => {
+    if (!lead) return
+    callInitiated.current = true
+    startTimer()
+  }
+
   const handleCall = () => {
     if (!lead) return
     const phone = lead.telefone.replace(/\s/g, '')
@@ -542,10 +550,11 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
 
           {/* ---- CALL BUTTON (main CTA) ---- */}
           <div style={{ padding: '20px 20px 8px' }}>
-            <button
-              onClick={timerActive ? undefined : handleCall}
-              disabled={timerActive}
-              style={{
+            <a
+              href={timerActive ? undefined : `tel:${lead.telefone.replace(/\s/g, '')}`}
+              onClick={timerActive ? (e => e.preventDefault()) : iniciarChamada}
+              aria-disabled={timerActive}
+              style={{ textDecoration: 'none', boxSizing: 'border-box',
                 width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
                 background: timerActive ? '#15803D' : '#16A34A',
                 color: '#fff', border: 'none', borderRadius: 14,
@@ -558,7 +567,7 @@ export default function LeadCallPage({ params }: { params: Promise<{ id: string 
             >
               <Phone size={22} />
               {timerActive ? `Em chamada — ${formatDuration(elapsed)}` : `Chamar  ${lead.telefone}`}
-            </button>
+            </a>
           </div>
 
           {/* Secondary actions */}
