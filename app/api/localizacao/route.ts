@@ -42,10 +42,13 @@ export async function POST(request: NextRequest) {
     const ip = ipGeo(request)
     if (!ip) return NextResponse.json({ ok: true, aproximada: false })
     const { data: atual } = await c.db.from('user_locations').select('accuracy, updated_at').eq('user_id', c.me.id).maybeSingle()
-    const gpsRecente = atual && Number(atual.accuracy ?? 0) < 5000 && Date.now() - new Date(atual.updated_at).getTime() < 10 * 60_000
-    if (!gpsRecente) {
-      await c.db.from('user_locations').upsert({ user_id: c.me.id, company_id: c.me.company_id, lat: ip.lat, lng: ip.lng, accuracy: 20000, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+    // A posição pelo IP é só a cidade da rede (nas redes móveis dá quase sempre o centro do Porto ou de Lisboa).
+    // Nunca substitui uma posição real de GPS: nesse caso só regista que a pessoa está online.
+    if (atual && Number(atual.accuracy ?? 0) < 5000) {
+      await c.db.from('usuarios').update({ last_seen_at: new Date().toISOString() }).eq('id', c.me.id)
+      return NextResponse.json({ ok: true, aproximada: false })
     }
+    await c.db.from('user_locations').upsert({ user_id: c.me.id, company_id: c.me.company_id, lat: ip.lat, lng: ip.lng, accuracy: 20000, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
     return NextResponse.json({ ok: true, aproximada: true })
   }
   const lat = Number(b.lat), lng = Number(b.lng)
