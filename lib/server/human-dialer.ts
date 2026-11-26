@@ -55,16 +55,24 @@ export async function nextCall(admin: any, userId: string, profile: Profile, fil
   const op = String(filters.operador || '').replace(/[%,]/g, '').trim(); if (op) q = q.ilike('operador', '%' + op + '%')
   const skip = exclude.filter(x => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 500)
   if (skip.length) q = q.not('id', 'in', '(' + skip.join(',') + ')')
-  const { data: candidates } = await q.order('created_at', { ascending: false }).limit(40)
-
+  // Antes só olhava para as 40 leads mais recentes e saltava as ligadas nas últimas 12 h; com o robot a
+  // ligar a milhares, essas 40 ficavam todas de fora e o Marcador dizia "sem mais leads". Agora percorre
+  // várias páginas e filtra de uma vez as leads com chamada recente.
   const livekit = getLiveKitConfig()
-  for (const lead of candidates || []) {
-    if (BLOCKED.has(String(lead.status || '').toLowerCase())) continue
+  const sinceRecent = new Date(Date.now() - RECALL_MS).toISOString()
+  const PAGE = 200
+  const ordered = q.order('created_at', { ascending: false }).order('id')
+  for (let page = 0; page < 8; page++) {
+    const { data: candidates } = await ordered.range(page * PAGE, page * PAGE + PAGE - 1)
+    if (!candidates?.length) break
+    const ids = candidates.map((c: any) => c.id)
+    const { data: recentRows } = await admin.from('voice_calls').select('lead_id').in('lead_id', ids).gte('created_at', sinceRecent)
+    const recentSet = new Set((recentRows || []).map((r: any) => String(r.lead_id)))
+    for (const lead of candidates) {
+      if (recentSet.has(String(lead.id))) continue
+      if (BLOCKED.has(String(lead.status || '').toLowerCase())) continue
     const destination = normalizePtPhone(String(lead.telefone))
     if (!destination) continue
-    const { count: recent } = await admin.from('voice_calls').select('id', { count: 'exact', head: true })
-      .eq('lead_id', lead.id).gte('created_at', new Date(Date.now() - RECALL_MS).toISOString())
-    if (recent) continue
     if (await isOptedOut(admin, String(profile.company_id), destination)) continue
 
     const callId = crypto.randomUUID()
@@ -86,6 +94,7 @@ export async function nextCall(admin: any, userId: string, profile: Profile, fil
       throw new SdDialerError('Não foi possível ligar. Tenta outra vez.', 502)
     }
     return { callId, identity: 'sip-' + callId, lead: { id: lead.id, nome: lead.nome, telefone: destination, localidade: lead.localidade, operador: lead.operador, observacoes: lead.observacoes } }
+    }
   }
   return { empty: true as const }
 }

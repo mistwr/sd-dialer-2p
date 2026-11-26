@@ -36,6 +36,7 @@ export function MarcadorPage() {
   const [localidade, setLocalidade] = useState("");
   const [operador, setOperador] = useState("");
   const [note, setNote] = useState("");
+  const [needAudio, setNeedAudio] = useState(false);
 
   const room = useRef<Room | null>(null);
   const callId = useRef("");
@@ -84,6 +85,7 @@ export function MarcadorPage() {
       r.on(RoomEvent.TrackSubscribed, (t, _pub, p) => {
         if (t.kind === Track.Kind.Audio && p.identity.startsWith("sip-")) { const el = t.attach(); el.autoplay = true; audioHost.current?.appendChild(el); }
       });
+      r.on(RoomEvent.AudioPlaybackStatusChanged, () => setNeedAudio(!r.canPlaybackAudio));
       r.on(RoomEvent.TrackUnsubscribed, t => t.detach().forEach(el => el.remove()));
       r.on(RoomEvent.ParticipantAttributesChanged, (_c, p) => onSipChange(p as RemoteParticipant));
       r.on(RoomEvent.ParticipantConnected, p => onSipChange(p));
@@ -94,7 +96,15 @@ export function MarcadorPage() {
       });
       r.on(RoomEvent.Disconnected, () => { room.current = null; if (runningRef.current) { runningRef.current = false; setPhase("idle"); setMsg("Ligação perdida. Carrega em Play para continuar."); } });
       await r.connect(s.url, s.token);
-      await r.localParticipant.setMicrophoneEnabled(true);
+      // No telemóvel o browser bloqueia o som até haver um gesto do utilizador: sem isto não se ouve o cliente.
+      await r.startAudio().catch(() => undefined);
+      setNeedAudio(!r.canPlaybackAudio);
+      try {
+        await r.localParticipant.setMicrophoneEnabled(true);
+      } catch {
+        r.disconnect();
+        throw new Error("Não consegui usar o microfone. Permite o microfone para este site nas definições do browser e tenta outra vez.");
+      }
       room.current = r;
       await nextLead();
     } catch (e) { setMsg((e as Error).message || "Não foi possível começar."); setPhase("idle"); runningRef.current = false; }
@@ -141,6 +151,12 @@ export function MarcadorPage() {
       </div>
 
       {phase === "connecting" && <p>A ligar o microfone…</p>}
+      {needAudio && runningRef.current && (
+        <button onClick={async () => { await room.current?.startAudio().catch(() => undefined); setNeedAudio(!(room.current?.canPlaybackAudio ?? false)); }}
+          style={{ padding: "10px 14px", borderRadius: 10, background: "#f59e0b", color: "#fff", border: 0, marginBottom: 10 }}>
+          🔊 Toca aqui para ativar o som (senão não ouves o cliente)
+        </button>
+      )}
       {phase === "empty" && <p>Não há mais leads com estes filtros. 🎉</p>}
       {msg && <p style={{ color: "#b91c1c", fontSize: 14 }}>{msg}</p>}
 
