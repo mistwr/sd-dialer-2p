@@ -6,6 +6,8 @@ import { MapPin } from 'lucide-react'
 export function LocationReporter({ userId }: { userId: string }) {
   const [ativo, setAtivo] = useState(false)
   const ultimo = useRef(0)
+  const recusou = useRef(false)
+  const semGpsTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     if (!userId || typeof navigator === 'undefined') return
@@ -21,10 +23,14 @@ export function LocationReporter({ userId }: { userId: string }) {
           body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
         }).then(r => setAtivo(r.ok)).catch(() => setAtivo(false))
       },
-      () => { setAtivo(false); semGps() },
+      err => {
+        setAtivo(false)
+        // Só usa a posição aproximada (rede) se a pessoa RECUSOU a localização. Se o GPS só demorou, espera pela próxima leitura.
+        if (err.code === 1 && !recusou.current) { recusou.current = true; semGps(); semGpsTimer.current = setInterval(semGps, 60_000) }
+      },
       { enableHighAccuracy: true, maximumAge: 20_000, timeout: 30_000 },
     )
-    return () => navigator.geolocation.clearWatch(id)
+    return () => { navigator.geolocation.clearWatch(id); if (semGpsTimer.current) clearInterval(semGpsTimer.current) }
   }, [userId])
 
   if (!ativo) return null

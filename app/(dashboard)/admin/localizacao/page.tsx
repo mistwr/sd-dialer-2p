@@ -50,8 +50,16 @@ export default function EquipaNoMapaPage() {
     const pts: [number, number][] = []
     pessoas.forEach(p => {
       const m = minAtras(p.updated_at)
-      L.current.circleMarker([p.lat, p.lng], { radius: 10, color: '#fff', weight: 2, fillColor: cor(m), fillOpacity: 1 })
-        .bindTooltip(`${p.nome}${p.accuracy && p.accuracy >= 5000 ? ' (aprox.)' : ''} · ${txt(m)}`, { permanent: true, direction: 'top', offset: [0, -8] }).addTo(camada.current)
+      const aprox = !!p.accuracy && p.accuracy >= 5000
+      if (aprox) {
+        // posição pela rede (IP): só a cidade, pode estar a dezenas de km — mostrada como zona, não como ponto exato
+        L.current.circle([p.lat, p.lng], { radius: 4000, color: '#94A3B8', weight: 1, dashArray: '4 6', fillColor: '#94A3B8', fillOpacity: 0.08 }).addTo(camada.current)
+        L.current.circleMarker([p.lat, p.lng], { radius: 8, color: cor(m), weight: 2, dashArray: '3 3', fillColor: '#fff', fillOpacity: 1 })
+          .bindTooltip(`${p.nome} (aprox. pela rede, sem GPS) · ${txt(m)}`, { direction: 'top', offset: [0, -8] }).addTo(camada.current)
+      } else {
+        L.current.circleMarker([p.lat, p.lng], { radius: 10, color: '#fff', weight: 2, fillColor: cor(m), fillOpacity: 1 })
+          .bindTooltip(`${p.nome} · ${txt(m)}${p.accuracy && p.accuracy > 100 ? ` (±${Math.round(p.accuracy)} m)` : ''}`, { permanent: true, direction: 'top', offset: [0, -8] }).addTo(camada.current)
+      }
       pts.push([p.lat, p.lng])
     })
     if (pts.length && !centrado.current) { mapa.current.fitBounds(pts, { padding: [50, 50], maxZoom: 15 }); centrado.current = true }
@@ -77,7 +85,7 @@ export default function EquipaNoMapaPage() {
             return (
               <div key={p.user_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderTop: '1px solid #F1F5F9' }}>
                 <span style={{ width: 10, height: 10, borderRadius: 999, background: cor(m) }} />
-                <div style={{ flex: 1, fontSize: 13 }}><b>{p.nome}</b><div style={{ color: '#94A3B8', fontSize: 12 }}>{p.empresa ? p.empresa + ' · ' : ''}{p.role} · {txt(m)}{p.accuracy && p.accuracy >= 5000 ? ' · aprox. (cidade)' : ''}</div></div>
+                <div style={{ flex: 1, fontSize: 13 }}><b>{p.nome}</b><div style={{ color: '#94A3B8', fontSize: 12 }}>{p.empresa ? p.empresa + ' · ' : ''}{p.role} · {txt(m)}{p.accuracy && p.accuracy >= 5000 ? ' · ⚠️ sem GPS (aprox. pela rede)' : ''}</div></div>
                 <a href={`https://www.google.com/maps?q=${p.lat},${p.lng}`} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#2563EB', fontWeight: 700 }}>Google Maps</a>
               </div>
             )
