@@ -83,7 +83,8 @@ export function LeadsSolario() {
 
   async function prepararLote() {
     if (!empresa || !declaro) return
-    if (!/stop/i.test(campMsg)) { setMsg('A mensagem tem de dizer como deixar de receber (ex.: "Responda STOP").'); return }
+    // A lei obriga a dizer como deixar de receber: se faltar, acrescenta-se no fim
+    const texto = /\b(stop|sair|parar)\b/i.test(campMsg) ? campMsg : campMsg.trim() + ' Resp. STOP p/ sair'
     const { data, error } = await sb.from('leads').select('telefone').eq('company_id', empresa).in('status', ELEGIVEIS).not('telefone', 'is', null)
       .order('created_at', { ascending: true }).order('id', { ascending: true }).range(lote * LOTE, lote * LOTE + LOTE - 1)
     if (error) { setMsg('Erro: ' + error.message); return }
@@ -93,7 +94,7 @@ export function LeadsSolario() {
     setLote(proximo)
     try { localStorage.setItem('solario-lote-' + empresa, String(proximo)) } catch {}
     setMsg(`Lote ${proximo} de ${Math.max(1, Math.ceil(totalElegiveis / LOTE))} preparado (${nums.length} números). Confirma o envio na app de SMS e volta para o lote seguinte.`)
-    window.location.href = 'sms:' + nums.join(',') + '?body=' + encodeURIComponent(campMsg)
+    window.location.href = 'sms:' + nums.join(',') + '?body=' + encodeURIComponent(texto)
   }
   useEffect(() => { void contar() }, [contar])
 
@@ -150,7 +151,15 @@ export function LeadsSolario() {
             <div style={{ marginTop: 12 }}>
               <p style={{ fontSize: 13, color: '#d3c1d5', margin: '0 0 8px' }}>{totalElegiveis.toLocaleString('pt-PT')} leads com telefone (novas, não atende, ligar depois e interessadas) = {Math.ceil(totalElegiveis / LOTE).toLocaleString('pt-PT')} lotes. Cada lote abre a app de SMS com {LOTE} números; carregas em enviar e voltas para o seguinte.</p>
               <textarea rows={3} value={campMsg} onChange={(e) => setCampMsg(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', padding: 10, borderRadius: 10, border: '1px solid #6e5270', background: '#1b161e', color: '#f9f3e8', fontSize: 14 }} />
-              <div style={{ fontSize: 12, color: campMsg.length > 160 ? '#f0b37e' : '#bfaec2', margin: '4px 0 8px' }}>{campMsg.length} caracteres{campMsg.length > 160 ? ' · mais de 160 conta como 2 SMS' : ''}</div>
+              {(() => {
+                const final = /\b(stop|sair|parar)\b/i.test(campMsg) ? campMsg : campMsg.trim() + ' Resp. STOP p/ sair'
+                return (
+                  <div style={{ fontSize: 12, color: final.length > 160 ? '#f0b37e' : '#bfaec2', margin: '4px 0 8px' }}>
+                    {final !== campMsg && <>Vai ser acrescentado no fim: <b>&quot;Resp. STOP p/ sair&quot;</b> (obrigatório). </>}
+                    {final.length} caracteres{final.length > 160 ? ' · mais de 160 conta como 2 SMS: encurta um pouco o texto' : ''}
+                  </div>
+                )
+              })()}
               <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13.5, marginBottom: 10 }}>
                 <input type="checkbox" checked={declaro} onChange={(e) => setDeclaro(e.target.checked)} style={{ marginTop: 3 }} />
                 <span>Declaro que estes contactos autorizaram receber SMS promocionais do Exclusive Solário e que quem responder STOP deixa de receber.</span>
