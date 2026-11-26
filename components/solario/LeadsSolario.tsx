@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Phone, MessageCircle, UserPlus, Search } from 'lucide-react'
+import { Phone, MessageCircle, UserPlus, Search, MessageSquare } from 'lucide-react'
 
 // Aba "Leads" do Solário Exclusive: as leads atribuídas à empresa do Alex no SD Dialer.
 // Ligar, WhatsApp, registar o resultado e passar a cliente do Solário.
@@ -37,6 +37,9 @@ export function LeadsSolario() {
   const [filtro, setFiltro] = useState('novo')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
+  const [modelo, setModelo] = useState('Olá {nome}! Obrigado pela conversa de hoje. No Exclusive Solário temos uma sessão de boas-vindas à sua espera. Quando lhe dá jeito passar? Responda STOP para não receber mais mensagens.')
+  const [aPassar, setAPassar] = useState<Lead | null>(null)
+  const [autorizou, setAutorizou] = useState(false)
 
   const carregar = useCallback(async () => {
     if (!empresa) return
@@ -71,13 +74,16 @@ export function LeadsSolario() {
     void contar()
   }
 
-  async function passarACliente(l: Lead) {
+  async function passarACliente(l: Lead, comConsentimento: boolean) {
     const phone = tel9(l.telefone)
     if (!/^9\d{8}$/.test(phone)) { setMsg('Só dá para passar a cliente com telemóvel (9 dígitos a começar por 9).'); return }
-    const { error } = await sb.from('solario_clients').insert({ name: (l.nome || 'Cliente').trim(), phone, notes: 'Vindo das leads do SD Dialer', consent: false, consent_source: 'por verificar' })
+    const hoje = new Date().toLocaleDateString('pt-PT')
+    const { error } = await sb.from('solario_clients').insert({ name: (l.nome || 'Cliente').trim(), phone, notes: 'Vindo das leads do SD Dialer',
+      consent: comConsentimento, consent_source: comConsentimento ? `autorização verbal na chamada de ${hoje}` : 'por verificar' })
     if (error) { setMsg('Erro ao criar cliente: ' + error.message); return }
     await marcar(l, 'vendido')
-    setMsg(`${l.nome || 'Lead'} passou a cliente do Solário (consentimento SMS por verificar).`)
+    setMsg(comConsentimento ? `${l.nome || 'Lead'} passou a cliente e já entra nas Campanhas SMS.` : `${l.nome || 'Lead'} passou a cliente (sem autorização de SMS: não entra nas campanhas).`)
+    setAPassar(null); setAutorizou(false)
   }
 
   const paginas = Math.max(1, Math.ceil(total / POR_PAGINA))
@@ -105,6 +111,26 @@ export function LeadsSolario() {
             {Object.entries(ESTADOS).map(([k, [l]]) => <option key={k} value={k}>{l}</option>)}
           </select>
         </div>
+        {(filtro === 'contactado' || filtro === 'todas') && (
+          <div style={{ padding: 12, borderRadius: 14, border: '1px solid #6e5270', marginBottom: 12, background: '#1b161e' }}>
+            <b style={{ fontSize: 14 }}><MessageSquare size={15} style={{ display: 'inline', verticalAlign: 'middle' }} /> SMS para interessados</b>
+            <p style={{ fontSize: 12.5, color: '#bfaec2', margin: '4px 0 8px' }}>Só para quem disse na chamada que quer saber mais. {'{nome}'} é substituído pelo primeiro nome. O botão SMS abre a mensagem no telemóvel.</p>
+            <textarea rows={3} value={modelo} onChange={(e) => setModelo(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', padding: 10, borderRadius: 10, border: '1px solid #6e5270', background: '#241d28', color: '#f9f3e8', fontSize: 14 }} />
+          </div>
+        )}
+        {aPassar && (
+          <div style={{ padding: 14, borderRadius: 14, border: '1px solid #e2be81', marginBottom: 12, background: 'linear-gradient(145deg,#3a2742,#2a1f30)' }}>
+            <b>Passar {aPassar.nome || 'esta lead'} a cliente do Solário</b>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 14, margin: '10px 0' }}>
+              <input type="checkbox" checked={autorizou} onChange={(e) => setAutorizou(e.target.checked)} style={{ marginTop: 3 }} />
+              <span>O cliente autorizou, nesta chamada, receber SMS promocionais do Exclusive Solário. <small style={{ color: '#bfaec2' }}>(Fica registado. Só assim entra nas Campanhas SMS.)</small></span>
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => passarACliente(aPassar, autorizou)} style={btn('linear-gradient(100deg,#f1d49c,#e2be81)')}>Confirmar</button>
+              <button onClick={() => setAPassar(null)} style={btn('#3a2f3d', '#e6d8e8')}>Cancelar</button>
+            </div>
+          </div>
+        )}
         {msg && <p role="status" style={{ background: '#352a29', padding: 10, borderRadius: 10, fontSize: 14 }}>{msg}</p>}
         <div style={{ color: '#bfaec2', fontSize: 13, marginBottom: 10 }}>{busy ? 'A carregar…' : `${total.toLocaleString('pt-PT')} leads`}</div>
 
@@ -126,7 +152,10 @@ export function LeadsSolario() {
                   <button onClick={() => marcar(l, 'ligar_depois')} style={btn('#3a2f3d', '#e6d8e8')}>Ligar depois</button>
                   <button onClick={() => marcar(l, 'contactado')} style={btn('#3a2f3d', '#e6d8e8')}>Interessado</button>
                   <button onClick={() => marcar(l, 'nao_interessado')} style={btn('#3a2f3d', '#e6d8e8')}>Sem interesse</button>
-                  <button onClick={() => passarACliente(l)} style={btn('linear-gradient(100deg,#b889cd,#d5b4e5)')}><UserPlus size={15} /> Passar a cliente</button>
+                  {l.status === 'contactado' && t.startsWith('9') && (
+                    <a href={`sms:+351${t}?body=${encodeURIComponent(modelo.replace(/\{nome\}/g, (l.nome || '').split(' ')[0] || ''))}`} style={btn('linear-gradient(100deg,#7cc4e8,#a9dcf2)')}><MessageSquare size={15} /> SMS</a>
+                  )}
+                  <button onClick={() => { setAPassar(l); setAutorizou(false) }} style={btn('linear-gradient(100deg,#b889cd,#d5b4e5)')}><UserPlus size={15} /> Passar a cliente</button>
                 </div>
               </div>
             )
